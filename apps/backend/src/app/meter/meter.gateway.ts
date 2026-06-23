@@ -13,7 +13,9 @@ import { MeterService } from './meter.service';
  * Pusht Live-Messwerte an verbundene Clients. Quelle ist DbService.readings$
  * (gespeist aus pg NOTIFY) - kein Polling.
  */
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({
+  cors: { origin: process.env.CORS_ORIGIN ?? 'http://localhost:4200' },
+})
 export class MeterGateway implements OnModuleInit, OnGatewayConnection {
   private readonly logger = new Logger(MeterGateway.name);
 

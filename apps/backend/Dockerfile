@@ -12,11 +12,12 @@ RUN npx nx build backend
 # Laufzeit-Abhängigkeiten ins Bundle-Verzeichnis installieren (generatePackageJson)
 RUN cd apps/backend/dist && npm install --omit=dev
 
-# Stage 2: schlankes Runtime-Image
+# Stage 2: schlankes Runtime-Image (läuft als non-root User 'node')
 FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
-COPY --from=build /repo/apps/backend/dist ./
+COPY --from=build --chown=node:node /repo/apps/backend/dist ./
+USER node
 EXPOSE 3000
 CMD ["node", "main.js"]

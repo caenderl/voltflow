@@ -7,8 +7,9 @@ COPY libs ./libs
 RUN npm ci
 RUN npx nx build frontend
 
-# Stage 2: nginx liefert statische Files + Reverse-Proxy zum Backend
-FROM nginx:alpine AS runtime
+# Stage 2: nginx (unprivileged = non-root, lauscht auf 8080) liefert
+# statische Files + Reverse-Proxy zum Backend
+FROM nginxinc/nginx-unprivileged:alpine AS runtime
 COPY apps/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /repo/dist/apps/frontend/browser /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 8080
