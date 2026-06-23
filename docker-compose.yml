@@ -5,17 +5,18 @@ services:
     image: timescale/timescaledb:latest-pg16
     container_name: poke-db
     restart: unless-stopped
+    env_file: .env
     environment:
-      POSTGRES_USER: poke
-      POSTGRES_PASSWORD: poke
-      POSTGRES_DB: poke
+      POSTGRES_USER: ${POSTGRES_USER:-poke}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-poke}
+      POSTGRES_DB: ${POSTGRES_DB:-poke}
     ports:
       - "5432:5432"
     volumes:
       - poke-db-data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U poke -d poke"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-poke} -d ${POSTGRES_DB:-poke}"]
       interval: 5s
       timeout: 5s
       retries: 10

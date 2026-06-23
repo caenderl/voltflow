@@ -8,8 +8,6 @@ import { Client, Pool } from 'pg';
 import { Subject } from 'rxjs';
 import type { MeterReading } from '@org/shared-types';
 
-const DEFAULT_DSN = 'postgresql://poke:poke@localhost:5432/poke';
-
 /** Wandelt eine DB-Zeile (snake_case) in einen MeterReading um. */
 export function rowToReading(row: Record<string, unknown>): MeterReading {
   const num = (v: unknown): number | null =>
@@ -29,22 +27,41 @@ export function rowToReading(row: Record<string, unknown>): MeterReading {
  *  - ein Pool für normale Queries
  *  - ein dedizierter Client mit LISTEN meter_reading für den Live-Push
  */
+const LISTEN_RECONNECT_MS = 5000;
+
 @Injectable()
 export class DbService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DbService.name);
+  private dsn!: string;
   private pool!: Pool;
-  private listenClient!: Client;
+  private listenClient: Client | null = null;
+  private stopped = false;
+  private reconnectTimer: NodeJS.Timeout | null = null;
 
   /** Stream neuer Messwerte (gespeist aus pg NOTIFY). */
   readonly readings$ = new Subject<MeterReading>();
 
-  async onModuleInit(): Promise<void> {
-    const dsn = process.env.DATABASE_URL || DEFAULT_DSN;
+  onModuleInit(): void {
+    const dsn = process.env.DATABASE_URL;
+    if (!dsn) {
+      // Konfigurationsfehler -> hart abbrechen (kein sinnvoller Betrieb möglich)
+      throw new Error('DATABASE_URL nicht gesetzt (env oder .env).');
+    }
+    this.dsn = dsn;
+    // Pool für REST-Queries: verbindet lazy und reconnectet pro Query selbst.
     this.pool = new Pool({ connectionString: dsn });
+    this.pool.on('error', (err) =>
+      this.logger.error(`DB-Pool-Fehler: ${err.message}`),
+    );
+    // LISTEN-Client für den Live-Push: separat, mit Auto-Reconnect.
+    void this.connectListener();
+  }
 
-    this.listenClient = new Client({ connectionString: dsn });
-    await this.listenClient.connect();
-    this.listenClient.on('notification', (msg) => {
+  /** Dedizierten LISTEN-Client aufbauen; bei Abbruch automatisch neu verbinden. */
+  private async connectListener(): Promise<void> {
+    if (this.stopped) return;
+    const client = new Client({ connectionString: this.dsn });
+    client.on('notification', (msg) => {
       if (!msg.payload) return;
       try {
         const row = JSON.parse(msg.payload) as Record<string, unknown>;
@@ -53,14 +70,46 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`Konnte NOTIFY-Payload nicht parsen: ${err}`);
       }
     });
-    this.listenClient.on('error', (err) =>
-      this.logger.error(`LISTEN-Client-Fehler: ${err}`),
-    );
-    await this.listenClient.query('LISTEN meter_reading');
-    this.logger.log('Verbunden, LISTEN meter_reading aktiv');
+    // error/end -> Verbindung gilt als tot, Reconnect planen
+    client.on('error', (err) => {
+      this.logger.error(`LISTEN-Client-Fehler: ${err.message}`);
+      this.handleListenFailure(client);
+    });
+    client.on('end', () => this.handleListenFailure(client));
+
+    try {
+      await client.connect();
+      await client.query('LISTEN meter_reading');
+      this.listenClient = client;
+      this.logger.log('LISTEN meter_reading aktiv');
+    } catch (err) {
+      this.logger.warn(
+        `LISTEN-Verbindung fehlgeschlagen, neuer Versuch in ${LISTEN_RECONNECT_MS}ms: ${err}`,
+      );
+      this.handleListenFailure(client);
+    }
+  }
+
+  /** Toten Client neutralisieren und (einmalig) Reconnect planen. */
+  private handleListenFailure(client: Client): void {
+    if (this.stopped) return;
+    // Handler des toten Clients entfernen, aber einen No-op-Error-Handler
+    // behalten, damit späte 'error'-Events nicht als unhandled den Prozess killen.
+    client.removeAllListeners();
+    client.on('error', () => undefined);
+    void client.end().catch(() => undefined);
+    if (this.listenClient === client) this.listenClient = null;
+
+    if (this.reconnectTimer) return;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.connectListener();
+    }, LISTEN_RECONNECT_MS);
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.stopped = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     await this.listenClient?.end().catch(() => undefined);
     await this.pool?.end().catch(() => undefined);
   }

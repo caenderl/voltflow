@@ -24,7 +24,6 @@ NX-Monorepo:
 | `apps/frontend`  | Angular-Dashboard (ngx-echarts) |
 | `libs/shared-types` | Geteilte TypeScript-Typen Backend ↔ Frontend |
 | `db/init.sql`    | Hypertable, Continuous Aggregates, NOTIFY-Trigger |
-| `poke_meter.py`  | CLI zum schnellen Live-Check auf der Konsole |
 
 > Hinweis: Der Smart Meter läuft **standalone** (kein Power-System). Verfügbar sind nur
 > Netzbezug (`grid_to_home_power`), Einspeisung/Überschuss (`pv_to_grid_power`) und die
@@ -66,14 +65,6 @@ npx nx serve backend         # http://localhost:3000/api
 
 # 6. Frontend
 npx nx serve frontend        # http://localhost:4200  (Proxy /api + /socket.io -> :3000)
-```
-
-Schneller Konsolen-Check ohne DB:
-
-```bash
-. venv/bin/activate
-python poke_meter.py          # einmalige Messung
-python poke_meter.py --loop   # fortlaufend
 ```
 
 ## Deployment (Raspberry Pi 5, arm64)

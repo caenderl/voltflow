@@ -9,8 +9,6 @@ import asyncpg
 
 LOG = logging.getLogger("poke.db")
 
-DEFAULT_DSN = "postgresql://poke:poke@localhost:5432/poke"
-
 # Float-Felder im Snapshot (kommen von der API als Strings)
 _FLOAT_FIELDS = (
     "grid_to_home_power",
@@ -30,7 +28,9 @@ def _to_float(value) -> float | None:
 
 
 async def create_pool() -> asyncpg.Pool:
-    dsn = os.getenv("DATABASE_URL", DEFAULT_DSN)
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError("DATABASE_URL nicht gesetzt (env oder .env).")
     LOG.info("Verbinde zur DB: %s", dsn.rsplit("@", 1)[-1])
     return await asyncpg.create_pool(dsn, min_size=1, max_size=4)
 

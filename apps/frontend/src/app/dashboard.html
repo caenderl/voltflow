@@ -47,6 +47,9 @@
     @if (loading()) {
       <p class="hint">Lade Daten …</p>
     }
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
 
     <div class="chart-box">
       <h2>Leistung</h2>

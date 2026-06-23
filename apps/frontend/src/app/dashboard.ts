@@ -35,6 +35,7 @@ export class Dashboard implements OnInit {
   readonly view = signal<View>('live');
   readonly month = signal<string>(currentMonthStr());
   readonly loading = signal(false);
+  readonly error = signal<string | null>(null);
 
   // Live
   readonly latest = signal<MeterReading | null>(null);
@@ -73,14 +74,22 @@ export class Dashboard implements OnInit {
     const view = this.view();
     const { from, to, resolution, period, date } = rangeFor(view, this.month());
     this.loading.set(true);
+    this.error.set(null);
     this.series.set(null);
     this.energy.set(null);
     this.api.series(from, to, resolution).subscribe({
       next: (s) => this.series.set(s),
       complete: () => this.loading.set(false),
-      error: () => this.loading.set(false),
+      error: () => {
+        this.loading.set(false);
+        this.error.set('Daten konnten nicht geladen werden (Backend erreichbar?).');
+      },
     });
-    this.api.energy(period, date).subscribe((e) => this.energy.set(e));
+    this.api.energy(period, date).subscribe({
+      next: (e) => this.energy.set(e),
+      error: () =>
+        this.error.set('Daten konnten nicht geladen werden (Backend erreichbar?).'),
+    });
   }
 
   // --- Chart-Optionen ---

@@ -27,8 +27,19 @@ LOG.setLevel(logging.INFO)
 RECONNECT_DELAY = 10
 
 
+async def _create_pool_with_retry():
+    """Pool aufbauen; bei (noch) nicht erreichbarer DB erneut versuchen."""
+    while True:
+        try:
+            return await create_pool()
+        except Exception as err:  # noqa: BLE001
+            LOG.warning("DB nicht erreichbar (%s) - neuer Versuch in %ss",
+                        type(err).__name__, RECONNECT_DELAY)
+            await asyncio.sleep(RECONNECT_DELAY)
+
+
 async def run() -> None:
-    pool = await create_pool()
+    pool = await _create_pool_with_retry()
     device_registered = False
     count = 0
     try:
