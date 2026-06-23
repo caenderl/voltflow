@@ -42,30 +42,36 @@ DATABASE_URL="postgresql://poke:poke@localhost:5432/poke"
 
 ## Entwicklung (lokal)
 
-DB im Container, der Rest lokal:
+Nur die DB läuft im Container; Backend, Frontend und Collector laufen nativ mit
+Hot-Reload (kein Docker-Image-Rebuild beim Entwickeln).
+
+**Einmaliges Setup:**
 
 ```bash
-# 1. TimescaleDB starten
-docker compose up -d db
-
-# 2. Python-venv + Abhängigkeiten (einmalig)
+# Python-venv + Abhängigkeiten
 python3 -m venv venv && . venv/bin/activate
 pip install cryptography aiohttp aiofiles paho-mqtt python-dotenv asyncpg
 git clone https://github.com/thomluther/anker-solix-api.git
 cd anker-solix-api && pip install --editable . && cd ..
 
-# 3. Node-Abhängigkeiten (einmalig)
+# Node-Abhängigkeiten
 npm ci
-
-# 4. Collector starten (schreibt Messwerte in die DB)
-. venv/bin/activate && python apps/collector/collector.py
-
-# 5. Backend
-npx nx serve backend         # http://localhost:3000/api
-
-# 6. Frontend
-npx nx serve frontend        # http://localhost:4200  (Proxy /api + /socket.io -> :3000)
 ```
+
+**Täglicher Dev-Workflow (npm-Scripts):**
+
+```bash
+npm run db          # TimescaleDB-Container starten (einmal, bleibt laufen)
+npm run dev         # Backend (:3000) + Frontend (:4200) mit Hot-Reload
+npm run collector   # Collector separat (schreibt Live-Werte in die DB)
+# oder alles zusammen:
+npm run dev:all     # Backend + Frontend + Collector parallel
+```
+
+Frontend: http://localhost:4200 (proxyt `/api` + `/socket.io` -> :3000).
+
+> Hinweis: Es darf immer nur **ein** Collector pro Anker-Konto laufen (eine
+> MQTT-Session). Den Prod-Stack-Collector also stoppen, wenn lokal entwickelt wird.
 
 ## Deployment (Raspberry Pi 5, arm64)
 

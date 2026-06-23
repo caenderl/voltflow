@@ -1,0 +1,15 @@
+{
+  "name": "collector",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/collector",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "venv/bin/python apps/collector/collector.py",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

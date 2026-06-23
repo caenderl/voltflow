@@ -2,7 +2,12 @@
   "name": "@org/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "db": "docker compose up -d db",
+    "dev": "nx run-many -t serve -p backend frontend",
+    "dev:all": "nx run-many -t serve -p backend frontend collector",
+    "collector": "venv/bin/python apps/collector/collector.py"
+  },
   "private": true,
   "devDependencies": {
     "@angular-devkit/core": "~21.2.0",
