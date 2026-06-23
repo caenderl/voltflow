@@ -1,0 +1,6 @@
+.env
+venv/
+anker-solix-api/
+__pycache__/
+*.pyc
+.claude/settings.local.json
