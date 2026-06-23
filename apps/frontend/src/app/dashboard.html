@@ -74,10 +74,12 @@
       <p class="error">{{ error() }}</p>
     }
 
-    <div class="chart-box">
-      <h2>Leistung</h2>
-      <div echarts [options]="powerChart()" class="chart"></div>
-    </div>
+    @if (view() !== 'month') {
+      <div class="chart-box">
+        <h2>Leistung (Bezug + / Einspeisung −)</h2>
+        <div echarts [options]="powerChart()" class="chart"></div>
+      </div>
+    }
     <div class="chart-box">
       <h2>Energie pro {{ view() === 'day' ? 'Stunde' : 'Tag' }}</h2>
       <div echarts [options]="energyChart()" class="chart"></div>

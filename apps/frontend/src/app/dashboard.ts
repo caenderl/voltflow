@@ -121,59 +121,34 @@ export class Dashboard implements OnInit {
 
   // --- Chart options ---
 
-  /** Minimal sparkline for the live hero (no legend/axis clutter). */
+  /** Minimal sparkline for the live hero (signed net: import + / export -). */
   readonly liveSpark = computed<EChartsCoreOption>(() => {
     const buf = this.liveBuffer();
-    return {
-      grid: { left: 0, right: 0, top: 8, bottom: 0 },
-      xAxis: { type: 'time', show: false },
-      yAxis: { type: 'value', show: false },
-      tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${Math.round(v)} W` },
-      series: [
-        {
-          name: 'Bezug',
-          type: 'line',
-          showSymbol: false,
-          smooth: true,
-          lineStyle: { width: 2 },
-          areaStyle: { opacity: 0.18 },
-          itemStyle: { color: '#f87171' },
-          data: buf.map((p) => [p.time, p.grid] as [string, number | null]),
-        },
-        {
-          name: 'Einspeisung',
-          type: 'line',
-          showSymbol: false,
-          smooth: true,
-          lineStyle: { width: 2 },
-          areaStyle: { opacity: 0.18 },
-          itemStyle: { color: '#34d399' },
-          data: buf.map((p) => [p.time, p.pv] as [string, number | null]),
-        },
-      ],
-    };
+    return signedPowerChart(
+      buf.map((p) => [p.time, netWatts(p.grid, p.pv)] as [string, number]),
+      { spark: true },
+    );
   });
 
   readonly powerChart = computed<EChartsCoreOption>(() => {
-    const s = this.series();
-    const points = s?.points ?? [];
-    return basePowerChart(
-      points.map((p) => [p.time, p.gridToHomePowerAvg] as [string, number | null]),
-      points.map((p) => [p.time, p.pvToGridPowerAvg] as [string, number | null]),
+    const points = this.series()?.points ?? [];
+    return signedPowerChart(
+      points.map(
+        (p) => [p.time, netWatts(p.gridToHomePowerAvg, p.pvToGridPowerAvg)] as [string, number],
+      ),
     );
   });
 
   readonly energyChart = computed<EChartsCoreOption>(() => {
-    const e = this.energy();
-    const buckets = e?.buckets ?? [];
+    const buckets = this.energy()?.buckets ?? [];
     return {
-      tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${v} kWh` },
-      legend: { data: ['Bezug', 'Einspeisung'], textStyle: { color: '#cbd5e1' } },
-      grid: { left: 50, right: 20, top: 40, bottom: 40 },
-      xAxis: {
-        type: 'time',
-        axisLabel: { color: '#94a3b8' },
+      tooltip: {
+        trigger: 'axis',
+        valueFormatter: (v: number) => `${Math.abs(Number(v)).toFixed(2)} kWh`,
       },
+      legend: { data: ['Bezug', 'Einspeisung'], top: 0, textStyle: { color: '#cbd5e1' } },
+      grid: { left: 50, right: 20, top: 40, bottom: 30 },
+      xAxis: { type: 'time', axisLabel: { color: '#94a3b8' } },
       yAxis: {
         type: 'value',
         name: 'kWh',
@@ -184,53 +159,80 @@ export class Dashboard implements OnInit {
         {
           name: 'Bezug',
           type: 'bar',
+          stack: 'energy',
           itemStyle: { color: '#ef4444' },
+          // import positive (up)
           data: buckets.map((b) => [b.time, b.importKwh]),
         },
         {
           name: 'Einspeisung',
           type: 'bar',
+          stack: 'energy',
           itemStyle: { color: '#22c55e' },
-          data: buckets.map((b) => [b.time, b.exportKwh]),
+          // feed-in negative (down)
+          data: buckets.map((b) => [b.time, -b.exportKwh]),
         },
       ],
     };
   });
 }
 
-function basePowerChart(
-  gridData: [string, number | null][],
-  pvData: [string, number | null][],
+/** Signed net power in W: import positive, feed-in negative. */
+function netWatts(grid: number | null, pv: number | null): number {
+  return (grid ?? 0) - (pv ?? 0);
+}
+
+/**
+ * Single signed power line: import (positive) red above zero, feed-in
+ * (negative) green below zero. Color split via visualMap at the zero line.
+ */
+function signedPowerChart(
+  data: [string, number][],
+  opts: { spark?: boolean } = {},
 ): EChartsCoreOption {
+  const spark = opts.spark === true;
   return {
-    tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${Math.round(v)} W` },
-    legend: { data: ['Bezug', 'Einspeisung'], top: 0, textStyle: { color: '#cbd5e1' } },
-    grid: { left: 55, right: 20, top: 40, bottom: 30 },
-    xAxis: { type: 'time', axisLabel: { color: '#94a3b8' } },
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: (v: number) =>
+        v >= 0 ? `Bezug ${Math.round(v)} W` : `Einspeisung ${Math.round(-v)} W`,
+    },
+    visualMap: {
+      show: false,
+      type: 'piecewise',
+      seriesIndex: 0,
+      pieces: [
+        { gt: 0, color: '#f87171' }, // import -> red
+        { lte: 0, color: '#34d399' }, // feed-in -> green
+      ],
+    },
+    grid: spark
+      ? { left: 0, right: 0, top: 8, bottom: 0 }
+      : { left: 60, right: 20, top: 20, bottom: 30 },
+    xAxis: { type: 'time', show: !spark, axisLabel: { color: '#94a3b8' } },
     yAxis: {
       type: 'value',
-      name: 'W',
+      show: !spark,
+      name: spark ? undefined : 'W',
       axisLabel: { color: '#94a3b8' },
       splitLine: { lineStyle: { color: '#1e293b' } },
     },
     series: [
       {
-        name: 'Bezug',
         type: 'line',
         showSymbol: false,
         smooth: true,
-        areaStyle: { opacity: 0.15 },
-        itemStyle: { color: '#ef4444' },
-        data: gridData,
-      },
-      {
-        name: 'Einspeisung',
-        type: 'line',
-        showSymbol: false,
-        smooth: true,
-        areaStyle: { opacity: 0.15 },
-        itemStyle: { color: '#22c55e' },
-        data: pvData,
+        lineStyle: { width: 2 },
+        areaStyle: { opacity: 0.18 },
+        markLine: spark
+          ? undefined
+          : {
+              silent: true,
+              symbol: 'none',
+              lineStyle: { color: '#475569', type: 'solid' },
+              data: [{ yAxis: 0 }],
+            },
+        data,
       },
     ],
   };
