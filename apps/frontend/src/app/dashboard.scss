@@ -10,6 +10,14 @@
   max-width: 1000px;
   margin: 0 auto;
   padding: 1.5rem 1rem 3rem;
+
+  // Live view fills the screen (wall-tablet, always-on)
+  &.live-view {
+    max-width: 1100px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 header {
@@ -36,10 +44,10 @@ header {
     background: #1e293b;
     color: #cbd5e1;
     border: 1px solid #334155;
-    border-radius: 8px;
-    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    padding: 0.6rem 1.2rem;
     cursor: pointer;
-    font-size: 0.95rem;
+    font-size: 1.05rem;
 
     &.active {
       background: #2563eb;
@@ -52,11 +60,114 @@ header {
     background: #1e293b;
     color: #e2e8f0;
     border: 1px solid #334155;
-    border-radius: 8px;
-    padding: 0.45rem 0.6rem;
+    border-radius: 10px;
+    padding: 0.5rem 0.7rem;
+    font-size: 1.05rem;
   }
 }
 
+/* ---------- Live hero (energy flow) ---------- */
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  text-align: center;
+
+  // accent color per state
+  --accent: #64748b;
+  &.is-export { --accent: #22c55e; }
+  &.is-import { --accent: #f59e0b; }
+}
+
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+
+  .node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 4rem;
+    line-height: 1;
+
+    small {
+      margin-top: 0.4rem;
+      font-size: 1.1rem;
+      color: #94a3b8;
+      letter-spacing: 0.05em;
+    }
+  }
+
+  .arrow {
+    font-size: 3.5rem;
+    color: var(--accent);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; transform: translateX(0); }
+  50% { opacity: 1; transform: translateX(6px); }
+}
+
+.state-label {
+  font-size: 1.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #94a3b8;
+}
+
+.big-watts {
+  font-size: 7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+
+  span {
+    font-size: 2.2rem;
+    color: #94a3b8;
+    margin-left: 0.5rem;
+  }
+}
+
+.charge-pill {
+  font-size: 1.4rem;
+  font-weight: 600;
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+
+  &.ok {
+    background: #14532d;
+    color: #bbf7d0;
+    border-color: #22c55e;
+  }
+}
+
+.today {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  font-size: 1.3rem;
+  color: #cbd5e1;
+
+  .up { color: #fca5a5; }
+  .down { color: #86efac; }
+}
+
+.spark {
+  width: 100%;
+  max-width: 900px;
+  height: 140px;
+}
+
+/* ---------- Day / Week / Month ---------- */
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -73,12 +184,8 @@ header {
   gap: 0.4rem;
   border-left: 4px solid #475569;
 
-  &.import {
-    border-left-color: #ef4444;
-  }
-  &.export {
-    border-left-color: #22c55e;
-  }
+  &.import { border-left-color: #ef4444; }
+  &.export { border-left-color: #22c55e; }
 
   .label {
     font-size: 0.85rem;

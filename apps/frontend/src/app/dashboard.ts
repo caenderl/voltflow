@@ -14,12 +14,16 @@ import { LiveService } from './live.service';
 import { MeterApiService } from './meter-api.service';
 
 type View = 'live' | 'day' | 'week' | 'month';
+type FlowMode = 'export' | 'import' | 'idle';
 
 interface LivePoint {
   time: string;
   grid: number | null;
   pv: number | null;
 }
+
+// Surplus (W) from which charging makes sense (~6 A single-phase). Configurable later.
+const CHARGE_THRESHOLD_W = 1400;
 
 @Component({
   selector: 'app-dashboard',
@@ -39,6 +43,7 @@ export class Dashboard implements OnInit {
 
   // Live
   readonly latest = signal<MeterReading | null>(null);
+  readonly today = signal<EnergySummary | null>(null);
   private readonly liveBuffer = signal<LivePoint[]>([]);
 
   // History / energy
@@ -52,11 +57,33 @@ export class Dashboard implements OnInit {
     { id: 'month', label: 'Monat' },
   ];
 
+  /** Current grid flow state derived from the latest reading. */
+  readonly flow = computed<{ mode: FlowMode; watts: number; charging: boolean }>(() => {
+    const r = this.latest();
+    const imp = r?.gridToHomePower ?? 0;
+    const exp = r?.pvToGridPower ?? 0;
+    if (exp > 0) {
+      return { mode: 'export', watts: exp, charging: exp >= CHARGE_THRESHOLD_W };
+    }
+    if (imp > 0) return { mode: 'import', watts: imp, charging: false };
+    return { mode: 'idle', watts: 0, charging: false };
+  });
+
   ngOnInit(): void {
     this.live.readings$().subscribe((r) => {
       this.latest.set(r);
       const buf = [...this.liveBuffer(), { time: r.time, grid: r.gridToHomePower, pv: r.pvToGridPower }];
       this.liveBuffer.set(buf.slice(-120)); // ~10 min at 5s interval
+    });
+    this.loadToday();
+    // Refresh today's totals every 5 min
+    setInterval(() => this.loadToday(), 5 * 60 * 1000);
+  }
+
+  private loadToday(): void {
+    this.api.energy('day', new Date()).subscribe({
+      next: (e) => this.today.set(e),
+      error: () => undefined,
     });
   }
 
@@ -94,12 +121,37 @@ export class Dashboard implements OnInit {
 
   // --- Chart options ---
 
-  readonly liveChart = computed<EChartsCoreOption>(() => {
+  /** Minimal sparkline for the live hero (no legend/axis clutter). */
+  readonly liveSpark = computed<EChartsCoreOption>(() => {
     const buf = this.liveBuffer();
-    return basePowerChart(
-      buf.map((p) => [p.time, p.grid] as [string, number | null]),
-      buf.map((p) => [p.time, p.pv] as [string, number | null]),
-    );
+    return {
+      grid: { left: 0, right: 0, top: 8, bottom: 0 },
+      xAxis: { type: 'time', show: false },
+      yAxis: { type: 'value', show: false },
+      tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${Math.round(v)} W` },
+      series: [
+        {
+          name: 'Bezug',
+          type: 'line',
+          showSymbol: false,
+          smooth: true,
+          lineStyle: { width: 2 },
+          areaStyle: { opacity: 0.18 },
+          itemStyle: { color: '#f87171' },
+          data: buf.map((p) => [p.time, p.grid] as [string, number | null]),
+        },
+        {
+          name: 'Einspeisung',
+          type: 'line',
+          showSymbol: false,
+          smooth: true,
+          lineStyle: { width: 2 },
+          areaStyle: { opacity: 0.18 },
+          itemStyle: { color: '#34d399' },
+          data: buf.map((p) => [p.time, p.pv] as [string, number | null]),
+        },
+      ],
+    };
   });
 
   readonly powerChart = computed<EChartsCoreOption>(() => {
@@ -132,7 +184,6 @@ export class Dashboard implements OnInit {
         {
           name: 'Bezug',
           type: 'bar',
-          stack: undefined,
           itemStyle: { color: '#ef4444' },
           data: buckets.map((b) => [b.time, b.importKwh]),
         },
@@ -153,8 +204,8 @@ function basePowerChart(
 ): EChartsCoreOption {
   return {
     tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${Math.round(v)} W` },
-    legend: { data: ['Bezug', 'Einspeisung'], textStyle: { color: '#cbd5e1' } },
-    grid: { left: 55, right: 20, top: 40, bottom: 40 },
+    legend: { data: ['Bezug', 'Einspeisung'], top: 0, textStyle: { color: '#cbd5e1' } },
+    grid: { left: 55, right: 20, top: 40, bottom: 30 },
     xAxis: { type: 'time', axisLabel: { color: '#94a3b8' } },
     yAxis: {
       type: 'value',

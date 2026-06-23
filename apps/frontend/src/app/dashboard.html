@@ -1,4 +1,4 @@
-<div class="dashboard">
+<div class="dashboard" [class.live-view]="view() === 'live'">
   <header>
     <h1>⚡ poke-meter</h1>
     <nav class="views">
@@ -18,20 +18,43 @@
   </header>
 
   @if (view() === 'live') {
-    <section class="cards">
-      <div class="card import">
-        <span class="label">Netzbezug</span>
-        <span class="value">{{ latest()?.gridToHomePower ?? '–' }} <small>W</small></span>
+    <section
+      class="hero"
+      [class.is-export]="flow().mode === 'export'"
+      [class.is-import]="flow().mode === 'import'"
+      [class.is-idle]="flow().mode === 'idle'"
+    >
+      <div class="flow">
+        @if (flow().mode === 'export') {
+          <span class="node">🏠<small>Haus</small></span>
+          <span class="arrow">→</span>
+          <span class="node">⚡<small>Netz</small></span>
+        } @else {
+          <span class="node">⚡<small>Netz</small></span>
+          <span class="arrow">→</span>
+          <span class="node">🏠<small>Haus</small></span>
+        }
       </div>
-      <div class="card export">
-        <span class="label">Einspeisung</span>
-        <span class="value">{{ latest()?.pvToGridPower ?? '–' }} <small>W</small></span>
+
+      <div class="state-label">
+        {{ flow().mode === 'export' ? 'Überschuss' : flow().mode === 'import' ? 'Netzbezug' : 'Ausgeglichen' }}
       </div>
+      <div class="big-watts">{{ flow().watts | number }}<span>W</span></div>
+
+      @if (flow().mode === 'export') {
+        <div class="charge-pill" [class.ok]="flow().charging">
+          {{ flow().charging ? '✓ genug zum Laden' : 'noch zu wenig zum Laden' }}
+        </div>
+      }
+
+      <div class="today">
+        <span>Heute</span>
+        <span class="up">↑ Bezug {{ today()?.importKwh ?? '–' }} kWh</span>
+        <span class="down">↓ Einspeisung {{ today()?.exportKwh ?? '–' }} kWh</span>
+      </div>
+
+      <div echarts [options]="liveSpark()" class="spark"></div>
     </section>
-    <div class="chart-box">
-      <h2>Live (letzte ~10 min)</h2>
-      <div echarts [options]="liveChart()" class="chart"></div>
-    </div>
   } @else {
     <section class="cards">
       <div class="card import">
