@@ -1,5 +1,5 @@
 """
-db.py - asyncpg-Anbindung an die TimescaleDB fuer den Collector.
+db.py - asyncpg connection to TimescaleDB for the collector.
 """
 
 import logging
@@ -9,7 +9,7 @@ import asyncpg
 
 LOG = logging.getLogger("poke.db")
 
-# Float-Felder im Snapshot (kommen von der API als Strings)
+# Float fields in the snapshot (come from the API as strings)
 _FLOAT_FIELDS = (
     "grid_to_home_power",
     "pv_to_grid_power",
@@ -30,13 +30,13 @@ def _to_float(value) -> float | None:
 async def create_pool() -> asyncpg.Pool:
     dsn = os.getenv("DATABASE_URL")
     if not dsn:
-        raise RuntimeError("DATABASE_URL nicht gesetzt (env oder .env).")
-    LOG.info("Verbinde zur DB: %s", dsn.rsplit("@", 1)[-1])
+        raise RuntimeError("DATABASE_URL not set (env or .env).")
+    LOG.info("Connecting to DB: %s", dsn.rsplit("@", 1)[-1])
     return await asyncpg.create_pool(dsn, min_size=1, max_size=4)
 
 
 async def register_device(pool: asyncpg.Pool, snapshot: dict, dev: dict | None = None) -> None:
-    """Geraet in die device-Registry eintragen (idempotent)."""
+    """Register the device in the device registry (idempotent)."""
     dev = dev or {}
     await pool.execute(
         """
@@ -55,7 +55,7 @@ async def register_device(pool: asyncpg.Pool, snapshot: dict, dev: dict | None =
 
 
 async def insert_reading(pool: asyncpg.Pool, snapshot: dict) -> None:
-    """Einen Smart-Meter-Snapshot als Messwert speichern."""
+    """Store a smart meter snapshot as a measurement row."""
     await pool.execute(
         """
         INSERT INTO meter_reading (

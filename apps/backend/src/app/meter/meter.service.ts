@@ -10,7 +10,7 @@ import type {
 } from '@org/shared-types';
 import { DbService, rowToReading } from './db.service';
 
-/** Aggregat-View je Auflösung. */
+/** Aggregate view per resolution. */
 const VIEW_BY_RESOLUTION: Record<Exclude<SeriesResolution, 'raw'>, string> = {
   '1min': 'meter_1min',
   '1hour': 'meter_1hour',
@@ -83,8 +83,8 @@ export class MeterService {
   }
 
   /**
-   * Energie-Auswertung für einen Zeitraum. kWh = Delta der kumulativen
-   * Zählerstände (max - min pro Bucket; Zähler ist monoton steigend).
+   * Energy summary for a time range. kWh = delta of the cumulative meter
+   * readings (max - min per bucket; the counter is monotonically increasing).
    */
   async energy(
     period: EnergyPeriod,
@@ -110,7 +110,8 @@ export class MeterService {
       exportKwh: round3(Number(r['export_kwh'] ?? 0)),
     }));
 
-    // Gesamtsummen direkt als Delta über den ganzen Zeitraum (genauer als Bucket-Summe)
+    // Totals computed directly as a delta over the whole range (more accurate
+    // than summing the buckets).
     const { rows: totalRows } = await this.db.query(
       `SELECT max(grid_import_energy) - min(grid_import_energy) AS import_kwh,
               max(grid_export_energy) - min(grid_export_energy) AS export_kwh

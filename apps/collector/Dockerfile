@@ -1,14 +1,14 @@
-# Build-Context = apps/collector
+# Build context = apps/collector
 FROM python:3.12-slim
 WORKDIR /app
 
-# git wird für die pip-Installation der anker-solix-api von GitHub benötigt
+# git is required for the pip install of anker-solix-api from GitHub
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
-# Laufzeit-Abhängigkeiten: asyncpg + dotenv (requirements) und die anker-solix-api
-# auf einen festen Commit gepinnt (Reproduzierbarkeit + Supply-Chain-Schutz).
+# Runtime dependencies: asyncpg + dotenv (requirements) and anker-solix-api
+# pinned to a fixed commit (reproducibility + supply-chain protection).
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir \
@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 COPY . /app
 
-# Als non-root Benutzer laufen
+# Run as a non-root user
 RUN useradd --create-home --uid 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 

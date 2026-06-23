@@ -1,18 +1,18 @@
-# Build-Context = Repo-Root (braucht libs/ + Workspace-Konfig).
-# Stage 1: Backend mit NX bauen
+# Build context = repo root (needs libs/ + workspace config).
+# Stage 1: build the backend with NX
 FROM node:24-alpine AS build
 WORKDIR /repo
 COPY package.json package-lock.json nx.json tsconfig.base.json tsconfig.json ./
-# Ganzer apps-Ordner, damit der tsconfig-Referenzgraph vollständig ist
-# (sonst bricht der NX-Sync-Check im nicht-interaktiven Build ab).
+# Whole apps folder so the tsconfig reference graph is complete
+# (otherwise the NX sync check fails in a non-interactive build).
 COPY apps ./apps
 COPY libs ./libs
 RUN npm ci
 RUN npx nx build backend
-# Laufzeit-Abhängigkeiten ins Bundle-Verzeichnis installieren (generatePackageJson)
+# Install runtime dependencies into the bundle directory (generatePackageJson)
 RUN cd apps/backend/dist && npm install --omit=dev
 
-# Stage 2: schlankes Runtime-Image (läuft als non-root User 'node')
+# Stage 2: slim runtime image (runs as the non-root user 'node')
 FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production

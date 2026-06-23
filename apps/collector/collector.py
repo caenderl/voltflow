@@ -1,10 +1,10 @@
 """
-collector.py - Liest die Smart-Meter-Werte per MQTT und schreibt sie in die DB.
+collector.py - Reads the smart meter values via MQTT and writes them to the DB.
 
-Start (lokal, im Root-venv):
+Start (locally, in the root venv):
     python apps/collector/collector.py
 
-Konfiguration per .env / env:
+Configuration via .env / env:
     ANKERUSER, ANKERPASSWORD, ANKERCOUNTRY
     DATABASE_URL=postgresql://poke:poke@localhost:5432/poke
 """
@@ -23,17 +23,17 @@ logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(n
 LOG = logging.getLogger("poke.collector")
 LOG.setLevel(logging.INFO)
 
-# Sekunden bis zum Reconnect, falls der MQTT-Stream abreisst
+# Seconds before reconnecting if the MQTT stream breaks
 RECONNECT_DELAY = 10
 
 
 async def _create_pool_with_retry():
-    """Pool aufbauen; bei (noch) nicht erreichbarer DB erneut versuchen."""
+    """Build the pool; retry if the DB is not (yet) reachable."""
     while True:
         try:
             return await create_pool()
         except Exception as err:  # noqa: BLE001
-            LOG.warning("DB nicht erreichbar (%s) - neuer Versuch in %ss",
+            LOG.warning("DB not reachable (%s) - retrying in %ss",
                         type(err).__name__, RECONNECT_DELAY)
             await asyncio.sleep(RECONNECT_DELAY)
 
@@ -51,15 +51,15 @@ async def run() -> None:
                         device_registered = True
                     await insert_reading(pool, reading)
                     count += 1
-                    if count % 12 == 0:  # ~jede Minute eine Statuszeile
+                    if count % 12 == 0:  # ~one status line per minute
                         LOG.info(
-                            "%d Messwerte gespeichert (zuletzt: g2h=%s pv2g=%s)",
+                            "%d readings stored (latest: g2h=%s pv2g=%s)",
                             count,
                             reading.get("grid_to_home_power"),
                             reading.get("pv_to_grid_power"),
                         )
             except Exception as err:  # noqa: BLE001
-                LOG.warning("Stream-Fehler: %s: %s - Reconnect in %ss",
+                LOG.warning("Stream error: %s: %s - reconnecting in %ss",
                             type(err).__name__, err, RECONNECT_DELAY)
                 await asyncio.sleep(RECONNECT_DELAY)
     finally:

@@ -8,7 +8,7 @@ import { Client, Pool } from 'pg';
 import { Subject } from 'rxjs';
 import type { MeterReading } from '@org/shared-types';
 
-/** Wandelt eine DB-Zeile (snake_case) in einen MeterReading um. */
+/** Converts a DB row (snake_case) into a MeterReading. */
 export function rowToReading(row: Record<string, unknown>): MeterReading {
   const num = (v: unknown): number | null =>
     v === null || v === undefined ? null : Number(v);
@@ -22,13 +22,13 @@ export function rowToReading(row: Record<string, unknown>): MeterReading {
   };
 }
 
-/**
- * Kapselt den Postgres-Zugriff:
- *  - ein Pool für normale Queries
- *  - ein dedizierter Client mit LISTEN meter_reading für den Live-Push
- */
 const LISTEN_RECONNECT_MS = 5000;
 
+/**
+ * Encapsulates Postgres access:
+ *  - a pool for regular queries
+ *  - a dedicated client with LISTEN meter_reading for the live push
+ */
 @Injectable()
 export class DbService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DbService.name);
@@ -38,26 +38,26 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
   private stopped = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
 
-  /** Stream neuer Messwerte (gespeist aus pg NOTIFY). */
+  /** Stream of new readings (fed by pg NOTIFY). */
   readonly readings$ = new Subject<MeterReading>();
 
   onModuleInit(): void {
     const dsn = process.env.DATABASE_URL;
     if (!dsn) {
-      // Konfigurationsfehler -> hart abbrechen (kein sinnvoller Betrieb möglich)
-      throw new Error('DATABASE_URL nicht gesetzt (env oder .env).');
+      // Configuration error -> fail hard (no meaningful operation possible)
+      throw new Error('DATABASE_URL not set (env or .env).');
     }
     this.dsn = dsn;
-    // Pool für REST-Queries: verbindet lazy und reconnectet pro Query selbst.
+    // Pool for REST queries: connects lazily and reconnects per query itself.
     this.pool = new Pool({ connectionString: dsn });
     this.pool.on('error', (err) =>
-      this.logger.error(`DB-Pool-Fehler: ${err.message}`),
+      this.logger.error(`DB pool error: ${err.message}`),
     );
-    // LISTEN-Client für den Live-Push: separat, mit Auto-Reconnect.
+    // LISTEN client for the live push: separate, with auto-reconnect.
     void this.connectListener();
   }
 
-  /** Dedizierten LISTEN-Client aufbauen; bei Abbruch automatisch neu verbinden. */
+  /** Set up the dedicated LISTEN client; reconnect automatically on failure. */
   private async connectListener(): Promise<void> {
     if (this.stopped) return;
     const client = new Client({ connectionString: this.dsn });
@@ -67,12 +67,12 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
         const row = JSON.parse(msg.payload) as Record<string, unknown>;
         this.readings$.next(rowToReading(row));
       } catch (err) {
-        this.logger.warn(`Konnte NOTIFY-Payload nicht parsen: ${err}`);
+        this.logger.warn(`Could not parse NOTIFY payload: ${err}`);
       }
     });
-    // error/end -> Verbindung gilt als tot, Reconnect planen
+    // error/end -> connection is considered dead, schedule a reconnect
     client.on('error', (err) => {
-      this.logger.error(`LISTEN-Client-Fehler: ${err.message}`);
+      this.logger.error(`LISTEN client error: ${err.message}`);
       this.handleListenFailure(client);
     });
     client.on('end', () => this.handleListenFailure(client));
@@ -81,20 +81,20 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
       await client.connect();
       await client.query('LISTEN meter_reading');
       this.listenClient = client;
-      this.logger.log('LISTEN meter_reading aktiv');
+      this.logger.log('LISTEN meter_reading active');
     } catch (err) {
       this.logger.warn(
-        `LISTEN-Verbindung fehlgeschlagen, neuer Versuch in ${LISTEN_RECONNECT_MS}ms: ${err}`,
+        `LISTEN connection failed, retrying in ${LISTEN_RECONNECT_MS}ms: ${err}`,
       );
       this.handleListenFailure(client);
     }
   }
 
-  /** Toten Client neutralisieren und (einmalig) Reconnect planen. */
+  /** Neutralize the dead client and schedule a (single) reconnect. */
   private handleListenFailure(client: Client): void {
     if (this.stopped) return;
-    // Handler des toten Clients entfernen, aber einen No-op-Error-Handler
-    // behalten, damit späte 'error'-Events nicht als unhandled den Prozess killen.
+    // Remove the dead client's handlers, but keep a no-op error handler so that
+    // late 'error' events do not crash the process as unhandled.
     client.removeAllListeners();
     client.on('error', () => undefined);
     void client.end().catch(() => undefined);

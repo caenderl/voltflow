@@ -33,7 +33,7 @@ export class MeterApiService {
   energy(period: EnergyPeriod, date: Date): Observable<EnergySummary> {
     const params = new HttpParams()
       .set('period', period)
-      // YYYY-MM-DD in lokaler Zeit
+      // YYYY-MM-DD in local time
       .set('date', toLocalDateString(date));
     return this.http.get<EnergySummary>(`${this.base}/energy`, { params });
   }

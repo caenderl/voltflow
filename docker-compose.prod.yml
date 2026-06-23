@@ -1,13 +1,13 @@
-# Prod-Stack (läuft auf dem Raspberry Pi 5, arm64).
+# Prod stack (runs on the Raspberry Pi 5, arm64).
 # Start:  docker compose -f docker-compose.prod.yml up -d --build
-# Zugriff: http://<pi>:8080
+# Access: http://<pi>:8080
 #
-# ANKER-Credentials kommen aus der .env (ANKERUSER/ANKERPASSWORD/ANKERCOUNTRY).
+# ANKER credentials come from .env (ANKERUSER/ANKERPASSWORD/ANKERCOUNTRY).
 services:
   db:
     image: timescale/timescaledb:latest-pg16
     restart: unless-stopped
-    mem_limit: 1g          # reicht für TimescaleDB bei diesem Datenvolumen
+    mem_limit: 1g          # enough for TimescaleDB at this data volume
     env_file: .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-poke}

@@ -9,8 +9,8 @@ import {
 import { HttpAdapterHost } from '@nestjs/core';
 
 /**
- * Fängt ALLE unbehandelten Exceptions ab, loggt sie einheitlich und
- * antwortet mit sauberem JSON (statt rohem Stacktrace / generischem 500).
+ * Catches ALL unhandled exceptions, logs them consistently and responds with
+ * clean JSON (instead of a raw stack trace / generic 500).
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -32,7 +32,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getResponse()
         : 'Internal server error';
 
-    // 5xx mit Stacktrace, 4xx nur knapp loggen
+    // 5xx with stack trace, 4xx logged briefly
     const path = httpAdapter.getRequestUrl(ctx.getRequest());
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(

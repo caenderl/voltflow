@@ -1,12 +1,12 @@
--- Schema für poke-meter (TimescaleDB).
--- Läuft automatisch beim ersten Start des DB-Containers
--- (gemountet nach /docker-entrypoint-initdb.d/).
+-- Schema for poke-meter (TimescaleDB).
+-- Runs automatically on the first start of the DB container
+-- (mounted into /docker-entrypoint-initdb.d/).
 
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- ---------------------------------------------------------------------------
--- Geräte-Registry (vorbereitend; aktuell nur der Smart Meter).
--- Spätere Erweiterung (Wallbox) trägt sich hier ein.
+-- Device registry (preparatory; currently only the smart meter).
+-- A future extension (wallbox) registers itself here.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS device (
     device_sn   TEXT PRIMARY KEY,
@@ -17,16 +17,16 @@ CREATE TABLE IF NOT EXISTS device (
 );
 
 -- ---------------------------------------------------------------------------
--- Rohmesswerte vom Smart Meter (~alle 5s ein Insert).
--- time = Ingestion-Zeit (now()), da msg_timestamp unzuverlässig sein kann.
+-- Raw smart meter readings (~one insert every 5s).
+-- time = ingestion time (now()), since msg_timestamp can be unreliable.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS meter_reading (
     time               TIMESTAMPTZ      NOT NULL DEFAULT now(),
     device_sn          TEXT             NOT NULL,
-    grid_to_home_power DOUBLE PRECISION,   -- W Bezug (Import aus dem Netz)
-    pv_to_grid_power   DOUBLE PRECISION,   -- W Einspeisung / Überschuss
-    grid_import_energy DOUBLE PRECISION,   -- kWh kumulativer Zählerstand Bezug
-    grid_export_energy DOUBLE PRECISION    -- kWh kumulativer Zählerstand Einspeisung
+    grid_to_home_power DOUBLE PRECISION,   -- W grid import
+    pv_to_grid_power   DOUBLE PRECISION,   -- W feed-in / surplus
+    grid_import_energy DOUBLE PRECISION,   -- kWh cumulative import meter reading
+    grid_export_energy DOUBLE PRECISION    -- kWh cumulative export meter reading
 );
 
 SELECT create_hypertable('meter_reading', 'time', if_not_exists => TRUE);
@@ -35,13 +35,13 @@ CREATE INDEX IF NOT EXISTS meter_reading_sn_time_idx
     ON meter_reading (device_sn, time DESC);
 
 -- ---------------------------------------------------------------------------
--- Continuous Aggregates fürs Downsampling der Ansichten.
--- avg/min/max der Leistung; last() der kumulativen Zählerstände
--- (für kWh-Deltas je Zeitraum). Real-time aggregation bleibt an (Default),
--- damit der aktuelle, noch nicht materialisierte Bucket sofort sichtbar ist.
+-- Continuous aggregates for downsampling the views.
+-- avg/min/max of power; last() of the cumulative meter readings
+-- (for kWh deltas per range). Real-time aggregation stays on (default), so the
+-- current, not-yet-materialized bucket is visible immediately.
 -- ---------------------------------------------------------------------------
 
--- 1-Minuten-Buckets -> Ansicht "Tag"
+-- 1-minute buckets -> "day" view
 CREATE MATERIALIZED VIEW IF NOT EXISTS meter_1min
 WITH (timescaledb.continuous) AS
 SELECT
@@ -57,7 +57,7 @@ FROM meter_reading
 GROUP BY device_sn, bucket
 WITH NO DATA;
 
--- 1-Stunden-Buckets -> Ansicht "Woche"
+-- 1-hour buckets -> "week" view
 CREATE MATERIALIZED VIEW IF NOT EXISTS meter_1hour
 WITH (timescaledb.continuous) AS
 SELECT
@@ -73,7 +73,7 @@ FROM meter_reading
 GROUP BY device_sn, bucket
 WITH NO DATA;
 
--- 1-Tag-Buckets -> Ansicht "Monat"
+-- 1-day buckets -> "month" view
 CREATE MATERIALIZED VIEW IF NOT EXISTS meter_1day
 WITH (timescaledb.continuous) AS
 SELECT
@@ -89,7 +89,7 @@ FROM meter_reading
 GROUP BY device_sn, bucket
 WITH NO DATA;
 
--- Refresh-Policies (automatisches Nachführen im Hintergrund)
+-- Refresh policies (automatic background updates)
 SELECT add_continuous_aggregate_policy('meter_1min',
     start_offset => INTERVAL '3 days',  end_offset => INTERVAL '1 minute',
     schedule_interval => INTERVAL '1 minute');
@@ -100,12 +100,12 @@ SELECT add_continuous_aggregate_policy('meter_1day',
     start_offset => INTERVAL '1 year',  end_offset => INTERVAL '1 day',
     schedule_interval => INTERVAL '1 hour');
 
--- Rohdaten nach 30 Tagen verwerfen (Aggregate bleiben langfristig erhalten)
+-- Drop raw data after 30 days (aggregates are kept long-term)
 SELECT add_retention_policy('meter_reading', INTERVAL '30 days');
 
 -- ---------------------------------------------------------------------------
--- NOTIFY-Trigger für Live-Push: jeder Insert sendet die Zeile als JSON
--- auf den Kanal 'meter_reading'. Das NestJS-Backend macht LISTEN darauf.
+-- NOTIFY trigger for the live push: every insert sends the row as JSON on the
+-- 'meter_reading' channel. The NestJS backend LISTENs on it.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION notify_meter_reading() RETURNS trigger AS $$
 BEGIN

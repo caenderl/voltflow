@@ -1,27 +1,27 @@
-// Geteilte Typen zwischen Backend (NestJS) und Frontend (Angular).
-// Quelle der Wahrheit für die API-/WebSocket-Verträge.
+// Shared types between backend (NestJS) and frontend (Angular).
+// Single source of truth for the API / WebSocket contracts.
 
-/** Ein Live-/Roh-Messwert vom Smart Meter. */
+/** A live / raw reading from the smart meter. */
 export interface MeterReading {
-  /** ISO-Zeitstempel der Messung (Ingestion-Zeit). */
+  /** ISO timestamp of the measurement (ingestion time). */
   time: string;
   deviceSn: string;
-  /** Netzbezug in W (Import). */
+  /** Grid import in W. */
   gridToHomePower: number | null;
-  /** Einspeisung in W (Überschuss). */
+  /** Feed-in / surplus in W. */
   pvToGridPower: number | null;
-  /** Kumulativer Zählerstand Bezug in kWh. */
+  /** Cumulative import meter reading in kWh. */
   gridImportEnergy: number | null;
-  /** Kumulativer Zählerstand Einspeisung in kWh. */
+  /** Cumulative export meter reading in kWh. */
   gridExportEnergy: number | null;
 }
 
-/** Auflösung einer Zeitreihe; bestimmt die Aggregat-Quelle im Backend. */
+/** Resolution of a time series; determines the aggregate source in the backend. */
 export type SeriesResolution = 'raw' | '1min' | '1hour' | '1day';
 
-/** Ein aggregierter Punkt einer Leistungs-Zeitreihe. */
+/** A single aggregated point of a power time series. */
 export interface SeriesPoint {
-  /** ISO-Zeitstempel des Buckets (bzw. der Messung bei resolution=raw). */
+  /** ISO timestamp of the bucket (or of the measurement when resolution=raw). */
   time: string;
   gridToHomePowerAvg: number | null;
   gridToHomePowerMax: number | null;
@@ -29,7 +29,7 @@ export interface SeriesPoint {
   pvToGridPowerMax: number | null;
 }
 
-/** Antwort von GET /api/meter/series. */
+/** Response of GET /api/meter/series. */
 export interface SeriesResponse {
   resolution: SeriesResolution;
   from: string;
@@ -37,30 +37,30 @@ export interface SeriesResponse {
   points: SeriesPoint[];
 }
 
-/** Zeitraum für die Energie-Auswertung. */
+/** Period for the energy summary. */
 export type EnergyPeriod = 'day' | 'week' | 'month';
 
-/** Ein Bucket der Energie-Auswertung (z. B. ein Tag im Monat). */
+/** A single bucket of the energy summary (e.g. one day within a month). */
 export interface EnergyBucket {
-  /** ISO-Zeitstempel des Bucket-Beginns. */
+  /** ISO timestamp of the bucket start. */
   time: string;
-  /** Bezug in diesem Bucket in kWh (Delta der Zählerstände). */
+  /** Import in this bucket in kWh (delta of the meter readings). */
   importKwh: number;
-  /** Einspeisung in diesem Bucket in kWh (Delta der Zählerstände). */
+  /** Feed-in in this bucket in kWh (delta of the meter readings). */
   exportKwh: number;
 }
 
-/** Antwort von GET /api/meter/energy. */
+/** Response of GET /api/meter/energy. */
 export interface EnergySummary {
   period: EnergyPeriod;
   from: string;
   to: string;
-  /** Gesamtbezug im Zeitraum in kWh. */
+  /** Total import over the range in kWh. */
   importKwh: number;
-  /** Gesamteinspeisung im Zeitraum in kWh. */
+  /** Total feed-in over the range in kWh. */
   exportKwh: number;
   buckets: EnergyBucket[];
 }
 
-/** Name des WebSocket-Events, über das Live-Messwerte gepusht werden. */
+/** Name of the WebSocket event used to push live readings. */
 export const METER_READING_EVENT = 'reading';

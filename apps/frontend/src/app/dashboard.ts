@@ -41,7 +41,7 @@ export class Dashboard implements OnInit {
   readonly latest = signal<MeterReading | null>(null);
   private readonly liveBuffer = signal<LivePoint[]>([]);
 
-  // Verlauf / Energie
+  // History / energy
   private readonly series = signal<SeriesResponse | null>(null);
   readonly energy = signal<EnergySummary | null>(null);
 
@@ -56,7 +56,7 @@ export class Dashboard implements OnInit {
     this.live.readings$().subscribe((r) => {
       this.latest.set(r);
       const buf = [...this.liveBuffer(), { time: r.time, grid: r.gridToHomePower, pv: r.pvToGridPower }];
-      this.liveBuffer.set(buf.slice(-120)); // ~10 min bei 5s-Takt
+      this.liveBuffer.set(buf.slice(-120)); // ~10 min at 5s interval
     });
   }
 
@@ -92,7 +92,7 @@ export class Dashboard implements OnInit {
     });
   }
 
-  // --- Chart-Optionen ---
+  // --- Chart options ---
 
   readonly liveChart = computed<EChartsCoreOption>(() => {
     const buf = this.liveBuffer();
@@ -185,7 +185,7 @@ function basePowerChart(
   };
 }
 
-// --- Zeitraum-Helfer ---
+// --- Time range helpers ---
 
 interface RangeSpec {
   from: Date;
@@ -217,7 +217,7 @@ function startOfDay(d: Date): Date {
 }
 function startOfWeek(d: Date): Date {
   const x = startOfDay(d);
-  const day = (x.getDay() + 6) % 7; // Mo=0
+  const day = (x.getDay() + 6) % 7; // Mon=0
   x.setDate(x.getDate() - day);
   return x;
 }

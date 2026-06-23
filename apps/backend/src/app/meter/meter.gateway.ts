@@ -10,8 +10,8 @@ import { DbService } from './db.service';
 import { MeterService } from './meter.service';
 
 /**
- * Pusht Live-Messwerte an verbundene Clients. Quelle ist DbService.readings$
- * (gespeist aus pg NOTIFY) - kein Polling.
+ * Pushes live readings to connected clients. Source is DbService.readings$
+ * (fed by pg NOTIFY) - no polling.
  */
 @WebSocketGateway({
   cors: { origin: process.env.CORS_ORIGIN ?? 'http://localhost:4200' },
@@ -33,9 +33,9 @@ export class MeterGateway implements OnModuleInit, OnGatewayConnection {
     });
   }
 
-  /** Neuen Clients direkt den letzten bekannten Wert schicken. */
+  /** Send the latest known value to newly connected clients right away. */
   async handleConnection(client: Socket): Promise<void> {
-    this.logger.log(`Client verbunden: ${client.id}`);
+    this.logger.log(`Client connected: ${client.id}`);
     const latest = await this.meter.latest();
     if (latest) client.emit(METER_READING_EVENT, latest);
   }

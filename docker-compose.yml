@@ -1,5 +1,5 @@
-# Dev-Setup: nur die TimescaleDB im Container.
-# Collector, Backend und Frontend laufen im Dev lokal (siehe README).
+# Dev setup: only TimescaleDB runs in a container.
+# Collector, backend and frontend run locally in dev (see README).
 services:
   db:
     image: timescale/timescaledb:latest-pg16

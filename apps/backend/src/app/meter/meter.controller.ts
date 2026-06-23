@@ -29,13 +29,13 @@ export class MeterController {
     const to = toStr ? new Date(toStr) : new Date();
     const from = fromStr
       ? new Date(fromStr)
-      : new Date(to.getTime() - 60 * 60 * 1000); // Default: letzte Stunde
+      : new Date(to.getTime() - 60 * 60 * 1000); // default: last hour
     if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-      throw new BadRequestException('Ungültige from/to-Zeitangabe.');
+      throw new BadRequestException('Invalid from/to timestamp.');
     }
     const res = (resolution ?? '1min') as SeriesResolution;
     if (!RESOLUTIONS.includes(res)) {
-      throw new BadRequestException(`resolution muss eine von ${RESOLUTIONS}`);
+      throw new BadRequestException(`resolution must be one of ${RESOLUTIONS}`);
     }
     return this.meter.series(from, to, res);
   }
@@ -47,18 +47,18 @@ export class MeterController {
   ): Promise<EnergySummary> {
     const period = (periodStr ?? 'day') as EnergyPeriod;
     if (!PERIODS.includes(period)) {
-      throw new BadRequestException(`period muss eine von ${PERIODS}`);
+      throw new BadRequestException(`period must be one of ${PERIODS}`);
     }
     const ref = dateStr ? new Date(dateStr) : new Date();
     if (isNaN(ref.getTime())) {
-      throw new BadRequestException('Ungültiges date.');
+      throw new BadRequestException('Invalid date.');
     }
     const { from, to } = computeRange(period, ref);
     return this.meter.energy(period, from, to);
   }
 }
 
-/** Liefert [from, to) für den gewählten Zeitraum (lokale Zeit). */
+/** Returns [from, to) for the selected period (local time). */
 function computeRange(period: EnergyPeriod, ref: Date): { from: Date; to: Date } {
   const from = new Date(ref);
   from.setHours(0, 0, 0, 0);
@@ -67,8 +67,8 @@ function computeRange(period: EnergyPeriod, ref: Date): { from: Date; to: Date }
   if (period === 'day') {
     to.setDate(to.getDate() + 1);
   } else if (period === 'week') {
-    // Woche beginnt Montag
-    const day = (from.getDay() + 6) % 7; // Mo=0 .. So=6
+    // week starts on Monday
+    const day = (from.getDay() + 6) % 7; // Mon=0 .. Sun=6
     from.setDate(from.getDate() - day);
     to.setTime(from.getTime());
     to.setDate(to.getDate() + 7);

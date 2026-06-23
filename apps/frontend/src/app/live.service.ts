@@ -4,8 +4,8 @@ import { io, Socket } from 'socket.io-client';
 import { METER_READING_EVENT, type MeterReading } from '@org/shared-types';
 
 /**
- * Liefert Live-Messwerte über die WebSocket-Verbindung zum Backend.
- * Im Dev läuft die Verbindung über den NX-Proxy (/socket.io -> :3000).
+ * Provides live readings over the WebSocket connection to the backend.
+ * In dev the connection runs through the NX proxy (/socket.io -> :3000).
  */
 @Injectable({ providedIn: 'root' })
 export class LiveService {
