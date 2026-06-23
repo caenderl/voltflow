@@ -1,0 +1,60 @@
+<div class="dashboard">
+  <header>
+    <h1>⚡ poke-meter</h1>
+    <nav class="views">
+      @for (v of views; track v.id) {
+        <button [class.active]="view() === v.id" (click)="select(v.id)">
+          {{ v.label }}
+        </button>
+      }
+      @if (view() === 'month') {
+        <input
+          type="month"
+          [ngModel]="month()"
+          (ngModelChange)="onMonthChange($event)"
+        />
+      }
+    </nav>
+  </header>
+
+  @if (view() === 'live') {
+    <section class="cards">
+      <div class="card import">
+        <span class="label">Netzbezug</span>
+        <span class="value">{{ latest()?.gridToHomePower ?? '–' }} <small>W</small></span>
+      </div>
+      <div class="card export">
+        <span class="label">Einspeisung</span>
+        <span class="value">{{ latest()?.pvToGridPower ?? '–' }} <small>W</small></span>
+      </div>
+    </section>
+    <div class="chart-box">
+      <h2>Live (letzte ~10 min)</h2>
+      <div echarts [options]="liveChart()" class="chart"></div>
+    </div>
+  } @else {
+    <section class="cards">
+      <div class="card import">
+        <span class="label">Bezug gesamt</span>
+        <span class="value">{{ energy()?.importKwh ?? '–' }} <small>kWh</small></span>
+      </div>
+      <div class="card export">
+        <span class="label">Einspeisung gesamt</span>
+        <span class="value">{{ energy()?.exportKwh ?? '–' }} <small>kWh</small></span>
+      </div>
+    </section>
+
+    @if (loading()) {
+      <p class="hint">Lade Daten …</p>
+    }
+
+    <div class="chart-box">
+      <h2>Leistung</h2>
+      <div echarts [options]="powerChart()" class="chart"></div>
+    </div>
+    <div class="chart-box">
+      <h2>Energie pro {{ view() === 'day' ? 'Stunde' : 'Tag' }}</h2>
+      <div echarts [options]="energyChart()" class="chart"></div>
+    </div>
+  }
+</div>

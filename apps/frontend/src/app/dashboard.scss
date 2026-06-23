@@ -1,0 +1,118 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.dashboard {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+}
+
+.views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+
+  button {
+    background: #1e293b;
+    color: #cbd5e1;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+
+    &.active {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #fff;
+    }
+  }
+
+  input[type='month'] {
+    background: #1e293b;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 0.45rem 0.6rem;
+  }
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.card {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-left: 4px solid #475569;
+
+  &.import {
+    border-left-color: #ef4444;
+  }
+  &.export {
+    border-left-color: #22c55e;
+  }
+
+  .label {
+    font-size: 0.85rem;
+    color: #94a3b8;
+  }
+  .value {
+    font-size: 2rem;
+    font-weight: 600;
+    small {
+      font-size: 1rem;
+      color: #94a3b8;
+    }
+  }
+}
+
+.chart-box {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 1rem 1rem 0.5rem;
+  margin-bottom: 1.5rem;
+
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #cbd5e1;
+  }
+}
+
+.chart {
+  width: 100%;
+  height: 320px;
+}
+
+.hint {
+  color: #94a3b8;
+}

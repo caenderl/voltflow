@@ -1,0 +1,24 @@
+# Dev-Setup: nur die TimescaleDB im Container.
+# Collector, Backend und Frontend laufen im Dev lokal (siehe README).
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: poke-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: poke
+      POSTGRES_PASSWORD: poke
+      POSTGRES_DB: poke
+    ports:
+      - "5432:5432"
+    volumes:
+      - poke-db-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poke -d poke"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  poke-db-data:

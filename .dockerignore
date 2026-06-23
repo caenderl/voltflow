@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.nx
+.angular
+venv
+anker-solix-api
+.git
+*.log
+.env
+__pycache__
+**/__pycache__
