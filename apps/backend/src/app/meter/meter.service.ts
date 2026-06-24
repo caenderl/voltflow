@@ -10,6 +10,9 @@ import type {
 } from '@org/shared-types';
 import { DbService, rowToReading } from './db.service';
 
+/** Timezone for day-boundary bucketing (overridable via TZ env). */
+const TIMEZONE = process.env.TZ || 'Europe/Berlin';
+
 /** Aggregate view per resolution. */
 const VIEW_BY_RESOLUTION: Record<Exclude<SeriesResolution, 'raw'>, string> = {
   '1min': 'meter_1min',
@@ -93,15 +96,16 @@ export class MeterService {
   ): Promise<EnergySummary> {
     const bucketInterval = period === 'day' ? '1 hour' : '1 day';
 
+    // Bucket in local time so a "day" is a local calendar day (not a UTC day).
     const { rows } = await this.db.query(
-      `SELECT time_bucket($1::interval, time) AS bucket,
+      `SELECT time_bucket($1::interval, time, $4) AS bucket,
               max(grid_import_energy) - min(grid_import_energy) AS import_kwh,
               max(grid_export_energy) - min(grid_export_energy) AS export_kwh
          FROM meter_reading
         WHERE time >= $2 AND time < $3
         GROUP BY bucket
         ORDER BY bucket`,
-      [bucketInterval, from, to],
+      [bucketInterval, from, to, TIMEZONE],
     );
 
     const buckets: EnergyBucket[] = rows.map((r) => ({

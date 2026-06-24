@@ -131,16 +131,38 @@ export class Dashboard implements OnInit {
   });
 
   readonly powerChart = computed<EChartsCoreOption>(() => {
-    const points = this.series()?.points ?? [];
+    const view = this.view();
+    const s = this.series();
+    const points = s?.points ?? [];
     return signedPowerChart(
       points.map(
         (p) => [p.time, netWatts(p.gridToHomePowerAvg, p.pvToGridPowerAvg)] as [string, number],
       ),
+      {
+        axisFormat: (v: number) => dayLabel(view, v),
+        // week -> one tick per day (weekday labels)
+        minInterval: view === 'week' ? ONE_DAY : undefined,
+        // span the full period so the axis starts at 00:00 / week/month start
+        min: s?.from,
+        max: s?.to,
+      },
     );
   });
 
   readonly energyChart = computed<EChartsCoreOption>(() => {
+    const view = this.view();
     const buckets = this.energy()?.buckets ?? [];
+    // Full set of slots for the period (day -> 24h, week -> Mo..So, month ->
+    // 1..N), so every day/hour shows even without data.
+    const slots = energySlots(view, this.month());
+    const byKey = new Map<string, { imp: number; exp: number }>();
+    for (const b of buckets) {
+      const k = slotKey(view, new Date(b.time).getTime());
+      const cur = byKey.get(k) ?? { imp: 0, exp: 0 };
+      cur.imp += b.importKwh;
+      cur.exp += b.exportKwh;
+      byKey.set(k, cur);
+    }
     return {
       tooltip: {
         trigger: 'axis',
@@ -148,7 +170,11 @@ export class Dashboard implements OnInit {
       },
       legend: { data: ['Bezug', 'Einspeisung'], top: 0, textStyle: { color: '#cbd5e1' } },
       grid: { left: 50, right: 20, top: 40, bottom: 30 },
-      xAxis: { type: 'time', axisLabel: { color: '#94a3b8' } },
+      xAxis: {
+        type: 'category',
+        data: slots.map((s) => s.label),
+        axisLabel: { color: '#94a3b8', interval: 0 },
+      },
       yAxis: {
         type: 'value',
         name: 'kWh',
@@ -161,16 +187,14 @@ export class Dashboard implements OnInit {
           type: 'bar',
           stack: 'energy',
           itemStyle: { color: '#ef4444' },
-          // import positive (up)
-          data: buckets.map((b) => [b.time, b.importKwh]),
+          data: slots.map((s) => round2(byKey.get(s.key)?.imp ?? 0)), // import up
         },
         {
           name: 'Einspeisung',
           type: 'bar',
           stack: 'energy',
           itemStyle: { color: '#22c55e' },
-          // feed-in negative (down)
-          data: buckets.map((b) => [b.time, -b.exportKwh]),
+          data: slots.map((s) => -round2(byKey.get(s.key)?.exp ?? 0)), // feed-in down
         },
       ],
     };
@@ -182,6 +206,65 @@ function netWatts(grid: number | null, pv: number | null): number {
   return (grid ?? 0) - (pv ?? 0);
 }
 
+const ONE_DAY = 24 * 60 * 60 * 1000;
+
+/** X-axis label for a timestamp depending on the view. */
+function dayLabel(view: View, ms: number): string {
+  const d = new Date(ms);
+  if (view === 'week') return d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', ''); // Mo..So
+  if (view === 'month') return String(d.getDate()); // 1..31
+  return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); // HH:MM
+}
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+/** Local day key for matching buckets to slots. */
+function localDateKey(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** Key of the slot a bucket belongs to (day -> hour, else -> local day). */
+function slotKey(view: View, ms: number): string {
+  if (view === 'day') return String(new Date(ms).getHours());
+  return localDateKey(ms);
+}
+
+interface Slot {
+  key: string;
+  label: string;
+}
+
+/** Full set of category slots for the period (so empty days/hours still show). */
+function energySlots(view: View, monthStr: string): Slot[] {
+  const slots: Slot[] = [];
+  if (view === 'day') {
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    for (let h = 0; h < 24; h++) {
+      const d = new Date(base);
+      d.setHours(h);
+      slots.push({ key: String(h), label: dayLabel('day', d.getTime()) });
+    }
+  } else if (view === 'week') {
+    const base = startOfWeek(new Date());
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(base, i);
+      slots.push({ key: localDateKey(d.getTime()), label: dayLabel('week', d.getTime()) });
+    }
+  } else {
+    const [y, m] = monthStr.split('-').map(Number);
+    const days = new Date(y, m, 0).getDate(); // days in month
+    for (let day = 1; day <= days; day++) {
+      const d = new Date(y, m - 1, day);
+      slots.push({ key: localDateKey(d.getTime()), label: String(day) });
+    }
+  }
+  return slots;
+}
+
 /**
  * Signed power chart: import (positive) red above zero, feed-in (negative)
  * green below zero. Split into two area series at the zero line (robust, no
@@ -189,7 +272,13 @@ function netWatts(grid: number | null, pv: number | null): number {
  */
 function signedPowerChart(
   data: [string, number][],
-  opts: { spark?: boolean } = {},
+  opts: {
+    spark?: boolean;
+    axisFormat?: string | ((value: number) => string);
+    minInterval?: number;
+    min?: string;
+    max?: string;
+  } = {},
 ): EChartsCoreOption {
   const spark = opts.spark === true;
   const importData = data.map(([t, v]) => [t, v >= 0 ? v : null] as [string, number | null]);
@@ -213,7 +302,14 @@ function signedPowerChart(
     grid: spark
       ? { left: 0, right: 0, top: 8, bottom: 0 }
       : { left: 60, right: 20, top: 20, bottom: 30 },
-    xAxis: { type: 'time', show: !spark, axisLabel: { color: '#94a3b8' } },
+    xAxis: {
+      type: 'time',
+      show: !spark,
+      min: opts.min,
+      max: opts.max,
+      minInterval: opts.minInterval,
+      axisLabel: { color: '#94a3b8', formatter: opts.axisFormat },
+    },
     yAxis: {
       type: 'value',
       show: !spark,
