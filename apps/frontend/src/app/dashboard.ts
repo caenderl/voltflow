@@ -168,32 +168,32 @@ export class Dashboard implements OnInit {
         trigger: 'axis',
         valueFormatter: (v: number) => `${Math.abs(Number(v)).toFixed(2)} kWh`,
       },
-      legend: { data: ['Bezug', 'Einspeisung'], top: 0, textStyle: { color: '#cbd5e1' } },
+      legend: { data: ['Bezug', 'Einspeisung'], top: 0, textStyle: { color: '#c9c5d0' } },
       grid: { left: 50, right: 20, top: 40, bottom: 30 },
       xAxis: {
         type: 'category',
         data: slots.map((s) => s.label),
-        axisLabel: { color: '#94a3b8', interval: 0 },
+        axisLabel: { color: '#948f9c', interval: 0 },
       },
       yAxis: {
         type: 'value',
         name: 'kWh',
-        axisLabel: { color: '#94a3b8' },
-        splitLine: { lineStyle: { color: '#1e293b' } },
+        axisLabel: { color: '#948f9c' },
+        splitLine: { lineStyle: { color: '#2a2a30' } },
       },
       series: [
         {
           name: 'Bezug',
           type: 'bar',
           stack: 'energy',
-          itemStyle: { color: '#ef4444' },
+          itemStyle: { color: '#ff8a80' },
           data: slots.map((s) => round2(byKey.get(s.key)?.imp ?? 0)), // import up
         },
         {
           name: 'Einspeisung',
           type: 'bar',
           stack: 'energy',
-          itemStyle: { color: '#22c55e' },
+          itemStyle: { color: '#7fe0a3' },
           data: slots.map((s) => -round2(byKey.get(s.key)?.exp ?? 0)), // feed-in down
         },
       ],
@@ -308,18 +308,18 @@ function signedPowerChart(
       min: opts.min,
       max: opts.max,
       minInterval: opts.minInterval,
-      axisLabel: { color: '#94a3b8', formatter: opts.axisFormat },
+      axisLabel: { color: '#948f9c', formatter: opts.axisFormat },
     },
     yAxis: {
       type: 'value',
       show: !spark,
       name: spark ? undefined : 'W',
-      axisLabel: { color: '#94a3b8' },
-      splitLine: { lineStyle: { color: '#1e293b' } },
+      axisLabel: { color: '#948f9c' },
+      splitLine: { lineStyle: { color: '#2a2a30' } },
     },
     series: [
-      lineSeries('Bezug', '#f87171', importData),
-      lineSeries('Einspeisung', '#34d399', exportData),
+      lineSeries('Bezug', '#ff8a80', importData),
+      lineSeries('Einspeisung', '#7fe0a3', exportData),
     ],
   };
 }
