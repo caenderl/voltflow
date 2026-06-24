@@ -17,6 +17,17 @@ CREATE TABLE IF NOT EXISTS device (
 );
 
 -- ---------------------------------------------------------------------------
+-- Single-row electricity tariff (work prices in ct/kWh).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS tariff (
+    id            INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    provider      TEXT,
+    import_ct_kwh DOUBLE PRECISION,
+    export_ct_kwh DOUBLE PRECISION,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------------------------------------------------------------------------
 -- Raw smart meter readings (~one insert every 5s).
 -- time = ingestion time (now()), since msg_timestamp can be unreliable.
 -- ---------------------------------------------------------------------------

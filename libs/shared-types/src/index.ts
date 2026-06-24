@@ -62,6 +62,15 @@ export interface EnergySummary {
   buckets: EnergyBucket[];
 }
 
+/** Electricity tariff (work prices). Costs are derived from kWh × price. */
+export interface Tariff {
+  provider: string | null;
+  /** Consumption price in ct/kWh. */
+  importCtPerKwh: number | null;
+  /** Feed-in price in ct/kWh. */
+  exportCtPerKwh: number | null;
+}
+
 /** Available data range (first/last reading), for period navigation. */
 export interface DataRange {
   first: string | null;

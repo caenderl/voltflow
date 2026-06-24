@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsCoreOption } from 'echarts/core';
 import type {
@@ -9,6 +10,7 @@ import type {
   MeterReading,
   SeriesResolution,
   SeriesResponse,
+  Tariff,
 } from '@org/shared-types';
 import { LiveService } from './live.service';
 import { MeterApiService } from './meter-api.service';
@@ -28,7 +30,7 @@ const CHARGE_THRESHOLD_W = 1400;
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, NgxEchartsDirective],
+  imports: [CommonModule, FormsModule, NgxEchartsDirective],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
@@ -52,6 +54,30 @@ export class Dashboard implements OnInit {
   // History / energy
   private readonly series = signal<SeriesResponse | null>(null);
   readonly energy = signal<EnergySummary | null>(null);
+
+  // Tariff / config
+  readonly tariff = signal<Tariff | null>(null);
+  readonly configOpen = signal(false);
+  // form model (bound via ngModel in the settings modal)
+  formProvider = '';
+  formImport: number | null = null;
+  formExport: number | null = null;
+
+  /** True when both work prices are configured -> show costs. */
+  readonly hasTariff = computed(() => {
+    const t = this.tariff();
+    return t != null && t.importCtPerKwh != null && t.exportCtPerKwh != null;
+  });
+
+  /** Costs (€) for the currently loaded period, derived from energy × prices. */
+  readonly costs = computed(() => {
+    const t = this.tariff();
+    const e = this.energy();
+    if (!t || !e || t.importCtPerKwh == null || t.exportCtPerKwh == null) return null;
+    const importCost = (e.importKwh * t.importCtPerKwh) / 100;
+    const exportRevenue = (e.exportKwh * t.exportCtPerKwh) / 100;
+    return { importCost, exportRevenue, net: importCost - exportRevenue };
+  });
 
   readonly views: { id: View; label: string }[] = [
     { id: 'live', label: 'Live' },
@@ -95,8 +121,36 @@ export class Dashboard implements OnInit {
     });
     this.loadToday();
     this.api.range().subscribe({ next: (r) => this.dataRange.set(r), error: () => undefined });
+    this.api.tariff().subscribe({ next: (t) => this.tariff.set(t), error: () => undefined });
     // Refresh today's totals every 5 min
     setInterval(() => this.loadToday(), 5 * 60 * 1000);
+  }
+
+  openConfig(): void {
+    const t = this.tariff();
+    this.formProvider = t?.provider ?? '';
+    this.formImport = t?.importCtPerKwh ?? null;
+    this.formExport = t?.exportCtPerKwh ?? null;
+    this.configOpen.set(true);
+  }
+
+  closeConfig(): void {
+    this.configOpen.set(false);
+  }
+
+  saveConfig(): void {
+    const t: Tariff = {
+      provider: this.formProvider.trim() || null,
+      importCtPerKwh: this.formImport ?? null,
+      exportCtPerKwh: this.formExport ?? null,
+    };
+    this.api.saveTariff(t).subscribe({
+      next: (saved) => {
+        this.tariff.set(saved);
+        this.configOpen.set(false);
+      },
+      error: () => this.error.set('Tarif konnte nicht gespeichert werden.'),
+    });
   }
 
   private loadToday(): void {

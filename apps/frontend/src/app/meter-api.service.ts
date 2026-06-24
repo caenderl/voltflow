@@ -8,6 +8,7 @@ import type {
   MeterReading,
   SeriesResolution,
   SeriesResponse,
+  Tariff,
 } from '@org/shared-types';
 
 @Injectable({ providedIn: 'root' })
@@ -21,6 +22,14 @@ export class MeterApiService {
 
   range(): Observable<DataRange> {
     return this.http.get<DataRange>(`${this.base}/range`);
+  }
+
+  tariff(): Observable<Tariff> {
+    return this.http.get<Tariff>('/api/tariff');
+  }
+
+  saveTariff(t: Tariff): Observable<Tariff> {
+    return this.http.put<Tariff>('/api/tariff', t);
   }
 
   series(
