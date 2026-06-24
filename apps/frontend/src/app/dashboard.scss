@@ -301,6 +301,15 @@
       color: var(--muted);
     }
   }
+
+  .sub {
+    margin-top: 0.15rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--on-surface-var);
+  }
+  &.import .sub { color: var(--import); }
+  &.export .sub { color: var(--export); }
 }
 
 .chart-box {

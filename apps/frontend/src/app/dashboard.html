@@ -78,29 +78,24 @@
       <div class="card import">
         <span class="label">Bezug gesamt</span>
         <span class="value">{{ energy()?.importKwh ?? '–' }} <small>kWh</small></span>
+        @if (hasTariff() && costs(); as c) {
+          <span class="sub">{{ c.importCost | number: '1.2-2' }} €</span>
+        }
       </div>
       <div class="card export">
         <span class="label">Einspeisung gesamt</span>
         <span class="value">{{ energy()?.exportKwh ?? '–' }} <small>kWh</small></span>
+        @if (hasTariff() && costs(); as c) {
+          <span class="sub">{{ c.exportRevenue | number: '1.2-2' }} €</span>
+        }
       </div>
-    </section>
-
-    @if (hasTariff() && costs(); as c) {
-      <section class="cards">
-        <div class="card import">
-          <span class="label">Bezugskosten</span>
-          <span class="value">{{ c.importCost | number: '1.2-2' }} <small>€</small></span>
-        </div>
-        <div class="card export">
-          <span class="label">Einspeise-Erlös</span>
-          <span class="value">{{ c.exportRevenue | number: '1.2-2' }} <small>€</small></span>
-        </div>
+      @if (hasTariff() && costs(); as c) {
         <div class="card" [class.import]="c.net >= 0" [class.export]="c.net < 0">
           <span class="label">Netto</span>
           <span class="value">{{ c.net | number: '1.2-2' }} <small>€</small></span>
         </div>
-      </section>
-    }
+      }
+    </section>
 
     @if (loading()) {
       <p class="hint">Lade Daten …</p>
