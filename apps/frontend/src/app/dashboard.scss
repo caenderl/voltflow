@@ -125,7 +125,12 @@
 
   --accent: var(--muted);
   &.is-export { --accent: var(--export); }
-  &.is-import { --accent: #ffb77c; }
+  &.is-import { --accent: var(--import); }
+
+  // surplus -> reverse the arrow (house -> grid) without swapping icons
+  &.is-export .arrow {
+    transform: scaleX(-1);
+  }
 }
 
 .flow {

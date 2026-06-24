@@ -36,31 +36,17 @@
       [class.is-idle]="flow().mode === 'idle'"
     >
       <div class="flow">
-        @if (flow().mode === 'export') {
-          <span class="node">
-            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
-            <small>Haus</small>
-          </span>
-          <span class="arrow">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h12l-5-5 1.4-1.4L20.8 12l-8.4 7.4L11 18l5-5H4z" /></svg>
-          </span>
-          <span class="node">
-            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v11h3v9l7-12h-4l4-8z" /></svg>
-            <small>Netz</small>
-          </span>
-        } @else {
-          <span class="node">
-            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v11h3v9l7-12h-4l4-8z" /></svg>
-            <small>Netz</small>
-          </span>
-          <span class="arrow">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h12l-5-5 1.4-1.4L20.8 12l-8.4 7.4L11 18l5-5H4z" /></svg>
-          </span>
-          <span class="node">
-            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
-            <small>Haus</small>
-          </span>
-        }
+        <span class="node">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v11h3v9l7-12h-4l4-8z" /></svg>
+          <small>Netz</small>
+        </span>
+        <span class="arrow">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h12l-5-5 1.4-1.4L20.8 12l-8.4 7.4L11 18l5-5H4z" /></svg>
+        </span>
+        <span class="node">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
+          <small>Haus</small>
+        </span>
       </div>
 
       <div class="state-label">
@@ -68,10 +54,8 @@
       </div>
       <div class="big-watts">{{ flow().watts | number }}<span>W</span></div>
 
-      @if (flow().mode === 'export') {
-        <div class="charge-pill" [class.ok]="flow().charging">
-          {{ flow().charging ? '✓ genug zum Laden' : 'noch zu wenig zum Laden' }}
-        </div>
+      @if (flow().charging) {
+        <div class="charge-pill ok">✓ genug zum Laden</div>
       }
 
       <div class="today">
