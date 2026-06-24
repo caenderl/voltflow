@@ -2,6 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import type {
+  DataRange,
   EnergyPeriod,
   EnergySummary,
   MeterReading,
@@ -16,6 +17,10 @@ export class MeterApiService {
 
   latest(): Observable<MeterReading | null> {
     return this.http.get<MeterReading | null>(`${this.base}/latest`);
+  }
+
+  range(): Observable<DataRange> {
+    return this.http.get<DataRange>(`${this.base}/range`);
   }
 
   series(

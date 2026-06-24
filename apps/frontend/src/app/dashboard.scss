@@ -103,14 +103,49 @@
   }
 }
 
-.month-field {
-  background: var(--surface-3);
+/* ---------- Period navigator ---------- */
+.period-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 0.25rem 0 1.5rem;
+}
+
+.period-label {
+  min-width: 16rem;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   color: var(--on-surface);
-  border: 1px solid var(--outline);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.7rem;
-  font: inherit;
-  color-scheme: dark;
+}
+
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--on-surface);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+
+  svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    fill: currentColor;
+  }
+  &:hover:not(:disabled) {
+    background: var(--surface-3);
+  }
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
 }
 
 /* ---------- Live hero (energy flow) ---------- */

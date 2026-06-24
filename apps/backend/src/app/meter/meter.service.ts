@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  DataRange,
   EnergyBucket,
   EnergyPeriod,
   EnergySummary,
@@ -23,6 +24,17 @@ const VIEW_BY_RESOLUTION: Record<Exclude<SeriesResolution, 'raw'>, string> = {
 @Injectable()
 export class MeterService {
   constructor(private readonly db: DbService) {}
+
+  async range(): Promise<DataRange> {
+    const { rows } = await this.db.query(
+      `SELECT min(time) AS first, max(time) AS last FROM meter_reading`,
+    );
+    const r = rows[0] ?? {};
+    return {
+      first: r['first'] ? new Date(r['first'] as string).toISOString() : null,
+      last: r['last'] ? new Date(r['last'] as string).toISOString() : null,
+    };
+  }
 
   async latest(): Promise<MeterReading | null> {
     const { rows } = await this.db.query(

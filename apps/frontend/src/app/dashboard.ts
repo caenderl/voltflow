@@ -1,9 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsCoreOption } from 'echarts/core';
 import type {
+  DataRange,
   EnergyPeriod,
   EnergySummary,
   MeterReading,
@@ -28,7 +28,7 @@ const CHARGE_THRESHOLD_W = 1400;
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, NgxEchartsDirective],
+  imports: [CommonModule, NgxEchartsDirective],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
@@ -37,7 +37,10 @@ export class Dashboard implements OnInit {
   private readonly live = inject(LiveService);
 
   readonly view = signal<View>('live');
-  readonly month = signal<string>(currentMonthStr());
+  /** Reference date of the shown period (day/week/month it falls into). */
+  readonly refDate = signal<Date>(new Date());
+  /** Available data range, for enabling prev/next. */
+  readonly dataRange = signal<DataRange | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
@@ -69,6 +72,21 @@ export class Dashboard implements OnInit {
     return { mode: 'idle', watts: 0, charging: false };
   });
 
+  /** Period label shown in the navigator (e.g. "Di., 24. Juni 2026"). */
+  readonly periodLabel = computed(() => periodLabelFor(this.view(), this.refDate()));
+
+  readonly canPrev = computed(() => {
+    const r = this.dataRange();
+    if (!r?.first) return false;
+    const { from } = rangeFor(this.view(), this.refDate());
+    return new Date(r.first) < from;
+  });
+
+  readonly canNext = computed(() => {
+    const { to } = rangeFor(this.view(), this.refDate());
+    return to <= startOfDay(new Date()); // no navigating into the future
+  });
+
   ngOnInit(): void {
     this.live.readings$().subscribe((r) => {
       this.latest.set(r);
@@ -76,6 +94,7 @@ export class Dashboard implements OnInit {
       this.liveBuffer.set(buf.slice(-120)); // ~10 min at 5s interval
     });
     this.loadToday();
+    this.api.range().subscribe({ next: (r) => this.dataRange.set(r), error: () => undefined });
     // Refresh today's totals every 5 min
     setInterval(() => this.loadToday(), 5 * 60 * 1000);
   }
@@ -89,17 +108,31 @@ export class Dashboard implements OnInit {
 
   select(view: View): void {
     this.view.set(view);
+    this.refDate.set(new Date()); // start at the current period
     if (view !== 'live') this.load();
   }
 
-  onMonthChange(value: string): void {
-    this.month.set(value);
-    if (this.view() === 'month') this.load();
+  prev(): void {
+    if (this.canPrev()) this.shift(-1);
+  }
+
+  next(): void {
+    if (this.canNext()) this.shift(1);
+  }
+
+  private shift(dir: -1 | 1): void {
+    const d = new Date(this.refDate());
+    const v = this.view();
+    if (v === 'day') d.setDate(d.getDate() + dir);
+    else if (v === 'week') d.setDate(d.getDate() + 7 * dir);
+    else d.setMonth(d.getMonth() + dir);
+    this.refDate.set(d);
+    this.load();
   }
 
   private load(): void {
     const view = this.view();
-    const { from, to, resolution, period, date } = rangeFor(view, this.month());
+    const { from, to, resolution, period, date } = rangeFor(view, this.refDate());
     this.loading.set(true);
     this.error.set(null);
     this.series.set(null);
@@ -154,7 +187,7 @@ export class Dashboard implements OnInit {
     const buckets = this.energy()?.buckets ?? [];
     // Full set of slots for the period (day -> 24h, week -> Mo..So, month ->
     // 1..N), so every day/hour shows even without data.
-    const slots = energySlots(view, this.month());
+    const slots = energySlots(view, this.refDate());
     const byKey = new Map<string, { imp: number; exp: number }>();
     for (const b of buckets) {
       const k = slotKey(view, new Date(b.time).getTime());
@@ -238,27 +271,27 @@ interface Slot {
 }
 
 /** Full set of category slots for the period (so empty days/hours still show). */
-function energySlots(view: View, monthStr: string): Slot[] {
+function energySlots(view: View, ref: Date): Slot[] {
   const slots: Slot[] = [];
   if (view === 'day') {
-    const base = new Date();
-    base.setHours(0, 0, 0, 0);
+    const base = startOfDay(ref);
     for (let h = 0; h < 24; h++) {
       const d = new Date(base);
       d.setHours(h);
       slots.push({ key: String(h), label: dayLabel('day', d.getTime()) });
     }
   } else if (view === 'week') {
-    const base = startOfWeek(new Date());
+    const base = startOfWeek(ref);
     for (let i = 0; i < 7; i++) {
       const d = addDays(base, i);
       slots.push({ key: localDateKey(d.getTime()), label: dayLabel('week', d.getTime()) });
     }
   } else {
-    const [y, m] = monthStr.split('-').map(Number);
-    const days = new Date(y, m, 0).getDate(); // days in month
+    const y = ref.getFullYear();
+    const m = ref.getMonth();
+    const days = new Date(y, m + 1, 0).getDate(); // days in month
     for (let day = 1; day <= days; day++) {
-      const d = new Date(y, m - 1, day);
+      const d = new Date(y, m, day);
       slots.push({ key: localDateKey(d.getTime()), label: String(day) });
     }
   }
@@ -334,19 +367,18 @@ interface RangeSpec {
   date: Date;
 }
 
-function rangeFor(view: View, monthStr: string): RangeSpec {
-  const now = new Date();
-  if (view === 'day') {
-    const from = startOfDay(now);
-    return { from, to: addDays(from, 1), resolution: '1min', period: 'day', date: now };
-  }
+function rangeFor(view: View, ref: Date): RangeSpec {
   if (view === 'week') {
-    const from = startOfWeek(now);
-    return { from, to: addDays(from, 7), resolution: '1hour', period: 'week', date: now };
+    const from = startOfWeek(ref);
+    return { from, to: addDays(from, 7), resolution: '1hour', period: 'week', date: ref };
   }
-  // month
-  const from = startOfMonth(monthStr);
-  return { from, to: addMonths(from, 1), resolution: '1day', period: 'month', date: from };
+  if (view === 'month') {
+    const from = startOfMonth(ref);
+    return { from, to: addMonths(from, 1), resolution: '1day', period: 'month', date: from };
+  }
+  // day (also the fallback for 'live', unused there)
+  const from = startOfDay(ref);
+  return { from, to: addDays(from, 1), resolution: '1min', period: 'day', date: ref };
 }
 
 function startOfDay(d: Date): Date {
@@ -365,16 +397,45 @@ function addDays(d: Date, n: number): Date {
   x.setDate(x.getDate() + n);
   return x;
 }
-function startOfMonth(monthStr: string): Date {
-  const [y, m] = monthStr.split('-').map(Number);
-  return new Date(y, m - 1, 1);
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 function addMonths(d: Date, n: number): Date {
   const x = new Date(d);
   x.setMonth(x.getMonth() + n);
   return x;
 }
-function currentMonthStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+/** ISO week number of a date. */
+function isoWeek(d: Date): number {
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  t.setDate(t.getDate() + 3 - ((t.getDay() + 6) % 7)); // nearest Thursday
+  const week1 = new Date(t.getFullYear(), 0, 4);
+  return (
+    1 +
+    Math.round(
+      ((t.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7,
+    )
+  );
+}
+
+/** Human label for the shown period. */
+function periodLabelFor(view: View, ref: Date): string {
+  if (view === 'week') {
+    const start = startOfWeek(ref);
+    const end = addDays(start, 6);
+    const s = start.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
+    const e = end.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' });
+    return `KW ${isoWeek(start)} · ${s} – ${e}`;
+  }
+  if (view === 'month') {
+    return ref.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+  }
+  // day
+  return ref.toLocaleDateString('de-DE', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 }

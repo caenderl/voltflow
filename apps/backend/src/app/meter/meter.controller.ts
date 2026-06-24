@@ -1,5 +1,6 @@
 import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import type {
+  DataRange,
   EnergyPeriod,
   EnergySummary,
   MeterReading,
@@ -18,6 +19,11 @@ export class MeterController {
   @Get('latest')
   latest(): Promise<MeterReading | null> {
     return this.meter.latest();
+  }
+
+  @Get('range')
+  range(): Promise<DataRange> {
+    return this.meter.range();
   }
 
   @Get('series')

@@ -62,5 +62,11 @@ export interface EnergySummary {
   buckets: EnergyBucket[];
 }
 
+/** Available data range (first/last reading), for period navigation. */
+export interface DataRange {
+  first: string | null;
+  last: string | null;
+}
+
 /** Name of the WebSocket event used to push live readings. */
 export const METER_READING_EVENT = 'reading';

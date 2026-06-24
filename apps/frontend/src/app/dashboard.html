@@ -17,14 +17,6 @@
           {{ v.label }}
         </button>
       }
-      @if (view() === 'month') {
-        <input
-          class="month-field"
-          type="month"
-          [ngModel]="month()"
-          (ngModelChange)="onMonthChange($event)"
-        />
-      }
     </nav>
   </header>
 
@@ -67,6 +59,16 @@
       <div echarts [options]="liveSpark()" class="spark"></div>
     </section>
   } @else {
+    <div class="period-nav">
+      <button class="nav-btn" (click)="prev()" [disabled]="!canPrev()" aria-label="Zurück">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z" /></svg>
+      </button>
+      <span class="period-label">{{ periodLabel() }}</span>
+      <button class="nav-btn" (click)="next()" [disabled]="!canNext()" aria-label="Weiter">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 7.4 10 6l6 6-6 6-1.4-1.4L13.2 12z" /></svg>
+      </button>
+    </div>
+
     <section class="cards">
       <div class="card import">
         <span class="label">Bezug gesamt</span>
