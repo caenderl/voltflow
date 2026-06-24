@@ -183,28 +183,32 @@ function netWatts(grid: number | null, pv: number | null): number {
 }
 
 /**
- * Single signed power line: import (positive) red above zero, feed-in
- * (negative) green below zero. Color split via visualMap at the zero line.
+ * Signed power chart: import (positive) red above zero, feed-in (negative)
+ * green below zero. Split into two area series at the zero line (robust, no
+ * visualMap which crashes on area lines).
  */
 function signedPowerChart(
   data: [string, number][],
   opts: { spark?: boolean } = {},
 ): EChartsCoreOption {
   const spark = opts.spark === true;
+  const importData = data.map(([t, v]) => [t, v >= 0 ? v : null] as [string, number | null]);
+  const exportData = data.map(([t, v]) => [t, v < 0 ? v : null] as [string, number | null]);
+  const lineSeries = (name: string, color: string, d: [string, number | null][]) => ({
+    name,
+    type: 'line' as const,
+    showSymbol: false,
+    smooth: true,
+    connectNulls: false,
+    lineStyle: { width: 2 },
+    itemStyle: { color },
+    areaStyle: { opacity: 0.18 },
+    data: d,
+  });
   return {
     tooltip: {
       trigger: 'axis',
-      valueFormatter: (v: number) =>
-        v >= 0 ? `Bezug ${Math.round(v)} W` : `Einspeisung ${Math.round(-v)} W`,
-    },
-    visualMap: {
-      show: false,
-      type: 'piecewise',
-      seriesIndex: 0,
-      pieces: [
-        { gt: 0, color: '#f87171' }, // import -> red
-        { lte: 0, color: '#34d399' }, // feed-in -> green
-      ],
+      valueFormatter: (v: number) => `${Math.abs(Math.round(Number(v)))} W`,
     },
     grid: spark
       ? { left: 0, right: 0, top: 8, bottom: 0 }
@@ -218,22 +222,8 @@ function signedPowerChart(
       splitLine: { lineStyle: { color: '#1e293b' } },
     },
     series: [
-      {
-        type: 'line',
-        showSymbol: false,
-        smooth: true,
-        lineStyle: { width: 2 },
-        areaStyle: { opacity: 0.18 },
-        markLine: spark
-          ? undefined
-          : {
-              silent: true,
-              symbol: 'none',
-              lineStyle: { color: '#475569', type: 'solid' },
-              data: [{ yAxis: 0 }],
-            },
-        data,
-      },
+      lineSeries('Bezug', '#f87171', importData),
+      lineSeries('Einspeisung', '#34d399', exportData),
     ],
   };
 }
