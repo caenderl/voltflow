@@ -1,4 +1,4 @@
--- Schema for poke-meter (TimescaleDB).
+-- Schema for Voltflow (TimescaleDB).
 -- Runs automatically on the first start of the DB container
 -- (mounted into /docker-entrypoint-initdb.d/).
 

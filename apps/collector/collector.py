@@ -6,7 +6,7 @@ Start (locally, in the root venv):
 
 Configuration via .env / env:
     ANKERUSER, ANKERPASSWORD, ANKERCOUNTRY
-    DATABASE_URL=postgresql://poke:poke@localhost:5432/poke
+    DATABASE_URL=postgresql://voltflow:voltflow@localhost:5432/voltflow
 """
 
 import asyncio
@@ -20,7 +20,7 @@ from meter_stream import stream_readings
 load_dotenv()
 
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-LOG = logging.getLogger("poke.collector")
+LOG = logging.getLogger("voltflow.collector")
 LOG.setLevel(logging.INFO)
 
 # Seconds before reconnecting if the MQTT stream breaks

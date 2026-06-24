@@ -7,7 +7,7 @@ import os
 
 import asyncpg
 
-LOG = logging.getLogger("poke.db")
+LOG = logging.getLogger("voltflow.db")
 
 # Float fields in the snapshot (come from the API as strings)
 _FLOAT_FIELDS = (

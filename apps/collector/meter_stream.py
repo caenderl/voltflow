@@ -21,7 +21,7 @@ from aiohttp import ClientSession
 from anker_solix_api.api import AnkerSolixApi
 from anker_solix_api.mqtt_factory import SolixMqttDeviceFactory
 
-LOG = logging.getLogger("poke.stream")
+LOG = logging.getLogger("voltflow.stream")
 
 # Fields we pick from the MQTT status (for snapshot + DB)
 METER_KEYS = [

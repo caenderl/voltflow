@@ -1,4 +1,4 @@
-# poke-meter
+# Voltflow
 
 Erfasst die Live-Werte des **Anker Solix Smart Meters (A17X7)** über den MQTT-Cloud-Server,
 speichert sie in **TimescaleDB** und stellt sie in einer Web-App grafisch dar
@@ -37,7 +37,7 @@ NX-Monorepo:
 ANKERUSER="deine@mail.de"
 ANKERPASSWORD="..."          # Sonderzeichen -> in Anfuehrungszeichen!
 ANKERCOUNTRY="DE"
-DATABASE_URL="postgresql://poke:poke@localhost:5432/poke"
+DATABASE_URL="postgresql://voltflow:voltflow@localhost:5432/voltflow"
 ```
 
 ## Entwicklung (lokal)
@@ -85,7 +85,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 Services: `db` (TimescaleDB), `collector`, `backend`, `frontend` (nginx, Port 8080,
-reverse-proxyt `/api` + `/socket.io` ans Backend). DB-Daten liegen im Volume `poke-db-data`.
+reverse-proxyt `/api` + `/socket.io` ans Backend). DB-Daten liegen im Volume `voltflow-db-data`.
 
 ## API
 

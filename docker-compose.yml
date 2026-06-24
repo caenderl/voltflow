@@ -3,23 +3,23 @@
 services:
   db:
     image: timescale/timescaledb:latest-pg16
-    container_name: poke-db
+    container_name: voltflow-db
     restart: unless-stopped
     env_file: .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-poke}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-poke}
-      POSTGRES_DB: ${POSTGRES_DB:-poke}
+      POSTGRES_USER: ${POSTGRES_USER:-voltflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voltflow}
+      POSTGRES_DB: ${POSTGRES_DB:-voltflow}
     ports:
       - "5432:5432"
     volumes:
-      - poke-db-data:/var/lib/postgresql/data
+      - voltflow-db-data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-poke} -d ${POSTGRES_DB:-poke}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-voltflow} -d ${POSTGRES_DB:-voltflow}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  poke-db-data:
+  voltflow-db-data:
