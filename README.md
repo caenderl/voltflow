@@ -94,7 +94,38 @@ reverse-proxyt `/api` + `/socket.io` ans Backend). DB-Daten liegen im Volume `vo
 | `GET /api/meter/latest` | Letzter Messwert |
 | `GET /api/meter/series?from&to&resolution=raw\|1min\|1hour\|1day` | Leistungs-Zeitreihe |
 | `GET /api/meter/energy?period=day\|week\|month&date=YYYY-MM-DD` | kWh-Bezug/Einspeisung |
+| `GET` / `PUT /api/tariff` | Stromtarif (Preise ct/kWh) |
+| `GET /api/meter/range` | Verfügbarer Datenzeitraum |
 | WS-Event `reading` | Live-Messwert (~alle 5 s) |
+
+## Datensicherheit (Daten bleiben bei Updates erhalten)
+
+Die Messdaten liegen im Docker-Volume `voltflow-db-data`, **getrennt** von den Containern.
+App-Updates (`docker compose ... up -d --build`) ersetzen nur die Container — das Volume
+bleibt. **Nie `docker compose down -v`** (löscht das Volume) verwenden.
+
+**Schema-Änderungen:** `db/init.sql` läuft nur beim allerersten Start (leeres Volume).
+Spätere additive Änderungen werden beim **Backend-Start idempotent** angewendet
+(`apps/backend/src/app/meter/schema.ts`, nur `… IF NOT EXISTS`) — so bekommen auch
+bestehende DBs neue Tabellen/Spalten **ohne Datenverlust**.
+
+**Backups** (das wichtigste Sicherheitsnetz):
+
+```bash
+./scripts/backup.sh                 # Dump nach ./backups/ (Rotation: 14 neueste)
+./scripts/restore.sh backups/voltflow-YYYYMMDD-HHMMSS.sql.gz
+# Prod (Pi):
+COMPOSE_FILE=docker-compose.prod.yml COMPOSE_PROJECT_NAME=voltflow-prod ./scripts/backup.sh
+```
+
+Geplant z. B. per crontab auf dem Pi (täglich 3 Uhr):
+
+```
+0 3 * * * cd /home/pi/voltflow && COMPOSE_FILE=docker-compose.prod.yml \
+  COMPOSE_PROJECT_NAME=voltflow-prod ./scripts/backup.sh >> backups/backup.log 2>&1
+```
+
+DB-Image ist auf `pg16` gepinnt; ein PG-Major-Upgrade nur bewusst per Dump + Restore.
 
 ## Roadmap
 

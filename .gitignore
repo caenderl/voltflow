@@ -4,6 +4,7 @@ venv/
 anker-solix-api/
 __pycache__/
 *.pyc
+backups/
 
 # --- NX / Node ---
 # compiled output

@@ -7,6 +7,7 @@ import {
 import { Client, Pool } from 'pg';
 import { Subject } from 'rxjs';
 import type { MeterReading } from '@org/shared-types';
+import { applyMigrations } from './schema';
 
 /** Converts a DB row (snake_case) into a MeterReading. */
 export function rowToReading(row: Record<string, unknown>): MeterReading {
@@ -53,18 +54,8 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
     this.pool.on('error', (err) =>
       this.logger.error(`DB pool error: ${err.message}`),
     );
-    // Ensure the tariff table exists (also on pre-existing DB volumes)
-    void this.pool
-      .query(
-        `CREATE TABLE IF NOT EXISTS tariff (
-           id            INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-           provider      TEXT,
-           import_ct_kwh DOUBLE PRECISION,
-           export_ct_kwh DOUBLE PRECISION,
-           updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-         )`,
-      )
-      .catch((err) => this.logger.error(`ensure tariff table: ${err.message}`));
+    // Apply idempotent schema migrations (also catches up pre-existing DBs)
+    void applyMigrations(this.pool, this.logger);
     // LISTEN client for the live push: separate, with auto-reconnect.
     void this.connectListener();
   }
