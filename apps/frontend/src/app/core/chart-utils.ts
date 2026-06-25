@@ -63,6 +63,60 @@ export function energySlots(view: View, ref: Date): Slot[] {
   return slots;
 }
 
+/** Compact watt label for the live y-axis (e.g. 2500 -> "2.5k", -800 -> "-800"). */
+function wattLabel(v: number): string {
+  return Math.abs(v) >= 1000 ? `${v / 1000}k` : `${v}`;
+}
+
+/**
+ * Compact live chart for the hero: signed net grid power (import red above 0,
+ * feed-in green below 0). No tooltip; a faint zero line marks the import/export
+ * boundary. The y-axis auto-scales to the data so the magnitude is readable.
+ * The time axis is fixed to [min, max] so the window stays constant.
+ */
+export function liveSparkChart(
+  meter: [string, number][],
+  opts: { min?: string; max?: string } = {},
+): EChartsCoreOption {
+  const importData = meter.map(([t, v]) => [t, v >= 0 ? v : null] as [string, number | null]);
+  const exportData = meter.map(([t, v]) => [t, v < 0 ? v : null] as [string, number | null]);
+  const line = (name: string, color: string, d: [string, number | null][]) => ({
+    name,
+    type: 'line' as const,
+    showSymbol: false,
+    smooth: true,
+    connectNulls: false,
+    lineStyle: { width: 2 },
+    itemStyle: { color },
+    areaStyle: { opacity: 0.18 },
+    data: d,
+  });
+  return {
+    grid: { left: 46, right: 12, top: 10, bottom: 6 },
+    xAxis: { type: 'time', show: false, min: opts.min, max: opts.max },
+    yAxis: {
+      type: 'value',
+      splitNumber: 3,
+      axisLabel: { color: '#948f9c', formatter: (v: number) => wattLabel(v) },
+      splitLine: { lineStyle: { color: '#2a2a30' } },
+    },
+    series: [
+      {
+        ...line('Bezug', '#ff8a80', importData),
+        // Faint horizontal zero line (import above / feed-in below).
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          label: { show: false },
+          lineStyle: { color: '#6b6b73', width: 1, opacity: 0.7 },
+          data: [{ yAxis: 0 }],
+        },
+      },
+      line('Einspeisung', '#7fe0a3', exportData),
+    ],
+  };
+}
+
 export function signedPowerChart(
   data: [string, number][],
   opts: {

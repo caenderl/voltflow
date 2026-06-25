@@ -14,7 +14,7 @@ import { LiveService } from '../core/live.service';
 import { MeterApiService } from '../core/meter-api.service';
 import { APP_VERSION } from '../../version';
 import { type View, rangeFor, startOfDay, periodLabelFor, dayLabel } from '../core/date-utils';
-import { netWatts, signedPowerChart, energySlots, slotKey, round2, ONE_DAY, isoToSlotKey } from '../core/chart-utils';
+import { netWatts, signedPowerChart, liveSparkChart, energySlots, slotKey, round2, ONE_DAY, isoToSlotKey } from '../core/chart-utils';
 import { ConfigModalComponent, type ConfigSaveEvent } from './config-modal/config-modal.component';
 import { LiveViewComponent, type FlowState } from './live-view/live-view.component';
 import { HistoryViewComponent, type Costs } from './history-view/history-view.component';
@@ -29,6 +29,22 @@ interface LivePoint {
 
 // Surplus (W) from which charging makes sense (~6 A single-phase). Configurable later.
 const CHARGE_THRESHOLD_W = 1400;
+
+// Rolling window shown in the live hero chart.
+const LIVE_WINDOW_MIN = 10;
+const LIVE_WINDOW_MS = LIVE_WINDOW_MIN * 60 * 1000;
+
+/** Append points to a time-series buffer, keeping it sorted, de-duped by
+ *  timestamp and trimmed to the live window (relative to the newest point). */
+function appendWindowed<T extends { time: string }>(existing: T[], incoming: T[]): T[] {
+  const byTime = new Map<number, T>();
+  for (const p of existing) byTime.set(new Date(p.time).getTime(), p);
+  for (const p of incoming) byTime.set(new Date(p.time).getTime(), p);
+  const sorted = [...byTime.entries()].sort((a, b) => a[0] - b[0]);
+  const newest = sorted.length ? sorted[sorted.length - 1][0] : Date.now();
+  const cutoff = newest - LIVE_WINDOW_MS;
+  return sorted.filter(([t]) => t >= cutoff).map(([, p]) => p);
+}
 
 @Component({
   selector: 'app-dashboard',
@@ -125,9 +141,13 @@ export class Dashboard implements OnInit {
 
   readonly liveSpark = computed(() => {
     const buf = this.liveBuffer();
-    return signedPowerChart(
+    const now = Date.now();
+    return liveSparkChart(
       buf.map((p) => [p.time, netWatts(p.grid, p.pv)] as [string, number]),
-      { spark: true },
+      {
+        min: new Date(now - LIVE_WINDOW_MS).toISOString(),
+        max: new Date(now).toISOString(),
+      },
     );
   });
 
@@ -232,13 +252,14 @@ export class Dashboard implements OnInit {
   });
 
   ngOnInit(): void {
+    this.backfillLive();
     this.live.readings$().subscribe((r) => {
       this.latest.set(r);
-      const buf = [
-        ...this.liveBuffer(),
-        { time: r.time, grid: r.gridToHomePower, pv: r.pvToGridPower },
-      ];
-      this.liveBuffer.set(buf.slice(-120)); // ~10 min at 5s interval
+      this.liveBuffer.set(
+        appendWindowed(this.liveBuffer(), [
+          { time: r.time, grid: r.gridToHomePower, pv: r.pvToGridPower },
+        ]),
+      );
     });
     this.live.wallboxReadings$().subscribe((w) => this.wallbox.set(w));
     this.loadToday();
@@ -276,6 +297,24 @@ export class Dashboard implements OnInit {
   private loadToday(): void {
     this.api.energy('day', new Date()).subscribe({
       next: (e) => this.today.set(e),
+      error: () => undefined,
+    });
+  }
+
+  /** Seed the live buffers with the last window of data so the hero chart is
+   *  populated immediately instead of filling up over time. */
+  private backfillLive(): void {
+    const to = new Date();
+    const from = new Date(to.getTime() - LIVE_WINDOW_MS);
+    this.api.series(from, to, 'raw').subscribe({
+      next: (s) => {
+        const points = s.points.map((p) => ({
+          time: p.time,
+          grid: p.gridToHomePowerAvg,
+          pv: p.pvToGridPowerAvg,
+        }));
+        this.liveBuffer.set(appendWindowed(this.liveBuffer(), points));
+      },
       error: () => undefined,
     });
   }
