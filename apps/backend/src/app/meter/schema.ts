@@ -31,12 +31,20 @@ export async function applyMigrations(
   pool: Pool,
   logger: Logger = new Logger('Schema'),
 ): Promise<void> {
+  let failed = 0;
   for (const m of MIGRATIONS) {
     try {
       await pool.query(m.sql);
     } catch (err) {
+      failed++;
       logger.error(`migration "${m.name}" failed: ${(err as Error).message}`);
     }
   }
-  logger.log(`Schema up to date (${MIGRATIONS.length} idempotent steps)`);
+  if (failed === 0) {
+    logger.log(`Schema up to date (${MIGRATIONS.length} idempotent steps)`);
+  } else {
+    logger.error(
+      `Schema NOT fully applied: ${failed} of ${MIGRATIONS.length} migrations failed`,
+    );
+  }
 }

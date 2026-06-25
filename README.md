@@ -125,7 +125,9 @@ Geplant z. B. per crontab auf dem Pi (täglich 3 Uhr):
   COMPOSE_PROJECT_NAME=voltflow-prod ./scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
-DB-Image ist auf `pg16` gepinnt; ein PG-Major-Upgrade nur bewusst per Dump + Restore.
+DB-Image ist exakt auf `timescale/timescaledb:2.28.1-pg16` gepinnt (PostgreSQL-Major **und**
+TimescaleDB-Version). Upgrades nur bewusst: Tag hochziehen → Backup → `docker compose pull` →
+`ALTER EXTENSION timescaledb UPDATE`. Ein PG-Major-Upgrade nur per Dump + Restore.
 
 ## Roadmap
 
