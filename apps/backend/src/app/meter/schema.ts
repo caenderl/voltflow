@@ -82,8 +82,12 @@ const MIGRATIONS: { name: string; sql: string }[] = [
             AFTER INSERT ON wallbox_reading
             FOR EACH ROW EXECUTE FUNCTION notify_wallbox_reading()`,
   },
+  {
+    name: '009-wallbox-config-name',
+    sql: `ALTER TABLE wallbox_config ADD COLUMN IF NOT EXISTS name TEXT`,
+  },
   // Future additive changes go here, e.g.:
-  // { name: '009-meter-voltage',
+  // { name: '010-meter-voltage',
   //   sql: 'ALTER TABLE meter_reading ADD COLUMN IF NOT EXISTS voltage DOUBLE PRECISION' },
 ];
 

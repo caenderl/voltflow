@@ -91,6 +91,8 @@ export const METER_READING_EVENT = 'reading';
  */
 export interface WallboxConfig {
   enabled: boolean;
+  /** Display name for the wallbox (shown in the UI). */
+  name: string | null;
   /** IP / hostname of the wallbox on the LAN (Modbus TCP). */
   host: string | null;
   /** Modbus TCP port (default 502). */

@@ -28,8 +28,13 @@ export class WallboxController {
       body.host === undefined || body.host === null || body.host === ''
         ? null
         : String(body.host).trim();
+    const name =
+      body.name === undefined || body.name === null || body.name === ''
+        ? null
+        : String(body.name).trim();
     const config: WallboxConfig = {
       enabled: Boolean(body.enabled),
+      name,
       host,
       port: parseIntInRange(body.port, 'port', 1, 65535, 502),
       unitId: parseIntInRange(body.unitId, 'unitId', 0, 255, 1),

@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS tariff (
 CREATE TABLE IF NOT EXISTS wallbox_config (
     id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     enabled         BOOLEAN NOT NULL DEFAULT false,
+    name            TEXT,
     host            TEXT,
     port            INT     NOT NULL DEFAULT 502,
     unit_id         INT     NOT NULL DEFAULT 1,

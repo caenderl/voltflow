@@ -74,10 +74,14 @@ export class Dashboard implements OnInit {
   readonly wallboxConfig = signal<WallboxConfig | null>(null);
   // wallbox form model
   formWbEnabled = false;
+  formWbName = '';
   formWbHost = '';
   formWbPort: number | null = 502;
   formWbUnitId: number | null = 1;
   formWbInterval: number | null = 30;
+
+  /** Display name for the wallbox (config name, falls back to "Wallbox"). */
+  readonly wallboxName = computed(() => this.wallboxConfig()?.name?.trim() || 'Wallbox');
 
   /** Live wallbox state for the live view (label + charging flag). */
   readonly wallboxState = computed(() => {
@@ -167,6 +171,7 @@ export class Dashboard implements OnInit {
     this.formExport = t?.exportCtPerKwh ?? null;
     const w = this.wallboxConfig();
     this.formWbEnabled = w?.enabled ?? false;
+    this.formWbName = w?.name ?? '';
     this.formWbHost = w?.host ?? '';
     this.formWbPort = w?.port ?? 502;
     this.formWbUnitId = w?.unitId ?? 1;
@@ -186,6 +191,7 @@ export class Dashboard implements OnInit {
     };
     const wb: WallboxConfig = {
       enabled: this.formWbEnabled,
+      name: this.formWbName.trim() || null,
       host: this.formWbHost.trim() || null,
       port: this.formWbPort ?? 502,
       unitId: this.formWbUnitId ?? 1,

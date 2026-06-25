@@ -8,6 +8,7 @@ import { DbService, rowToWallboxReading } from './db.service';
 
 const DEFAULT_CONFIG: WallboxConfig = {
   enabled: false,
+  name: null,
   host: null,
   port: 502,
   unitId: 1,
@@ -25,13 +26,14 @@ export class WallboxService {
 
   async getConfig(): Promise<WallboxConfig> {
     const { rows } = await this.db.query(
-      `SELECT enabled, host, port, unit_id, poll_interval_s
+      `SELECT enabled, name, host, port, unit_id, poll_interval_s
          FROM wallbox_config WHERE id = 1`,
     );
     if (!rows.length) return { ...DEFAULT_CONFIG };
     const r = rows[0];
     return {
       enabled: Boolean(r['enabled']),
+      name: (r['name'] as string) ?? null,
       host: (r['host'] as string) ?? null,
       port: Number(r['port']),
       unitId: Number(r['unit_id']),
@@ -41,16 +43,17 @@ export class WallboxService {
 
   async saveConfig(c: WallboxConfig): Promise<WallboxConfig> {
     await this.db.query(
-      `INSERT INTO wallbox_config (id, enabled, host, port, unit_id, poll_interval_s, updated_at)
-       VALUES (1, $1, $2, $3, $4, $5, now())
+      `INSERT INTO wallbox_config (id, enabled, name, host, port, unit_id, poll_interval_s, updated_at)
+       VALUES (1, $1, $2, $3, $4, $5, $6, now())
        ON CONFLICT (id) DO UPDATE
          SET enabled = EXCLUDED.enabled,
+             name = EXCLUDED.name,
              host = EXCLUDED.host,
              port = EXCLUDED.port,
              unit_id = EXCLUDED.unit_id,
              poll_interval_s = EXCLUDED.poll_interval_s,
              updated_at = now()`,
-      [c.enabled, c.host, c.port, c.unitId, c.pollIntervalS],
+      [c.enabled, c.name, c.host, c.port, c.unitId, c.pollIntervalS],
     );
     return this.getConfig();
   }
