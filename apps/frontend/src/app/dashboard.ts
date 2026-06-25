@@ -11,7 +11,10 @@ import type {
   SeriesResolution,
   SeriesResponse,
   Tariff,
+  WallboxConfig,
+  WallboxReading,
 } from '@org/shared-types';
+import { WALLBOX_STATUS_LABELS } from '@org/shared-types';
 import { LiveService } from './live.service';
 import { MeterApiService } from './meter-api.service';
 import { APP_VERSION } from '../version';
@@ -65,6 +68,29 @@ export class Dashboard implements OnInit {
   formProvider = '';
   formImport: number | null = null;
   formExport: number | null = null;
+
+  // Wallbox
+  readonly wallbox = signal<WallboxReading | null>(null);
+  readonly wallboxConfig = signal<WallboxConfig | null>(null);
+  // wallbox form model
+  formWbEnabled = false;
+  formWbHost = '';
+  formWbPort: number | null = 502;
+  formWbUnitId: number | null = 1;
+  formWbInterval: number | null = 30;
+
+  /** Live wallbox state for the live view (label + charging flag). */
+  readonly wallboxState = computed(() => {
+    const w = this.wallbox();
+    if (!w) return null;
+    const status = w.status ?? 0;
+    return {
+      statusLabel: WALLBOX_STATUS_LABELS[status] ?? `Status ${status}`,
+      charging: status === 2,
+      powerW: w.activePowerW ?? 0,
+      sessionKwh: (w.sessionEnergyWh ?? 0) / 1000,
+    };
+  });
 
   /** True when both work prices are configured -> show costs. */
   readonly hasTariff = computed(() => {
@@ -122,9 +148,14 @@ export class Dashboard implements OnInit {
       const buf = [...this.liveBuffer(), { time: r.time, grid: r.gridToHomePower, pv: r.pvToGridPower }];
       this.liveBuffer.set(buf.slice(-120)); // ~10 min at 5s interval
     });
+    this.live.wallboxReadings$().subscribe((w) => this.wallbox.set(w));
     this.loadToday();
     this.api.range().subscribe({ next: (r) => this.dataRange.set(r), error: () => undefined });
     this.api.tariff().subscribe({ next: (t) => this.tariff.set(t), error: () => undefined });
+    this.api.wallboxConfig().subscribe({
+      next: (c) => this.wallboxConfig.set(c),
+      error: () => undefined,
+    });
     // Refresh today's totals every 5 min
     setInterval(() => this.loadToday(), 5 * 60 * 1000);
   }
@@ -134,6 +165,12 @@ export class Dashboard implements OnInit {
     this.formProvider = t?.provider ?? '';
     this.formImport = t?.importCtPerKwh ?? null;
     this.formExport = t?.exportCtPerKwh ?? null;
+    const w = this.wallboxConfig();
+    this.formWbEnabled = w?.enabled ?? false;
+    this.formWbHost = w?.host ?? '';
+    this.formWbPort = w?.port ?? 502;
+    this.formWbUnitId = w?.unitId ?? 1;
+    this.formWbInterval = w?.pollIntervalS ?? 30;
     this.configOpen.set(true);
   }
 
@@ -147,6 +184,18 @@ export class Dashboard implements OnInit {
       importCtPerKwh: this.formImport ?? null,
       exportCtPerKwh: this.formExport ?? null,
     };
+    const wb: WallboxConfig = {
+      enabled: this.formWbEnabled,
+      host: this.formWbHost.trim() || null,
+      port: this.formWbPort ?? 502,
+      unitId: this.formWbUnitId ?? 1,
+      pollIntervalS: this.formWbInterval ?? 30,
+    };
+    // Save both; close once tariff returns (wallbox runs in parallel).
+    this.api.saveWallboxConfig(wb).subscribe({
+      next: (saved) => this.wallboxConfig.set(saved),
+      error: () => this.error.set('Wallbox-Konfiguration konnte nicht gespeichert werden.'),
+    });
     this.api.saveTariff(t).subscribe({
       next: (saved) => {
         this.tariff.set(saved);

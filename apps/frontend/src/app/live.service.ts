@@ -1,7 +1,12 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
-import { METER_READING_EVENT, type MeterReading } from '@org/shared-types';
+import {
+  METER_READING_EVENT,
+  WALLBOX_READING_EVENT,
+  type MeterReading,
+  type WallboxReading,
+} from '@org/shared-types';
 
 /**
  * Provides live readings over the WebSocket connection to the backend.
@@ -11,12 +16,24 @@ import { METER_READING_EVENT, type MeterReading } from '@org/shared-types';
 export class LiveService {
   private socket: Socket | null = null;
 
+  private get conn(): Socket {
+    return (this.socket ??= io());
+  }
+
   readings$(): Observable<MeterReading> {
-    return new Observable<MeterReading>((subscriber) => {
-      this.socket ??= io();
-      const handler = (reading: MeterReading) => subscriber.next(reading);
-      this.socket.on(METER_READING_EVENT, handler);
-      return () => this.socket?.off(METER_READING_EVENT, handler);
+    return this.on<MeterReading>(METER_READING_EVENT);
+  }
+
+  wallboxReadings$(): Observable<WallboxReading> {
+    return this.on<WallboxReading>(WALLBOX_READING_EVENT);
+  }
+
+  private on<T>(event: string): Observable<T> {
+    return new Observable<T>((subscriber) => {
+      const socket = this.conn;
+      const handler = (payload: T) => subscriber.next(payload);
+      socket.on(event, handler);
+      return () => socket.off(event, handler);
     });
   }
 }

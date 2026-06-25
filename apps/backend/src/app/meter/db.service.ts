@@ -6,13 +6,14 @@ import {
 } from '@nestjs/common';
 import { Client, Pool } from 'pg';
 import { Subject } from 'rxjs';
-import type { MeterReading } from '@org/shared-types';
+import type { MeterReading, WallboxReading } from '@org/shared-types';
 import { applyMigrations } from './schema';
+
+const num = (v: unknown): number | null =>
+  v === null || v === undefined ? null : Number(v);
 
 /** Converts a DB row (snake_case) into a MeterReading. */
 export function rowToReading(row: Record<string, unknown>): MeterReading {
-  const num = (v: unknown): number | null =>
-    v === null || v === undefined ? null : Number(v);
   return {
     time: new Date(row['time'] as string).toISOString(),
     deviceSn: row['device_sn'] as string,
@@ -20,6 +21,27 @@ export function rowToReading(row: Record<string, unknown>): MeterReading {
     pvToGridPower: num(row['pv_to_grid_power']),
     gridImportEnergy: num(row['grid_import_energy']),
     gridExportEnergy: num(row['grid_export_energy']),
+  };
+}
+
+/** Converts a DB row (snake_case) into a WallboxReading. */
+export function rowToWallboxReading(
+  row: Record<string, unknown>,
+): WallboxReading {
+  return {
+    time: new Date(row['time'] as string).toISOString(),
+    deviceSn: row['device_sn'] as string,
+    status: num(row['status']),
+    cpSignal: num(row['cp_signal']),
+    activePowerW: num(row['active_power_w']),
+    sessionEnergyWh: num(row['session_energy_wh']),
+    sessionDurationS: num(row['session_duration_s']),
+    l1CurrentA: num(row['l1_current_a']),
+    l2CurrentA: num(row['l2_current_a']),
+    l3CurrentA: num(row['l3_current_a']),
+    l1VoltageV: num(row['l1_voltage_v']),
+    l2VoltageV: num(row['l2_voltage_v']),
+    l3VoltageV: num(row['l3_voltage_v']),
   };
 }
 
@@ -39,8 +61,10 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
   private stopped = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
 
-  /** Stream of new readings (fed by pg NOTIFY). */
+  /** Stream of new meter readings (fed by pg NOTIFY). */
   readonly readings$ = new Subject<MeterReading>();
+  /** Stream of new wallbox readings (fed by pg NOTIFY). */
+  readonly wallboxReadings$ = new Subject<WallboxReading>();
 
   onModuleInit(): void {
     const dsn = process.env.DATABASE_URL;
@@ -68,7 +92,11 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
       if (!msg.payload) return;
       try {
         const row = JSON.parse(msg.payload) as Record<string, unknown>;
-        this.readings$.next(rowToReading(row));
+        if (msg.channel === 'wallbox_reading') {
+          this.wallboxReadings$.next(rowToWallboxReading(row));
+        } else {
+          this.readings$.next(rowToReading(row));
+        }
       } catch (err) {
         this.logger.warn(`Could not parse NOTIFY payload: ${err}`);
       }
@@ -83,8 +111,9 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
     try {
       await client.connect();
       await client.query('LISTEN meter_reading');
+      await client.query('LISTEN wallbox_reading');
       this.listenClient = client;
-      this.logger.log('LISTEN meter_reading active');
+      this.logger.log('LISTEN meter_reading + wallbox_reading active');
     } catch (err) {
       this.logger.warn(
         `LISTEN connection failed, retrying in ${LISTEN_RECONNECT_MS}ms: ${err}`,

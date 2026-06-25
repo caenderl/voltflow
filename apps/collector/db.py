@@ -66,3 +66,72 @@ async def insert_reading(pool: asyncpg.Pool, snapshot: dict) -> None:
         snapshot.get("device_sn"),
         *[_to_float(snapshot.get(f)) for f in _FLOAT_FIELDS],
     )
+
+
+# --- Wallbox -------------------------------------------------------------
+
+# Numeric fields of a wallbox snapshot (in INSERT column order)
+_WALLBOX_FIELDS = (
+    "status",
+    "cp_signal",
+    "active_power_w",
+    "session_energy_wh",
+    "session_duration_s",
+    "l1_current_a",
+    "l2_current_a",
+    "l3_current_a",
+    "l1_voltage_v",
+    "l2_voltage_v",
+    "l3_voltage_v",
+)
+
+
+async def read_wallbox_config(pool: asyncpg.Pool) -> dict | None:
+    """Return the wallbox config row, or None if not configured / table missing.
+
+    The collector reads this once at startup to decide whether to poll the
+    wallbox at all.
+    """
+    try:
+        row = await pool.fetchrow(
+            "SELECT enabled, host, port, unit_id, poll_interval_s "
+            "FROM wallbox_config WHERE id = 1"
+        )
+    except asyncpg.UndefinedTableError:
+        # Backend has not applied migrations yet -> treat as not configured.
+        return None
+    if row is None:
+        return None
+    return dict(row)
+
+
+async def register_wallbox(pool: asyncpg.Pool, snapshot: dict) -> None:
+    """Register the wallbox in the device registry (idempotent)."""
+    await pool.execute(
+        """
+        INSERT INTO device (device_sn, device_pn, type, alias)
+        VALUES ($1, $2, 'wallbox', $3)
+        ON CONFLICT (device_sn) DO UPDATE
+            SET device_pn = EXCLUDED.device_pn,
+                type      = EXCLUDED.type
+        """,
+        snapshot.get("device_sn"),
+        snapshot.get("device_pn"),
+        snapshot.get("device_pn"),
+    )
+
+
+async def insert_wallbox_reading(pool: asyncpg.Pool, snapshot: dict) -> None:
+    """Store a wallbox snapshot as a measurement row."""
+    await pool.execute(
+        """
+        INSERT INTO wallbox_reading (
+            device_sn, status, cp_signal, active_power_w,
+            session_energy_wh, session_duration_s,
+            l1_current_a, l2_current_a, l3_current_a,
+            l1_voltage_v, l2_voltage_v, l3_voltage_v
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        """,
+        snapshot.get("device_sn"),
+        *[snapshot.get(f) for f in _WALLBOX_FIELDS],
+    )

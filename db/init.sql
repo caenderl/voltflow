@@ -28,6 +28,20 @@ CREATE TABLE IF NOT EXISTS tariff (
 );
 
 -- ---------------------------------------------------------------------------
+-- Single-row wallbox connection config (Anker SOLIX V1 / A5191, Modbus TCP).
+-- The collector only polls the wallbox when enabled = true and host is set.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS wallbox_config (
+    id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    enabled         BOOLEAN NOT NULL DEFAULT false,
+    host            TEXT,
+    port            INT     NOT NULL DEFAULT 502,
+    unit_id         INT     NOT NULL DEFAULT 1,
+    poll_interval_s INT     NOT NULL DEFAULT 30,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------------------------------------------------------------------------
 -- Raw smart meter readings (~one insert every 5s).
 -- time = ingestion time (now()), since msg_timestamp can be unreliable.
 -- ---------------------------------------------------------------------------
@@ -129,3 +143,44 @@ DROP TRIGGER IF EXISTS meter_reading_notify ON meter_reading;
 CREATE TRIGGER meter_reading_notify
     AFTER INSERT ON meter_reading
     FOR EACH ROW EXECUTE FUNCTION notify_meter_reading();
+
+-- ---------------------------------------------------------------------------
+-- Raw wallbox readings (one insert per poll interval, default ~30s).
+-- time = ingestion time (now()).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS wallbox_reading (
+    time               TIMESTAMPTZ      NOT NULL DEFAULT now(),
+    device_sn          TEXT             NOT NULL,
+    status             SMALLINT,            -- charging status (reg 20097)
+    cp_signal          SMALLINT,            -- CP signal state (reg 20092)
+    active_power_w     DOUBLE PRECISION,    -- total charging active power, W
+    session_energy_wh  DOUBLE PRECISION,    -- current session energy, Wh
+    session_duration_s DOUBLE PRECISION,    -- current session duration, s
+    l1_current_a       DOUBLE PRECISION,
+    l2_current_a       DOUBLE PRECISION,
+    l3_current_a       DOUBLE PRECISION,
+    l1_voltage_v       DOUBLE PRECISION,
+    l2_voltage_v       DOUBLE PRECISION,
+    l3_voltage_v       DOUBLE PRECISION
+);
+
+SELECT create_hypertable('wallbox_reading', 'time', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS wallbox_reading_sn_time_idx
+    ON wallbox_reading (device_sn, time DESC);
+
+-- Drop raw data after 90 days (wallbox volume is low; keep longer than meter).
+SELECT add_retention_policy('wallbox_reading', INTERVAL '90 days', if_not_exists => TRUE);
+
+-- NOTIFY trigger for the live wallbox push (backend LISTENs 'wallbox_reading').
+CREATE OR REPLACE FUNCTION notify_wallbox_reading() RETURNS trigger AS $$
+BEGIN
+    PERFORM pg_notify('wallbox_reading', row_to_json(NEW)::text);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS wallbox_reading_notify ON wallbox_reading;
+CREATE TRIGGER wallbox_reading_notify
+    AFTER INSERT ON wallbox_reading
+    FOR EACH ROW EXECUTE FUNCTION notify_wallbox_reading();

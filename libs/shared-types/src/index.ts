@@ -79,3 +79,75 @@ export interface DataRange {
 
 /** Name of the WebSocket event used to push live readings. */
 export const METER_READING_EVENT = 'reading';
+
+// ---------------------------------------------------------------------------
+// Wallbox (Anker SOLIX V1 / A5191, Modbus TCP)
+// ---------------------------------------------------------------------------
+
+/**
+ * Connection parameters for the wallbox, stored as a single config row and
+ * edited via the settings UI. The collector only polls the wallbox when this
+ * is `enabled` and a `host` is set.
+ */
+export interface WallboxConfig {
+  enabled: boolean;
+  /** IP / hostname of the wallbox on the LAN (Modbus TCP). */
+  host: string | null;
+  /** Modbus TCP port (default 502). */
+  port: number;
+  /** Modbus unit / device id (default 1). */
+  unitId: number;
+  /** Polling interval in seconds. */
+  pollIntervalS: number;
+}
+
+/** Charging status (Anker register 20097). */
+export type WallboxStatus =
+  | 0 // Idle
+  | 1 // Preparing
+  | 2 // Charging
+  | 3 // Charger Paused
+  | 4 // Vehicle Paused
+  | 5 // Charging Completed
+  | 6 // Reserving
+  | 7 // Disabled
+  | 8; // Error
+
+/** Human labels for the charging status codes. */
+export const WALLBOX_STATUS_LABELS: Record<number, string> = {
+  0: 'Bereit',
+  1: 'Vorbereiten',
+  2: 'Lädt',
+  3: 'Pausiert (Ladestation)',
+  4: 'Pausiert (Fahrzeug)',
+  5: 'Abgeschlossen',
+  6: 'Reserviert',
+  7: 'Deaktiviert',
+  8: 'Fehler',
+};
+
+/** A live / raw reading from the wallbox. */
+export interface WallboxReading {
+  /** ISO timestamp of the measurement (ingestion time). */
+  time: string;
+  deviceSn: string;
+  /** Charging status code (see WallboxStatus / WALLBOX_STATUS_LABELS). */
+  status: number | null;
+  /** CP signal state (register 20092; 0 = no vehicle). */
+  cpSignal: number | null;
+  /** Total charging active power in W. */
+  activePowerW: number | null;
+  /** Energy of the current charging session in Wh. */
+  sessionEnergyWh: number | null;
+  /** Duration of the current charging session in s. */
+  sessionDurationS: number | null;
+  l1CurrentA: number | null;
+  l2CurrentA: number | null;
+  l3CurrentA: number | null;
+  l1VoltageV: number | null;
+  l2VoltageV: number | null;
+  l3VoltageV: number | null;
+}
+
+/** Name of the WebSocket event used to push live wallbox readings. */
+export const WALLBOX_READING_EVENT = 'wallbox-reading';

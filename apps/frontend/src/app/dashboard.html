@@ -64,6 +64,20 @@
 
       <div echarts [options]="liveSpark()" class="spark"></div>
     </section>
+
+    @if (wallboxState(); as wb) {
+      <section class="wallbox-card" [class.is-charging]="wb.charging">
+        <div class="wb-head">
+          <span class="wb-title">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v11h3v9l7-12h-4l4-8z" /></svg>
+            Wallbox
+          </span>
+          <span class="wb-status" [class.charging]="wb.charging">{{ wb.statusLabel }}</span>
+        </div>
+        <div class="wb-power">{{ wb.powerW | number }}<span>W</span></div>
+        <div class="wb-sub">Sitzung: {{ wb.sessionKwh | number: '1.2-2' }} kWh</div>
+      </section>
+    }
   } @else {
     <div class="period-nav">
       <button class="nav-btn" (click)="prev()" [disabled]="!canPrev()" aria-label="Zurück">
@@ -133,6 +147,32 @@
         <span>Einspeisung (ct/kWh)</span>
         <input type="number" min="0" step="0.01" [(ngModel)]="formExport" placeholder="z. B. 8" />
       </label>
+
+      <h2 class="section-head">Wallbox</h2>
+      <label class="field-row">
+        <input type="checkbox" [(ngModel)]="formWbEnabled" />
+        <span>Wallbox aktivieren (Modbus TCP)</span>
+      </label>
+      <label class="field">
+        <span>IP-Adresse</span>
+        <input type="text" [(ngModel)]="formWbHost" placeholder="z. B. 192.168.0.206" />
+      </label>
+      <div class="field-grid">
+        <label class="field">
+          <span>Port</span>
+          <input type="number" min="1" max="65535" [(ngModel)]="formWbPort" placeholder="502" />
+        </label>
+        <label class="field">
+          <span>Unit-ID</span>
+          <input type="number" min="0" max="255" [(ngModel)]="formWbUnitId" placeholder="1" />
+        </label>
+        <label class="field">
+          <span>Intervall (s)</span>
+          <input type="number" min="5" max="3600" [(ngModel)]="formWbInterval" placeholder="30" />
+        </label>
+      </div>
+      <p class="hint-sm">Änderungen am Wallbox-Anschluss greifen nach einem Neustart des Collectors.</p>
+
       <div class="modal-actions">
         <button class="btn-text" (click)="closeConfig()">Abbrechen</button>
         <button class="btn-filled" (click)="saveConfig()">Speichern</button>

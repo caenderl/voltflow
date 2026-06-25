@@ -9,6 +9,8 @@ import type {
   SeriesResolution,
   SeriesResponse,
   Tariff,
+  WallboxConfig,
+  WallboxReading,
 } from '@org/shared-types';
 
 @Injectable({ providedIn: 'root' })
@@ -50,6 +52,20 @@ export class MeterApiService {
       // YYYY-MM-DD in local time
       .set('date', toLocalDateString(date));
     return this.http.get<EnergySummary>(`${this.base}/energy`, { params });
+  }
+
+  // --- Wallbox ---
+
+  wallboxConfig(): Observable<WallboxConfig> {
+    return this.http.get<WallboxConfig>('/api/wallbox/config');
+  }
+
+  saveWallboxConfig(c: WallboxConfig): Observable<WallboxConfig> {
+    return this.http.put<WallboxConfig>('/api/wallbox/config', c);
+  }
+
+  wallboxLatest(): Observable<WallboxReading | null> {
+    return this.http.get<WallboxReading | null>('/api/wallbox/latest');
   }
 }
 

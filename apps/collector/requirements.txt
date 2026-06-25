@@ -1,6 +1,8 @@
 # Collector-Abhaengigkeiten.
 asyncpg>=0.30
 python-dotenv>=1.0
+# Wallbox (Anker SOLIX V1 / A5191) ueber Modbus TCP
+pymodbus>=3.11,<4
 # von anker-solix-api benoetigt (wird nicht zwingend mitinstalliert)
 aiohttp>=3.9
 aiofiles>=23
