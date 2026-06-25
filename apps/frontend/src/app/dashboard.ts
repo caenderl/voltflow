@@ -14,6 +14,7 @@ import type {
 } from '@org/shared-types';
 import { LiveService } from './live.service';
 import { MeterApiService } from './meter-api.service';
+import { APP_VERSION } from '../version';
 
 type View = 'live' | 'day' | 'week' | 'month';
 type FlowMode = 'export' | 'import' | 'idle';
@@ -37,6 +38,8 @@ const CHARGE_THRESHOLD_W = 1400;
 export class Dashboard implements OnInit {
   private readonly api = inject(MeterApiService);
   private readonly live = inject(LiveService);
+
+  readonly appVersion = APP_VERSION;
 
   readonly view = signal<View>('live');
   /** Reference date of the shown period (day/week/month it falls into). */

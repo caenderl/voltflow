@@ -1,12 +1,13 @@
 {
   "name": "@org/source",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "scripts": {
     "db": "docker compose up -d db",
     "dev": "nx run-many -t serve -p backend frontend",
     "dev:all": "nx run-many -t serve -p backend frontend collector",
-    "collector": "venv/bin/python apps/collector/collector.py"
+    "collector": "venv/bin/python apps/collector/collector.py",
+    "postversion": "node scripts/sync-version.js"
   },
   "private": true,
   "devDependencies": {

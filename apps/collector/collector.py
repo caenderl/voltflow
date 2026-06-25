@@ -11,8 +11,11 @@ Configuration via .env / env:
 
 import asyncio
 import logging
+from pathlib import Path
 
 from dotenv import load_dotenv
+
+__version__ = (Path(__file__).parent / "VERSION").read_text().strip()
 
 from db import create_pool, insert_reading, register_device
 from meter_stream import stream_readings
@@ -22,6 +25,7 @@ load_dotenv()
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 LOG = logging.getLogger("voltflow.collector")
 LOG.setLevel(logging.INFO)
+LOG.info("Voltflow collector %s starting", __version__)
 
 # Seconds before reconnecting if the MQTT stream breaks
 RECONNECT_DELAY = 10
