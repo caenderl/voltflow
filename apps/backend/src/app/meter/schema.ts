@@ -93,7 +93,7 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   {
     name: '010-wallbox-1min-aggregate',
     sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1min
-          WITH (timescaledb.continuous) AS
+          WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
           SELECT
             device_sn,
             time_bucket('1 minute', time)                             AS bucket,
@@ -119,7 +119,7 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   {
     name: '013-wallbox-1hour-aggregate',
     sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1hour
-          WITH (timescaledb.continuous) AS
+          WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
           SELECT
             device_sn,
             time_bucket('1 hour', time)                               AS bucket,
@@ -146,7 +146,7 @@ const MIGRATIONS: { name: string; sql: string }[] = [
     name: '016-wallbox-1day-aggregate',
     // Timezone-aware bucketing so day boundaries align with CET/CEST midnight.
     sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1day
-          WITH (timescaledb.continuous) AS
+          WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
           SELECT
             device_sn,
             time_bucket('1 day', time, 'Europe/Berlin')               AS bucket,
@@ -168,6 +168,19 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   {
     name: '018-wallbox-1day-retention',
     sql: `SELECT add_retention_policy('wallbox_1day', INTERVAL '10 years', if_not_exists => TRUE)`,
+  },
+  {
+    // Enable real-time aggregation on all continuous aggregates so the current,
+    // not-yet-materialized bucket is visible immediately. TimescaleDB >= 2.13
+    // defaults materialized_only to TRUE, which silently hides today's data
+    // (e.g. the wallbox daily energy view returned nothing). Idempotent.
+    name: '019-caggs-realtime-aggregation',
+    sql: `ALTER MATERIALIZED VIEW meter_1min    SET (timescaledb.materialized_only = false);
+          ALTER MATERIALIZED VIEW meter_1hour   SET (timescaledb.materialized_only = false);
+          ALTER MATERIALIZED VIEW meter_1day    SET (timescaledb.materialized_only = false);
+          ALTER MATERIALIZED VIEW wallbox_1min  SET (timescaledb.materialized_only = false);
+          ALTER MATERIALIZED VIEW wallbox_1hour SET (timescaledb.materialized_only = false);
+          ALTER MATERIALIZED VIEW wallbox_1day  SET (timescaledb.materialized_only = false)`,
   },
 ];
 

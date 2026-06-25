@@ -63,13 +63,15 @@ CREATE INDEX IF NOT EXISTS meter_reading_sn_time_idx
 -- ---------------------------------------------------------------------------
 -- Continuous aggregates for downsampling the views.
 -- avg/min/max of power; last() of the cumulative meter readings
--- (for kWh deltas per range). Real-time aggregation stays on (default), so the
--- current, not-yet-materialized bucket is visible immediately.
+-- (for kWh deltas per range). Real-time aggregation is enabled explicitly
+-- (materialized_only = false) so the current, not-yet-materialized bucket is
+-- visible immediately. NOTE: TimescaleDB >= 2.13 defaults this to true, so it
+-- must be set explicitly here.
 -- ---------------------------------------------------------------------------
 
 -- 1-minute buckets -> "day" view
 CREATE MATERIALIZED VIEW IF NOT EXISTS meter_1min
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT
     device_sn,
     time_bucket('1 minute', time)            AS bucket,
@@ -85,7 +87,7 @@ WITH NO DATA;
 
 -- 1-hour buckets -> "week" view
 CREATE MATERIALIZED VIEW IF NOT EXISTS meter_1hour
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT
     device_sn,
     time_bucket('1 hour', time)              AS bucket,
@@ -101,7 +103,7 @@ WITH NO DATA;
 
 -- 1-day buckets -> "month" view
 CREATE MATERIALIZED VIEW IF NOT EXISTS meter_1day
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT
     device_sn,
     time_bucket('1 day', time)               AS bucket,
@@ -176,12 +178,13 @@ SELECT add_retention_policy('wallbox_reading', INTERVAL '90 days', if_not_exists
 -- ---------------------------------------------------------------------------
 -- Continuous aggregates for downsampling wallbox readings.
 -- Energy is approximated as power × 30 s poll interval (/ 120 000 → kWh).
--- Real-time aggregation stays on (default) so the current bucket is visible.
+-- Real-time aggregation is enabled explicitly (materialized_only = false) so the
+-- current bucket is visible (TimescaleDB >= 2.13 defaults this to true).
 -- ---------------------------------------------------------------------------
 
 -- 1-minute buckets (UTC) — groundwork for a future "day" power chart
 CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1min
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT
     device_sn,
     time_bucket('1 minute', time)                                AS bucket,
@@ -194,7 +197,7 @@ WITH NO DATA;
 
 -- 1-hour buckets (UTC) — groundwork for a future "week" power chart
 CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1hour
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT
     device_sn,
     time_bucket('1 hour', time)                                  AS bucket,
@@ -208,7 +211,7 @@ WITH NO DATA;
 -- 1-day buckets (Berlin local time) — used by the monthly charged-energy chart.
 -- Timezone-aware so day boundaries align with CET/CEST midnight, not UTC.
 CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1day
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT
     device_sn,
     time_bucket('1 day', time, 'Europe/Berlin')                  AS bucket,
