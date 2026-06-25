@@ -9,6 +9,7 @@ import {
 import type {
   DataRange,
   WallboxConfig,
+  WallboxDailySummary,
   WallboxReading,
 } from '@org/shared-types';
 import { WallboxService } from './wallbox.service';
@@ -55,6 +56,21 @@ export class WallboxController {
   @Get('range')
   range(): Promise<DataRange> {
     return this.wallbox.range();
+  }
+
+  @Get('energy/daily')
+  dailyEnergy(
+    @Query('from') fromStr?: string,
+    @Query('to') toStr?: string,
+  ): Promise<WallboxDailySummary[]> {
+    const to = toStr ? new Date(toStr) : new Date();
+    const from = fromStr
+      ? new Date(fromStr)
+      : new Date(to.getFullYear(), to.getMonth(), 1);
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+      throw new BadRequestException('Invalid from/to timestamp.');
+    }
+    return this.wallbox.dailyEnergy(from, to);
   }
 
   @Get('history')

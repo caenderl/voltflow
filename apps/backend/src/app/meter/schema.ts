@@ -86,9 +86,89 @@ const MIGRATIONS: { name: string; sql: string }[] = [
     name: '009-wallbox-config-name',
     sql: `ALTER TABLE wallbox_config ADD COLUMN IF NOT EXISTS name TEXT`,
   },
-  // Future additive changes go here, e.g.:
-  // { name: '010-meter-voltage',
-  //   sql: 'ALTER TABLE meter_reading ADD COLUMN IF NOT EXISTS voltage DOUBLE PRECISION' },
+  // ---------------------------------------------------------------------------
+  // Wallbox continuous aggregates (added after initial release).
+  // Energy ≈ power × 30 s poll interval (/ 120 000 → kWh).
+  // ---------------------------------------------------------------------------
+  {
+    name: '010-wallbox-1min-aggregate',
+    sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1min
+          WITH (timescaledb.continuous) AS
+          SELECT
+            device_sn,
+            time_bucket('1 minute', time)                             AS bucket,
+            avg(active_power_w)                                       AS avg_power_w,
+            max(active_power_w)                                       AS max_power_w,
+            sum(active_power_w) FILTER (WHERE status = 2) / 120000.0 AS charged_kwh
+          FROM wallbox_reading
+          GROUP BY device_sn, bucket
+          WITH NO DATA`,
+  },
+  {
+    name: '011-wallbox-1min-policy',
+    sql: `SELECT add_continuous_aggregate_policy('wallbox_1min',
+            start_offset      => INTERVAL '3 days',
+            end_offset        => INTERVAL '1 minute',
+            schedule_interval => INTERVAL '1 minute',
+            if_not_exists     => TRUE)`,
+  },
+  {
+    name: '012-wallbox-1min-retention',
+    sql: `SELECT add_retention_policy('wallbox_1min', INTERVAL '10 years', if_not_exists => TRUE)`,
+  },
+  {
+    name: '013-wallbox-1hour-aggregate',
+    sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1hour
+          WITH (timescaledb.continuous) AS
+          SELECT
+            device_sn,
+            time_bucket('1 hour', time)                               AS bucket,
+            avg(active_power_w)                                       AS avg_power_w,
+            max(active_power_w)                                       AS max_power_w,
+            sum(active_power_w) FILTER (WHERE status = 2) / 120000.0 AS charged_kwh
+          FROM wallbox_reading
+          GROUP BY device_sn, bucket
+          WITH NO DATA`,
+  },
+  {
+    name: '014-wallbox-1hour-policy',
+    sql: `SELECT add_continuous_aggregate_policy('wallbox_1hour',
+            start_offset      => INTERVAL '90 days',
+            end_offset        => INTERVAL '1 hour',
+            schedule_interval => INTERVAL '1 hour',
+            if_not_exists     => TRUE)`,
+  },
+  {
+    name: '015-wallbox-1hour-retention',
+    sql: `SELECT add_retention_policy('wallbox_1hour', INTERVAL '10 years', if_not_exists => TRUE)`,
+  },
+  {
+    name: '016-wallbox-1day-aggregate',
+    // Timezone-aware bucketing so day boundaries align with CET/CEST midnight.
+    sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1day
+          WITH (timescaledb.continuous) AS
+          SELECT
+            device_sn,
+            time_bucket('1 day', time, 'Europe/Berlin')               AS bucket,
+            avg(active_power_w)                                       AS avg_power_w,
+            max(active_power_w)                                       AS max_power_w,
+            sum(active_power_w) FILTER (WHERE status = 2) / 120000.0 AS charged_kwh
+          FROM wallbox_reading
+          GROUP BY device_sn, bucket
+          WITH NO DATA`,
+  },
+  {
+    name: '017-wallbox-1day-policy',
+    sql: `SELECT add_continuous_aggregate_policy('wallbox_1day',
+            start_offset      => INTERVAL '90 days',
+            end_offset        => INTERVAL '1 day',
+            schedule_interval => INTERVAL '1 hour',
+            if_not_exists     => TRUE)`,
+  },
+  {
+    name: '018-wallbox-1day-retention',
+    sql: `SELECT add_retention_policy('wallbox_1day', INTERVAL '10 years', if_not_exists => TRUE)`,
+  },
 ];
 
 export async function applyMigrations(

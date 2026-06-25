@@ -1,0 +1,121 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  text-align: center;
+
+  --accent: var(--muted);
+  &.is-export { --accent: var(--export); }
+  &.is-import { --accent: var(--import); }
+
+  // surplus -> reverse the arrow (house -> grid) without swapping icons
+  &.is-export .arrow {
+    transform: scaleX(-1);
+  }
+}
+
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+
+  .node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+
+    .ic {
+      width: 3.25rem;
+      height: 3.25rem;
+      fill: var(--on-surface);
+    }
+    small {
+      font-size: 0.95rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+  }
+
+  .arrow svg {
+    width: 2.75rem;
+    height: 2.75rem;
+    fill: var(--accent);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; transform: translateX(0); }
+  50% { opacity: 1; transform: translateX(6px); }
+}
+
+.state-label {
+  font-size: 1rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+
+.big-watts {
+  font-size: 6.5rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+
+  span {
+    font-size: 2rem;
+    font-weight: 500;
+    color: var(--muted);
+    margin-left: 0.5rem;
+  }
+}
+
+.charge-pill {
+  font-size: 1rem;
+  font-weight: 500;
+  padding: 0.55rem 1.25rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--outline);
+
+  &.ok {
+    background: color-mix(in srgb, var(--export) 22%, transparent);
+    color: var(--export);
+    border-color: color-mix(in srgb, var(--export) 50%, transparent);
+  }
+}
+
+.today {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.25rem;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  color: var(--on-surface-var);
+
+  .today-label { color: var(--muted); }
+  .up { color: var(--import); }
+  .down { color: var(--export); }
+}
+
+.spark {
+  width: 100%;
+  max-width: 920px;
+  height: 150px;
+  margin-top: 0.5rem;
+}

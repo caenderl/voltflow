@@ -1,0 +1,57 @@
+<div class="period-nav">
+  <button class="nav-btn" (click)="prevClicked.emit()" [disabled]="!canPrev()" aria-label="Zurück">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z" /></svg>
+  </button>
+  <span class="period-label">{{ periodLabel() }}</span>
+  <button class="nav-btn" (click)="nextClicked.emit()" [disabled]="!canNext()" aria-label="Weiter">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 7.4 10 6l6 6-6 6-1.4-1.4L13.2 12z" /></svg>
+  </button>
+</div>
+
+<section class="cards">
+  <div class="card import">
+    <span class="label">Bezug gesamt</span>
+    <span class="value">{{ energy()?.importKwh ?? '–' }} <small>kWh</small></span>
+    @if (hasTariff() && costs(); as c) {
+      <span class="sub">{{ c.importCost | number: '1.2-2' }} €</span>
+    }
+  </div>
+  <div class="card export">
+    <span class="label">Einspeisung gesamt</span>
+    <span class="value">{{ energy()?.exportKwh ?? '–' }} <small>kWh</small></span>
+    @if (hasTariff() && costs(); as c) {
+      <span class="sub">{{ c.exportRevenue | number: '1.2-2' }} €</span>
+    }
+  </div>
+  @if (hasTariff() && costs(); as c) {
+    <div class="card" [class.import]="c.net >= 0" [class.export]="c.net < 0">
+      <span class="label">Netto</span>
+      <span class="value">{{ c.net | number: '1.2-2' }} <small>€</small></span>
+    </div>
+  }
+</section>
+
+@if (loading()) {
+  <p class="hint">Lade Daten …</p>
+}
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+
+@if (view() !== 'month') {
+  <div class="chart-box">
+    <h2>Leistung (Bezug + / Einspeisung −)</h2>
+    <div echarts [options]="powerChart()" class="chart"></div>
+  </div>
+}
+<div class="chart-box">
+  <h2>Energie pro {{ view() === 'day' ? 'Stunde' : 'Tag' }}</h2>
+  <div echarts [options]="energyChart()" class="chart"></div>
+</div>
+
+@if (wallboxDailyChart(); as chart) {
+  <div class="chart-box">
+    <h2>Wallbox — geladene Energie pro Tag</h2>
+    <div echarts [options]="chart" class="chart"></div>
+  </div>
+}

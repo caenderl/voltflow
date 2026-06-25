@@ -6,7 +6,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { METER_READING_EVENT } from '@org/shared-types';
-import { DbService } from './db.service';
+import { DbService } from '../db.service';
 import { MeterService } from './meter.service';
 
 /**

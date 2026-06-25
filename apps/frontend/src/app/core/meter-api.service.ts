@@ -10,6 +10,7 @@ import type {
   SeriesResponse,
   Tariff,
   WallboxConfig,
+  WallboxDailySummary,
   WallboxReading,
 } from '@org/shared-types';
 
@@ -66,6 +67,13 @@ export class MeterApiService {
 
   wallboxLatest(): Observable<WallboxReading | null> {
     return this.http.get<WallboxReading | null>('/api/wallbox/latest');
+  }
+
+  wallboxDailyEnergy(from: Date, to: Date): Observable<WallboxDailySummary[]> {
+    const params = new HttpParams()
+      .set('from', from.toISOString())
+      .set('to', to.toISOString());
+    return this.http.get<WallboxDailySummary[]>('/api/wallbox/energy/daily', { params });
   }
 }
 

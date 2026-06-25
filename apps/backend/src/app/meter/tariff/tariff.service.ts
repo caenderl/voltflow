@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Tariff } from '@org/shared-types';
-import { DbService } from './db.service';
+import { DbService } from '../db.service';
 
 const EMPTY: Tariff = { provider: null, importCtPerKwh: null, exportCtPerKwh: null };
 

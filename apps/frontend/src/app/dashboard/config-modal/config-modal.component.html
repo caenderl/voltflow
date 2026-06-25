@@ -1,0 +1,50 @@
+<div class="scrim" (click)="closed.emit()"></div>
+<div class="modal" role="dialog" aria-label="Einstellungen">
+  <h2>Stromtarif</h2>
+  <label class="field">
+    <span>Anbieter</span>
+    <input type="text" [(ngModel)]="formProvider" placeholder="z. B. Stadtwerke" />
+  </label>
+  <label class="field">
+    <span>Verbrauch (ct/kWh)</span>
+    <input type="number" min="0" step="0.01" [(ngModel)]="formImport" placeholder="z. B. 30" />
+  </label>
+  <label class="field">
+    <span>Einspeisung (ct/kWh)</span>
+    <input type="number" min="0" step="0.01" [(ngModel)]="formExport" placeholder="z. B. 8" />
+  </label>
+
+  <h2 class="section-head">Wallbox</h2>
+  <label class="field">
+    <span>Name</span>
+    <input type="text" [(ngModel)]="formWbName" placeholder="z. B. Garage" />
+  </label>
+  <label class="field-row">
+    <input type="checkbox" [(ngModel)]="formWbEnabled" />
+    <span>Wallbox aktivieren (Modbus TCP)</span>
+  </label>
+  <label class="field">
+    <span>IP-Adresse</span>
+    <input type="text" [(ngModel)]="formWbHost" placeholder="z. B. 192.168.0.206" />
+  </label>
+  <div class="field-grid">
+    <label class="field">
+      <span>Port</span>
+      <input type="number" min="1" max="65535" [(ngModel)]="formWbPort" placeholder="502" />
+    </label>
+    <label class="field">
+      <span>Unit-ID</span>
+      <input type="number" min="0" max="255" [(ngModel)]="formWbUnitId" placeholder="1" />
+    </label>
+    <label class="field">
+      <span>Intervall (s)</span>
+      <input type="number" min="5" max="3600" [(ngModel)]="formWbInterval" placeholder="30" />
+    </label>
+  </div>
+  <p class="hint-sm">Änderungen am Wallbox-Anschluss greifen nach einem Neustart des Collectors.</p>
+
+  <div class="modal-actions">
+    <button class="btn-text" (click)="closed.emit()">Abbrechen</button>
+    <button class="btn-filled" (click)="save()">Speichern</button>
+  </div>
+</div>

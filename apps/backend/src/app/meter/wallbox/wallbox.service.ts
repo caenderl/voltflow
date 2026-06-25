@@ -2,9 +2,12 @@ import { Injectable } from '@nestjs/common';
 import type {
   DataRange,
   WallboxConfig,
+  WallboxDailySummary,
   WallboxReading,
 } from '@org/shared-types';
-import { DbService, rowToWallboxReading } from './db.service';
+import { DbService, rowToWallboxReading } from '../db.service';
+
+const TIMEZONE = process.env.TZ || 'Europe/Berlin';
 
 const DEFAULT_CONFIG: WallboxConfig = {
   enabled: false,
@@ -77,6 +80,29 @@ export class WallboxService {
       first: r['first'] ? new Date(r['first'] as string).toISOString() : null,
       last: r['last'] ? new Date(r['last'] as string).toISOString() : null,
     };
+  }
+
+  /**
+   * Daily charged energy in [from, to) from the wallbox_1day continuous
+   * aggregate (Berlin-timezone day buckets, 10-year retention).
+   * Only days with actual charging activity are returned.
+   */
+  async dailyEnergy(from: Date, to: Date): Promise<WallboxDailySummary[]> {
+    const { rows } = await this.db.query(
+      `SELECT
+         (bucket AT TIME ZONE $3)::date::text AS day,
+         ROUND(charged_kwh::numeric, 2)       AS charged_kwh
+       FROM wallbox_1day
+       WHERE bucket >= $1
+         AND bucket < $2
+         AND COALESCE(charged_kwh, 0) > 0
+       ORDER BY bucket`,
+      [from, to, TIMEZONE],
+    );
+    return rows.map((r) => ({
+      day: String(r['day']),
+      chargedKwh: Number(r['charged_kwh']),
+    }));
   }
 
   /** Raw wallbox readings in [from, to), oldest first. */

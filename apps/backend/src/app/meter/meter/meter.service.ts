@@ -9,7 +9,7 @@ import type {
   SeriesResolution,
   SeriesResponse,
 } from '@org/shared-types';
-import { DbService, rowToReading } from './db.service';
+import { DbService, rowToReading } from '../db.service';
 
 /** Timezone for day-boundary bucketing (overridable via TZ env). */
 const TIMEZONE = process.env.TZ || 'Europe/Berlin';

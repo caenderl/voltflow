@@ -153,3 +153,11 @@ export interface WallboxReading {
 
 /** Name of the WebSocket event used to push live wallbox readings. */
 export const WALLBOX_READING_EVENT = 'wallbox-reading';
+
+/** Daily charging energy summary per day, returned by GET /api/wallbox/energy/daily. */
+export interface WallboxDailySummary {
+  /** Local date in ISO format (YYYY-MM-DD). */
+  day: string;
+  /** Total energy charged this day in kWh. */
+  chargedKwh: number;
+}
