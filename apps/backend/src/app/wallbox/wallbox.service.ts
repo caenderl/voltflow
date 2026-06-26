@@ -5,7 +5,7 @@ import type {
   WallboxDailySummary,
   WallboxReading,
 } from '@org/shared-types';
-import { DbService, rowToWallboxReading } from '../db.service';
+import { DbService, rowToWallboxReading } from '../database/db.service';
 
 const TIMEZONE = process.env.TZ || 'Europe/Berlin';
 

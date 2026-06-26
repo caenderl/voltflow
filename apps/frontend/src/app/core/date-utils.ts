@@ -2,7 +2,7 @@ import type { EnergyPeriod, SeriesResolution } from '@org/shared-types';
 
 export type View = 'live' | 'day' | 'week' | 'month';
 
-export interface RangeSpec {
+interface RangeSpec {
   from: Date;
   to: Date;
   resolution: SeriesResolution;
@@ -42,17 +42,17 @@ export function addDays(d: Date, n: number): Date {
   return x;
 }
 
-export function startOfMonth(d: Date): Date {
+function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
-export function addMonths(d: Date, n: number): Date {
+function addMonths(d: Date, n: number): Date {
   const x = new Date(d);
   x.setMonth(x.getMonth() + n);
   return x;
 }
 
-export function isoWeek(d: Date): number {
+function isoWeek(d: Date): number {
   const t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   t.setDate(t.getDate() + 3 - ((t.getDay() + 6) % 7)); // nearest Thursday
   const week1 = new Date(t.getFullYear(), 0, 4);
