@@ -183,7 +183,8 @@ export class Dashboard implements OnInit {
     return {
       tooltip: {
         trigger: 'axis',
-        valueFormatter: (v: number) => `${Math.abs(Number(v)).toFixed(2)} kWh`,
+        valueFormatter: (v: number) =>
+          `${Math.abs(Number(v)).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh`,
       },
       legend: { data: ['Bezug', 'Einspeisung'], top: 0, textStyle: { color: '#c9c5d0' } },
       grid: { left: 50, right: 20, top: 40, bottom: 30 },
@@ -195,7 +196,7 @@ export class Dashboard implements OnInit {
       yAxis: {
         type: 'value',
         name: 'kWh',
-        axisLabel: { color: '#948f9c' },
+        axisLabel: { color: '#948f9c', formatter: (v: number) => v.toLocaleString('de-DE') },
         splitLine: { lineStyle: { color: '#2a2a30' } },
       },
       series: [
@@ -226,7 +227,8 @@ export class Dashboard implements OnInit {
     return {
       tooltip: {
         trigger: 'axis',
-        valueFormatter: (v: number) => `${Number(v).toFixed(2)} kWh`,
+        valueFormatter: (v: number) =>
+          `${Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh`,
       },
       grid: { left: 50, right: 20, top: 20, bottom: 30 },
       xAxis: {
@@ -237,7 +239,7 @@ export class Dashboard implements OnInit {
       yAxis: {
         type: 'value',
         name: 'kWh',
-        axisLabel: { color: '#948f9c' },
+        axisLabel: { color: '#948f9c', formatter: (v: number) => v.toLocaleString('de-DE') },
         splitLine: { lineStyle: { color: '#2a2a30' } },
       },
       series: [

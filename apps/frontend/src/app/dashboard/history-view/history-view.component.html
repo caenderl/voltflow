@@ -11,14 +11,14 @@
 <section class="cards">
   <div class="card import">
     <span class="label">Bezug gesamt</span>
-    <span class="value">{{ energy()?.importKwh ?? '–' }} <small>kWh</small></span>
+    <span class="value">{{ (energy()?.importKwh | number: '1.2-2') ?? '–' }} <small>kWh</small></span>
     @if (hasTariff() && costs(); as c) {
       <span class="sub">{{ c.importCost | number: '1.2-2' }} €</span>
     }
   </div>
   <div class="card export">
     <span class="label">Einspeisung gesamt</span>
-    <span class="value">{{ energy()?.exportKwh ?? '–' }} <small>kWh</small></span>
+    <span class="value">{{ (energy()?.exportKwh | number: '1.2-2') ?? '–' }} <small>kWh</small></span>
     @if (hasTariff() && costs(); as c) {
       <span class="sub">{{ c.exportRevenue | number: '1.2-2' }} €</span>
     }

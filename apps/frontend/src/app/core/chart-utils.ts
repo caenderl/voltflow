@@ -63,9 +63,9 @@ export function energySlots(view: View, ref: Date): Slot[] {
   return slots;
 }
 
-/** Compact watt label for the live y-axis (e.g. 2500 -> "2.5k", -800 -> "-800"). */
+/** Compact watt label for the live y-axis (e.g. 2500 -> "2,5k", -800 -> "-800"). */
 function wattLabel(v: number): string {
-  return Math.abs(v) >= 1000 ? `${v / 1000}k` : `${v}`;
+  return Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString('de-DE')}k` : `${v}`;
 }
 
 /**
