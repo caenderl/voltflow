@@ -191,7 +191,8 @@ export class Dashboard implements OnInit {
       xAxis: {
         type: 'category',
         data: slots.map((s) => s.label),
-        axisLabel: { color: '#948f9c', interval: 0 },
+        // Thin labels automatically on narrow screens instead of forcing all.
+        axisLabel: { color: '#948f9c', interval: 'auto', hideOverlap: true },
       },
       yAxis: {
         type: 'value',
@@ -234,7 +235,7 @@ export class Dashboard implements OnInit {
       xAxis: {
         type: 'category',
         data: slots.map((s) => s.label),
-        axisLabel: { color: '#948f9c', interval: 0 },
+        axisLabel: { color: '#948f9c', interval: 'auto', hideOverlap: true },
       },
       yAxis: {
         type: 'value',

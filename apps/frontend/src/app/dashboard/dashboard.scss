@@ -141,3 +141,35 @@
     background: color-mix(in srgb, var(--on-surface) 8%, transparent);
   }
 }
+
+/* ---------- Small phones (e.g. iPhone 12 mini) ---------- */
+@media (max-width: 540px) {
+  .app-bar {
+    gap: 0.5rem;
+    padding: 0.6rem 0.25rem;
+  }
+
+  // Tabs move to their own full-width row as an even segmented control.
+  .bar-right {
+    width: 100%;
+    gap: 0.4rem;
+  }
+
+  .views {
+    flex: 1;
+    flex-wrap: nowrap; // never break the pill into two rows
+  }
+
+  .tab {
+    flex: 1;
+    padding: 0.5rem 0.25rem;
+    font-size: 0.82rem;
+    letter-spacing: 0;
+    text-align: center;
+  }
+
+  // Non-essential on a phone; frees width for the tabs.
+  .version-tag {
+    display: none;
+  }
+}
