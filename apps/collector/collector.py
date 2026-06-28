@@ -127,7 +127,12 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
     # Carry state (seeded from the DB so a night restart keeps today's yield).
     carry = {"date": None, "daily_wh": None, "total_kwh": None,
              "serial": None, "model": None}
-    seed = await last_sma_reading(pool)
+    try:
+        seed = await last_sma_reading(pool)
+    except Exception as err:  # noqa: BLE001 - seed must never crash the collector
+        LOG.warning("SMA seed read failed (%s: %s) - continuing without carry",
+                    type(err).__name__, err)
+        seed = None
     if seed:
         carry["serial"] = seed.get("device_sn")
         carry["model"] = seed.get("device_pn")

@@ -180,10 +180,11 @@ async def last_sma_reading(pool: asyncpg.Pool) -> dict | None:
     restart and for writing asleep rows when the inverter is unreachable)."""
     try:
         row = await pool.fetchrow(
-            "SELECT time, device_sn, device_pn, daily_yield_wh, total_yield_kwh "
+            "SELECT r.time, r.device_sn, d.device_pn, "
+            "       r.daily_yield_wh, r.total_yield_kwh "
             "FROM sma_readings r "
             "LEFT JOIN device d ON d.device_sn = r.device_sn "
-            "ORDER BY time DESC LIMIT 1"
+            "ORDER BY r.time DESC LIMIT 1"
         )
     except asyncpg.UndefinedTableError:
         return None
