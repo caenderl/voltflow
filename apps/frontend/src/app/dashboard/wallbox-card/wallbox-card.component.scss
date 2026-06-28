@@ -1,20 +1,15 @@
 :host {
-  display: block;
+  display: flex; // fill the live-cards flex item so cards share one height
 }
 
 .wallbox-card {
-  margin: 1rem auto 0;
+  flex: 1;
   width: 100%;
-  max-width: 420px;
   background: var(--surface-1);
   border: 1px solid var(--outline);
   border-radius: var(--radius);
   padding: 1rem 1.25rem;
   box-shadow: var(--elev-1);
-
-  &.is-charging {
-    border-color: color-mix(in srgb, var(--export) 50%, var(--outline));
-  }
 }
 
 .wb-head {

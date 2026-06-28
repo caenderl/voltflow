@@ -36,10 +36,13 @@
   <div echarts [options]="liveSpark()" class="spark"></div>
 </section>
 
-@if (smaState(); as s) {
-  <app-sma-card [state]="s" [name]="smaName()" [balance]="balance()" />
-}
-
-@if (wallboxState(); as wb) {
-  <app-wallbox-card [state]="wb" [name]="wallboxName()" />
+@if (smaState() || wallboxState()) {
+  <div class="live-cards">
+    @if (smaState(); as s) {
+      <app-sma-card [state]="s" [name]="smaName()" [balance]="balance()" />
+    }
+    @if (wallboxState(); as wb) {
+      <app-wallbox-card [state]="wb" [name]="wallboxName()" />
+    }
+  </div>
 }

@@ -119,3 +119,18 @@
   height: 150px;
   margin-top: 0.5rem;
 }
+
+/* Live cards (SMA / Wallbox): side by side when there is room, else stacked. */
+.live-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  width: 100%;
+
+  > * {
+    flex: 1 1 320px;
+    max-width: 420px;
+  }
+}
