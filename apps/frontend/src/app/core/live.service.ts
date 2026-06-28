@@ -3,8 +3,10 @@ import { Observable } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
 import {
   METER_READING_EVENT,
+  SMA_READING_EVENT,
   WALLBOX_READING_EVENT,
   type MeterReading,
+  type SmaReading,
   type WallboxReading,
 } from '@org/shared-types';
 
@@ -26,6 +28,10 @@ export class LiveService {
 
   wallboxReadings$(): Observable<WallboxReading> {
     return this.on<WallboxReading>(WALLBOX_READING_EVENT);
+  }
+
+  smaReadings$(): Observable<SmaReading> {
+    return this.on<SmaReading>(SMA_READING_EVENT);
   }
 
   private on<T>(event: string): Observable<T> {

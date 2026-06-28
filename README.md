@@ -3,28 +3,38 @@
 Erfasst die Live-Werte des **Anker Solix Smart Meters (A17X7)** über den MQTT-Cloud-Server,
 speichert sie in **TimescaleDB** und stellt sie in einer Web-App grafisch dar
 (Live, Tag, Woche, Monat). Bindet zusätzlich eine **Anker SOLIX V1 Wallbox (A5191)**
-per Modbus TCP an — Auslesen ist umgesetzt, Steuerung (Laden) ist geplant.
+per Modbus TCP und einen **SMA PV-Wechselrichter (STP 6000TL-20)** per Speedwire an.
+
+> **Highlight:** Erst mit der PV-Produktion (SMA) **und** dem Smart Meter lässt sich die
+> echte **Hauslast** (PV + Netzbezug − Einspeisung) und daraus **Eigenverbrauch & Autarkie**
+> ableiten — ohne Produktionsdaten war das vorher nicht möglich.
 
 ## Architektur
 
 ```
-Anker Cloud MQTT ─(5s)─▶ Collector (Python) ◀─(30s, Modbus TCP)─ Anker V1 Wallbox
-                            │ INSERT + NOTIFY
-                            ▼
-                        TimescaleDB  ──▶ Backend (NestJS, REST + WebSocket)
-                                            ▼
-   Browser ◀── nginx (Angular + Proxy) ◀── Frontend (Angular + ngx-echarts)
+Anker Cloud MQTT ─(5s)──▶ Collector (Python) ◀─(30s, Modbus TCP)── Anker V1 Wallbox
+SMA Inverter ─(60s, Speedwire)─▶ │ INSERT + NOTIFY
+                                 ▼
+                             TimescaleDB  ──▶ Backend (NestJS, REST + WebSocket)
+                                                 ▼
+   Browser ◀── nginx (Angular + Proxy) ◀──── Frontend (Angular + ngx-echarts)
 ```
 
 NX-Monorepo:
 
 | Pfad | Inhalt |
 |------|--------|
-| `apps/collector` | Python-Ingestion: Smart Meter (`anker-solix-api` via MQTT) **+ Wallbox (Modbus TCP)** |
-| `apps/backend`   | NestJS: REST (`/api/meter`, `/api/wallbox`, `/api/tariff`) + WebSocket (Live) |
+| `apps/collector` | Python-Ingestion: Smart Meter (`anker-solix-api`/MQTT) **+ Wallbox (Modbus)** **+ SMA (Speedwire/`pysma-plus`)** |
+| `apps/backend`   | NestJS: REST (`/api/meter`, `/api/wallbox`, `/api/sma`, `/api/tariff`) + WebSocket (Live) |
 | `apps/frontend`  | Angular-Dashboard (ngx-echarts) |
 | `libs/shared-types` | Geteilte TypeScript-Typen Backend ↔ Frontend |
 | `db/init.sql`    | Hypertables, Continuous Aggregates, NOTIFY-Trigger |
+
+> **SMA-Wechselrichter:** config-gesteuert (Name, IP, Intervall, an/aus in der UI), Passwort
+> aus `SMA_PASSWORD` (.env). Nachts schläft der Wechselrichter → wird als `asleep` (0 W)
+> erfasst, `daily_yield` wird bis Mitternacht weitergetragen. Die **Hauslast** entsteht als
+> reine VIEW `house_load_1min` aus den 1‑Min-Caggs von Meter **und** SMA (Caggs können nicht
+> über Hypertables joinen) — so wird der 5s‑vs‑60s‑Sampling-Mismatch auf einem Raster geglättet.
 
 > **Wallbox:** Die Anbindung ist **config-gesteuert** — der Collector pollt sie nur, wenn sie
 > in den Einstellungen (UI) aktiviert ist (Name, IP, Port, Unit-ID, Intervall). Register-Map
@@ -106,8 +116,15 @@ reverse-proxyt `/api` + `/socket.io` ans Backend). DB-Daten liegen im Volume `vo
 | `GET /api/wallbox/latest` | Letzter Wallbox-Messwert |
 | `GET /api/wallbox/history?from&to` | Rohe Wallbox-Messwerte |
 | `GET /api/wallbox/energy/daily?from&to` | Geladene Energie pro Tag (kWh) |
+| `GET` / `PUT /api/sma/config` | SMA-Verbindung (Name, IP, Intervall, an/aus) |
+| `GET /api/sma/latest` | Letzter SMA-Messwert |
+| `GET /api/sma/history?from&to` | Rohe SMA-Messwerte |
+| `GET /api/sma/energy/daily?from&to` | PV-Ertrag pro Tag (kWh) |
+| `GET /api/sma/house-load?from&to` | Abgeleitete Hauslast-Zeitreihe (W) |
+| `GET /api/sma/balance?from&to` | Energiebilanz: Eigenverbrauch & Autarkie |
 | WS-Event `reading` | Live-Messwert Smart Meter (~alle 5 s) |
 | WS-Event `wallbox-reading` | Live-Wallbox-Wert (~alle 30 s) |
+| WS-Event `sma-reading` | Live-SMA-Wert (~alle 60 s) |
 
 ## Datensicherheit (Daten bleiben bei Updates erhalten)
 

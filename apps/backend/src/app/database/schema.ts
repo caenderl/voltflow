@@ -182,6 +182,164 @@ const MIGRATIONS: { name: string; sql: string }[] = [
           ALTER MATERIALIZED VIEW wallbox_1hour SET (timescaledb.materialized_only = false);
           ALTER MATERIALIZED VIEW wallbox_1day  SET (timescaledb.materialized_only = false)`,
   },
+  // --- SMA PV inverter ------------------------------------------------------
+  {
+    name: '020-sma-config-table',
+    sql: `CREATE TABLE IF NOT EXISTS sma_config (
+            id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+            enabled         BOOLEAN NOT NULL DEFAULT false,
+            name            TEXT,
+            host            TEXT,
+            poll_interval_s INT     NOT NULL DEFAULT 60,
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+  },
+  {
+    name: '021-sma-readings-table',
+    sql: `CREATE TABLE IF NOT EXISTS sma_readings (
+            time            TIMESTAMPTZ      NOT NULL DEFAULT now(),
+            device_sn       TEXT             NOT NULL,
+            asleep          BOOLEAN          NOT NULL DEFAULT false,
+            grid_power      DOUBLE PRECISION,
+            pv_power_a      DOUBLE PRECISION,
+            pv_power_b      DOUBLE PRECISION,
+            daily_yield_wh  DOUBLE PRECISION,
+            total_yield_kwh DOUBLE PRECISION,
+            power_l1        DOUBLE PRECISION,
+            power_l2        DOUBLE PRECISION,
+            power_l3        DOUBLE PRECISION,
+            pv_voltage_a    DOUBLE PRECISION,
+            pv_voltage_b    DOUBLE PRECISION,
+            pv_current_a    DOUBLE PRECISION,
+            pv_current_b    DOUBLE PRECISION,
+            voltage_l1      DOUBLE PRECISION,
+            voltage_l2      DOUBLE PRECISION,
+            voltage_l3      DOUBLE PRECISION,
+            frequency       DOUBLE PRECISION,
+            temp_a          DOUBLE PRECISION,
+            status          INTEGER
+          )`,
+  },
+  {
+    name: '022-sma-readings-hypertable',
+    sql: `SELECT create_hypertable('sma_readings', 'time', if_not_exists => TRUE)`,
+  },
+  {
+    name: '023-sma-readings-index',
+    sql: `CREATE INDEX IF NOT EXISTS sma_readings_sn_time_idx
+            ON sma_readings (device_sn, time DESC)`,
+  },
+  {
+    name: '024-sma-readings-retention',
+    sql: `SELECT add_retention_policy('sma_readings', INTERVAL '90 days', if_not_exists => TRUE)`,
+  },
+  {
+    name: '025-sma-notify-function',
+    sql: `CREATE OR REPLACE FUNCTION notify_sma_reading() RETURNS trigger AS $$
+          BEGIN
+            PERFORM pg_notify('sma_reading', row_to_json(NEW)::text);
+            RETURN NEW;
+          END;
+          $$ LANGUAGE plpgsql`,
+  },
+  {
+    name: '026-sma-notify-trigger',
+    sql: `DROP TRIGGER IF EXISTS sma_reading_notify ON sma_readings;
+          CREATE TRIGGER sma_reading_notify
+            AFTER INSERT ON sma_readings
+            FOR EACH ROW EXECUTE FUNCTION notify_sma_reading()`,
+  },
+  {
+    name: '027-sma-1min-aggregate',
+    sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS sma_1min
+          WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+          SELECT
+            device_sn,
+            time_bucket('1 minute', time) AS bucket,
+            avg(grid_power)               AS grid_power_avg,
+            max(grid_power)               AS grid_power_max,
+            max(daily_yield_wh)           AS daily_yield_wh,
+            last(total_yield_kwh, time)   AS total_yield_kwh
+          FROM sma_readings
+          GROUP BY device_sn, bucket
+          WITH NO DATA`,
+  },
+  {
+    name: '028-sma-1min-policy',
+    sql: `SELECT add_continuous_aggregate_policy('sma_1min',
+            start_offset => INTERVAL '3 days', end_offset => INTERVAL '1 minute',
+            schedule_interval => INTERVAL '1 minute', if_not_exists => TRUE)`,
+  },
+  {
+    name: '029-sma-1min-retention',
+    sql: `SELECT add_retention_policy('sma_1min', INTERVAL '10 years', if_not_exists => TRUE)`,
+  },
+  {
+    name: '030-sma-1hour-aggregate',
+    sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS sma_1hour
+          WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+          SELECT
+            device_sn,
+            time_bucket('1 hour', time)   AS bucket,
+            avg(grid_power)               AS grid_power_avg,
+            max(grid_power)               AS grid_power_max,
+            max(daily_yield_wh)           AS daily_yield_wh,
+            last(total_yield_kwh, time)   AS total_yield_kwh
+          FROM sma_readings
+          GROUP BY device_sn, bucket
+          WITH NO DATA`,
+  },
+  {
+    name: '031-sma-1hour-policy',
+    sql: `SELECT add_continuous_aggregate_policy('sma_1hour',
+            start_offset => INTERVAL '90 days', end_offset => INTERVAL '1 hour',
+            schedule_interval => INTERVAL '1 hour', if_not_exists => TRUE)`,
+  },
+  {
+    name: '032-sma-1hour-retention',
+    sql: `SELECT add_retention_policy('sma_1hour', INTERVAL '10 years', if_not_exists => TRUE)`,
+  },
+  {
+    name: '033-sma-1day-aggregate',
+    sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS sma_1day
+          WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+          SELECT
+            device_sn,
+            time_bucket('1 day', time, 'Europe/Berlin') AS bucket,
+            avg(grid_power)               AS grid_power_avg,
+            max(grid_power)               AS grid_power_max,
+            max(daily_yield_wh)           AS daily_yield_wh,
+            last(total_yield_kwh, time)   AS total_yield_kwh
+          FROM sma_readings
+          GROUP BY device_sn, bucket
+          WITH NO DATA`,
+  },
+  {
+    name: '034-sma-1day-policy',
+    sql: `SELECT add_continuous_aggregate_policy('sma_1day',
+            start_offset => INTERVAL '90 days', end_offset => INTERVAL '1 day',
+            schedule_interval => INTERVAL '1 hour', if_not_exists => TRUE)`,
+  },
+  {
+    name: '035-sma-1day-retention',
+    sql: `SELECT add_retention_policy('sma_1day', INTERVAL '10 years', if_not_exists => TRUE)`,
+  },
+  {
+    // House load on a common 1-min grid. Caggs cannot JOIN hypertables, so this
+    // is a plain view combining meter_1min + sma_1min: house = PV + import - export.
+    name: '036-house-load-view',
+    sql: `CREATE OR REPLACE VIEW house_load_1min AS
+          SELECT
+            m.bucket                                AS bucket,
+            COALESCE(s.grid_power_avg, 0)           AS pv_power,
+            m.grid_to_home_power_avg                AS grid_import,
+            m.pv_to_grid_power_avg                  AS grid_export,
+            COALESCE(s.grid_power_avg, 0)
+              + COALESCE(m.grid_to_home_power_avg, 0)
+              - COALESCE(m.pv_to_grid_power_avg, 0) AS house_power
+          FROM meter_1min m
+          LEFT JOIN sma_1min s ON s.bucket = m.bucket`,
+  },
 ];
 
 export async function applyMigrations(

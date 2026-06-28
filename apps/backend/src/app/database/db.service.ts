@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Client, Pool } from 'pg';
 import { Subject } from 'rxjs';
-import type { MeterReading, WallboxReading } from '@org/shared-types';
+import type { MeterReading, SmaReading, WallboxReading } from '@org/shared-types';
 import { applyMigrations } from './schema';
 
 const num = (v: unknown): number | null =>
@@ -45,6 +45,33 @@ export function rowToWallboxReading(
   };
 }
 
+/** Converts a DB row (snake_case) into an SmaReading. */
+export function rowToSmaReading(row: Record<string, unknown>): SmaReading {
+  return {
+    time: new Date(row['time'] as string).toISOString(),
+    deviceSn: row['device_sn'] as string,
+    asleep: Boolean(row['asleep']),
+    gridPower: num(row['grid_power']),
+    pvPowerA: num(row['pv_power_a']),
+    pvPowerB: num(row['pv_power_b']),
+    dailyYieldWh: num(row['daily_yield_wh']),
+    totalYieldKwh: num(row['total_yield_kwh']),
+    powerL1: num(row['power_l1']),
+    powerL2: num(row['power_l2']),
+    powerL3: num(row['power_l3']),
+    pvVoltageA: num(row['pv_voltage_a']),
+    pvVoltageB: num(row['pv_voltage_b']),
+    pvCurrentA: num(row['pv_current_a']),
+    pvCurrentB: num(row['pv_current_b']),
+    voltageL1: num(row['voltage_l1']),
+    voltageL2: num(row['voltage_l2']),
+    voltageL3: num(row['voltage_l3']),
+    frequency: num(row['frequency']),
+    tempA: num(row['temp_a']),
+    status: num(row['status']),
+  };
+}
+
 const LISTEN_RECONNECT_MS = 5000;
 
 /**
@@ -65,6 +92,8 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
   readonly readings$ = new Subject<MeterReading>();
   /** Stream of new wallbox readings (fed by pg NOTIFY). */
   readonly wallboxReadings$ = new Subject<WallboxReading>();
+  /** Stream of new SMA inverter readings (fed by pg NOTIFY). */
+  readonly smaReadings$ = new Subject<SmaReading>();
 
   onModuleInit(): void {
     const dsn = process.env.DATABASE_URL;
@@ -94,6 +123,8 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
         const row = JSON.parse(msg.payload) as Record<string, unknown>;
         if (msg.channel === 'wallbox_reading') {
           this.wallboxReadings$.next(rowToWallboxReading(row));
+        } else if (msg.channel === 'sma_reading') {
+          this.smaReadings$.next(rowToSmaReading(row));
         } else {
           this.readings$.next(rowToReading(row));
         }
@@ -112,8 +143,9 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
       await client.connect();
       await client.query('LISTEN meter_reading');
       await client.query('LISTEN wallbox_reading');
+      await client.query('LISTEN sma_reading');
       this.listenClient = client;
-      this.logger.log('LISTEN meter_reading + wallbox_reading active');
+      this.logger.log('LISTEN meter_reading + wallbox_reading + sma_reading active');
     } catch (err) {
       this.logger.warn(
         `LISTEN connection failed, retrying in ${LISTEN_RECONNECT_MS}ms: ${err}`,

@@ -2,9 +2,12 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import type { EChartsCoreOption } from 'echarts/core';
 import type {
   DataRange,
+  EnergyBalance,
   EnergySummary,
   MeterReading,
   SeriesResponse,
+  SmaConfig,
+  SmaReading,
   Tariff,
   WallboxConfig,
   WallboxReading,
@@ -19,6 +22,7 @@ import { ConfigModalComponent, type ConfigSaveEvent } from './config-modal/confi
 import { LiveViewComponent, type FlowState } from './live-view/live-view.component';
 import { HistoryViewComponent, type Costs } from './history-view/history-view.component';
 import type { WallboxState } from './wallbox-card/wallbox-card.component';
+import type { SmaState } from './sma-card/sma-card.component';
 import type { WallboxDailySummary } from '@org/shared-types';
 
 interface LivePoint {
@@ -79,7 +83,23 @@ export class Dashboard implements OnInit {
   readonly wallboxConfig = signal<WallboxConfig | null>(null);
   readonly wallboxDailyEnergy = signal<WallboxDailySummary[]>([]);
 
+  readonly sma = signal<SmaReading | null>(null);
+  readonly smaConfig = signal<SmaConfig | null>(null);
+  readonly balance = signal<EnergyBalance | null>(null);
+
   readonly wallboxName = computed(() => this.wallboxConfig()?.name?.trim() || 'Wallbox');
+
+  readonly smaName = computed(() => this.smaConfig()?.name?.trim() || 'PV-Anlage');
+
+  readonly smaState = computed<SmaState | null>(() => {
+    const s = this.sma();
+    if (!s) return null;
+    return {
+      productionW: s.gridPower ?? 0,
+      dailyYieldKwh: (s.dailyYieldWh ?? 0) / 1000,
+      asleep: s.asleep,
+    };
+  });
 
   readonly wallboxState = computed<WallboxState | null>(() => {
     const w = this.wallbox();
@@ -265,11 +285,16 @@ export class Dashboard implements OnInit {
       );
     });
     this.live.wallboxReadings$().subscribe((w) => this.wallbox.set(w));
+    this.live.smaReadings$().subscribe((s) => this.sma.set(s));
     this.loadToday();
     this.api.range().subscribe({ next: (r) => this.dataRange.set(r), error: () => undefined });
     this.api.tariff().subscribe({ next: (t) => this.tariff.set(t), error: () => undefined });
     this.api.wallboxConfig().subscribe({
       next: (c) => this.wallboxConfig.set(c),
+      error: () => undefined,
+    });
+    this.api.smaConfig().subscribe({
+      next: (c) => this.smaConfig.set(c),
       error: () => undefined,
     });
     setInterval(() => this.loadToday(), 5 * 60 * 1000);
@@ -288,6 +313,10 @@ export class Dashboard implements OnInit {
       next: (saved) => this.wallboxConfig.set(saved),
       error: () => this.error.set('Wallbox-Konfiguration konnte nicht gespeichert werden.'),
     });
+    this.api.saveSmaConfig(event.sma).subscribe({
+      next: (saved) => this.smaConfig.set(saved),
+      error: () => this.error.set('SMA-Konfiguration konnte nicht gespeichert werden.'),
+    });
     this.api.saveTariff(event.tariff).subscribe({
       next: (saved) => {
         this.tariff.set(saved);
@@ -300,6 +329,13 @@ export class Dashboard implements OnInit {
   private loadToday(): void {
     this.api.energy('day', new Date()).subscribe({
       next: (e) => this.today.set(e),
+      error: () => undefined,
+    });
+    // Today's energy balance (self-consumption / autarky) for the live SMA card.
+    const from = startOfDay(new Date());
+    const to = new Date();
+    this.api.energyBalance(from, to).subscribe({
+      next: (b) => this.balance.set(b),
       error: () => undefined,
     });
   }

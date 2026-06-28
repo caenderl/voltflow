@@ -253,3 +253,143 @@ DROP TRIGGER IF EXISTS wallbox_reading_notify ON wallbox_reading;
 CREATE TRIGGER wallbox_reading_notify
     AFTER INSERT ON wallbox_reading
     FOR EACH ROW EXECUTE FUNCTION notify_wallbox_reading();
+
+-- ---------------------------------------------------------------------------
+-- Single-row SMA inverter connection config (Speedwire via pysma-plus).
+-- Password is NOT stored here (collector reads it from SMA_PASSWORD env).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sma_config (
+    id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    enabled         BOOLEAN NOT NULL DEFAULT false,
+    name            TEXT,
+    host            TEXT,
+    poll_interval_s INT     NOT NULL DEFAULT 60,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------------------------------------------------------------------------
+-- Raw SMA inverter readings (one insert per poll interval, default ~60s).
+-- At night the inverter sleeps -> asleep = true, power fields 0, daily_yield
+-- carried forward by the collector (so it does not drop to 0 before midnight).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sma_readings (
+    time            TIMESTAMPTZ      NOT NULL DEFAULT now(),
+    device_sn       TEXT             NOT NULL,
+    asleep          BOOLEAN          NOT NULL DEFAULT false,
+    grid_power      DOUBLE PRECISION,   -- AC power to grid connection (PV production), W
+    pv_power_a      DOUBLE PRECISION,   -- DC power string A, W
+    pv_power_b      DOUBLE PRECISION,   -- DC power string B, W
+    daily_yield_wh  DOUBLE PRECISION,   -- energy produced today, Wh (resets at midnight)
+    total_yield_kwh DOUBLE PRECISION,   -- lifetime energy, kWh
+    power_l1        DOUBLE PRECISION,
+    power_l2        DOUBLE PRECISION,
+    power_l3        DOUBLE PRECISION,
+    pv_voltage_a    DOUBLE PRECISION,
+    pv_voltage_b    DOUBLE PRECISION,
+    pv_current_a    DOUBLE PRECISION,
+    pv_current_b    DOUBLE PRECISION,
+    voltage_l1      DOUBLE PRECISION,
+    voltage_l2      DOUBLE PRECISION,
+    voltage_l3      DOUBLE PRECISION,
+    frequency       DOUBLE PRECISION,
+    temp_a          DOUBLE PRECISION,
+    status          INTEGER
+);
+
+SELECT create_hypertable('sma_readings', 'time', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS sma_readings_sn_time_idx
+    ON sma_readings (device_sn, time DESC);
+
+-- Drop raw data after 90 days (aggregates below are kept long-term).
+SELECT add_retention_policy('sma_readings', INTERVAL '90 days', if_not_exists => TRUE);
+
+-- ---------------------------------------------------------------------------
+-- Continuous aggregates for the SMA inverter.
+-- avg/max of production power; max(daily_yield) per day = the day's yield;
+-- last(total_yield). Real-time aggregation enabled explicitly (see meter note).
+-- ---------------------------------------------------------------------------
+CREATE MATERIALIZED VIEW IF NOT EXISTS sma_1min
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+SELECT
+    device_sn,
+    time_bucket('1 minute', time)        AS bucket,
+    avg(grid_power)                      AS grid_power_avg,
+    max(grid_power)                      AS grid_power_max,
+    max(daily_yield_wh)                  AS daily_yield_wh,
+    last(total_yield_kwh, time)          AS total_yield_kwh
+FROM sma_readings
+GROUP BY device_sn, bucket
+WITH NO DATA;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS sma_1hour
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+SELECT
+    device_sn,
+    time_bucket('1 hour', time)          AS bucket,
+    avg(grid_power)                      AS grid_power_avg,
+    max(grid_power)                      AS grid_power_max,
+    max(daily_yield_wh)                  AS daily_yield_wh,
+    last(total_yield_kwh, time)          AS total_yield_kwh
+FROM sma_readings
+GROUP BY device_sn, bucket
+WITH NO DATA;
+
+-- Day buckets in Berlin local time so a "day" matches the device midnight reset.
+CREATE MATERIALIZED VIEW IF NOT EXISTS sma_1day
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+SELECT
+    device_sn,
+    time_bucket('1 day', time, 'Europe/Berlin') AS bucket,
+    avg(grid_power)                      AS grid_power_avg,
+    max(grid_power)                      AS grid_power_max,
+    max(daily_yield_wh)                  AS daily_yield_wh,
+    last(total_yield_kwh, time)          AS total_yield_kwh
+FROM sma_readings
+GROUP BY device_sn, bucket
+WITH NO DATA;
+
+SELECT add_continuous_aggregate_policy('sma_1min',
+    start_offset => INTERVAL '3 days',  end_offset => INTERVAL '1 minute',
+    schedule_interval => INTERVAL '1 minute');
+SELECT add_continuous_aggregate_policy('sma_1hour',
+    start_offset => INTERVAL '90 days', end_offset => INTERVAL '1 hour',
+    schedule_interval => INTERVAL '1 hour');
+SELECT add_continuous_aggregate_policy('sma_1day',
+    start_offset => INTERVAL '90 days', end_offset => INTERVAL '1 day',
+    schedule_interval => INTERVAL '1 hour');
+
+SELECT add_retention_policy('sma_1min',  INTERVAL '10 years', if_not_exists => TRUE);
+SELECT add_retention_policy('sma_1hour', INTERVAL '10 years', if_not_exists => TRUE);
+SELECT add_retention_policy('sma_1day',  INTERVAL '10 years', if_not_exists => TRUE);
+
+-- NOTIFY trigger for the live SMA push (backend LISTENs 'sma_reading').
+CREATE OR REPLACE FUNCTION notify_sma_reading() RETURNS trigger AS $$
+BEGIN
+    PERFORM pg_notify('sma_reading', row_to_json(NEW)::text);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS sma_reading_notify ON sma_readings;
+CREATE TRIGGER sma_reading_notify
+    AFTER INSERT ON sma_readings
+    FOR EACH ROW EXECUTE FUNCTION notify_sma_reading();
+
+-- ---------------------------------------------------------------------------
+-- Derived house load on a common 1-minute grid. Continuous aggregates cannot
+-- JOIN across hypertables, so this is a plain VIEW combining the two per-source
+-- 1-min caggs on the bucket: house = PV production + grid import - feed-in.
+-- meter_1min is the base (always present); sma_1min is absent at night -> 0.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE VIEW house_load_1min AS
+SELECT
+    m.bucket                                          AS bucket,
+    COALESCE(s.grid_power_avg, 0)                     AS pv_power,
+    m.grid_to_home_power_avg                          AS grid_import,
+    m.pv_to_grid_power_avg                            AS grid_export,
+    COALESCE(s.grid_power_avg, 0)
+      + COALESCE(m.grid_to_home_power_avg, 0)
+      - COALESCE(m.pv_to_grid_power_avg, 0)           AS house_power
+FROM meter_1min m
+LEFT JOIN sma_1min s ON s.bucket = m.bucket;

@@ -43,6 +43,27 @@
   </div>
   <p class="hint-sm">Änderungen am Wallbox-Anschluss greifen nach einem Neustart des Collectors.</p>
 
+  <h2 class="section-head">PV-Wechselrichter (SMA)</h2>
+  <label class="field">
+    <span>Name</span>
+    <input type="text" [(ngModel)]="formSmaName" placeholder="z. B. Dach" />
+  </label>
+  <label class="field-row">
+    <input type="checkbox" [(ngModel)]="formSmaEnabled" />
+    <span>Wechselrichter aktivieren (Speedwire)</span>
+  </label>
+  <div class="field-grid">
+    <label class="field">
+      <span>IP-Adresse</span>
+      <input type="text" [(ngModel)]="formSmaHost" placeholder="z. B. 192.168.0.110" />
+    </label>
+    <label class="field">
+      <span>Intervall (s)</span>
+      <input type="number" min="5" max="3600" [(ngModel)]="formSmaInterval" placeholder="60" />
+    </label>
+  </div>
+  <p class="hint-sm">Passwort wird aus <code>SMA_PASSWORD</code> (.env) gelesen. Änderungen greifen nach einem Neustart des Collectors.</p>
+
   <div class="modal-actions">
     <button class="btn-text" (click)="closed.emit()">Abbrechen</button>
     <button class="btn-filled" (click)="save()">Speichern</button>

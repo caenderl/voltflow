@@ -33,6 +33,9 @@
       [liveSpark]="liveSpark()"
       [wallboxState]="wallboxState()"
       [wallboxName]="wallboxName()"
+      [smaState]="smaState()"
+      [smaName]="smaName()"
+      [balance]="balance()"
     />
   } @else {
     <app-history-view
@@ -57,6 +60,7 @@
     <app-config-modal
       [tariff]="tariff()"
       [wallboxConfig]="wallboxConfig()"
+      [smaConfig]="smaConfig()"
       (closed)="closeConfig()"
       (saved)="onConfigSave($event)"
     />

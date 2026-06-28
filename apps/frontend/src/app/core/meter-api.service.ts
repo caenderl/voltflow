@@ -3,11 +3,14 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import type {
   DataRange,
+  EnergyBalance,
   EnergyPeriod,
   EnergySummary,
   MeterReading,
   SeriesResolution,
   SeriesResponse,
+  SmaConfig,
+  SmaReading,
   Tariff,
   WallboxConfig,
   WallboxDailySummary,
@@ -74,6 +77,28 @@ export class MeterApiService {
       .set('from', from.toISOString())
       .set('to', to.toISOString());
     return this.http.get<WallboxDailySummary[]>('/api/wallbox/energy/daily', { params });
+  }
+
+  // --- SMA inverter ---
+
+  smaConfig(): Observable<SmaConfig> {
+    return this.http.get<SmaConfig>('/api/sma/config');
+  }
+
+  saveSmaConfig(c: SmaConfig): Observable<SmaConfig> {
+    return this.http.put<SmaConfig>('/api/sma/config', c);
+  }
+
+  smaLatest(): Observable<SmaReading | null> {
+    return this.http.get<SmaReading | null>('/api/sma/latest');
+  }
+
+  /** Energy balance (self-consumption / autarky) over [from, to). */
+  energyBalance(from: Date, to: Date): Observable<EnergyBalance> {
+    const params = new HttpParams()
+      .set('from', from.toISOString())
+      .set('to', to.toISOString());
+    return this.http.get<EnergyBalance>('/api/sma/balance', { params });
   }
 }
 

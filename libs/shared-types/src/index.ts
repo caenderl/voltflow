@@ -161,3 +161,103 @@ export interface WallboxDailySummary {
   /** Total energy charged this day in kWh. */
   chargedKwh: number;
 }
+
+// ---------------------------------------------------------------------------
+// SMA PV inverter (STP 6000TL-20, Speedwire via pysma-plus)
+// ---------------------------------------------------------------------------
+
+/**
+ * Connection parameters for the SMA inverter, stored as a single config row
+ * and edited via the settings UI. The password is NOT stored here — it is read
+ * from the SMA_PASSWORD env var by the collector. The collector only polls when
+ * this is `enabled` and a `host` is set.
+ */
+export interface SmaConfig {
+  enabled: boolean;
+  /** Display name for the inverter (shown in the UI). */
+  name: string | null;
+  /** IP / hostname of the inverter on the LAN (Speedwire). */
+  host: string | null;
+  /** Polling interval in seconds. */
+  pollIntervalS: number;
+}
+
+/** A live / raw reading from the SMA inverter. */
+export interface SmaReading {
+  /** ISO timestamp of the measurement (ingestion time). */
+  time: string;
+  deviceSn: string;
+  /** True when the inverter is asleep (night) — power fields are 0. */
+  asleep: boolean;
+  /** Total AC power fed to the grid connection point in W (PV production). */
+  gridPower: number | null;
+  /** DC power of string A / B in W. */
+  pvPowerA: number | null;
+  pvPowerB: number | null;
+  /** Energy produced today in Wh (device counter, resets at midnight). */
+  dailyYieldWh: number | null;
+  /** Lifetime energy produced in kWh (device counter). */
+  totalYieldKwh: number | null;
+  /** AC power per phase in W. */
+  powerL1: number | null;
+  powerL2: number | null;
+  powerL3: number | null;
+  /** DC voltage / current per string. */
+  pvVoltageA: number | null;
+  pvVoltageB: number | null;
+  pvCurrentA: number | null;
+  pvCurrentB: number | null;
+  /** AC voltage per phase in V. */
+  voltageL1: number | null;
+  voltageL2: number | null;
+  voltageL3: number | null;
+  /** Grid frequency in Hz. */
+  frequency: number | null;
+  /** Inverter temperature in °C. */
+  tempA: number | null;
+  /** Inverter operating status code. */
+  status: number | null;
+}
+
+/** Name of the WebSocket event used to push live SMA readings. */
+export const SMA_READING_EVENT = 'sma-reading';
+
+/** Per-day energy summary, returned by the SMA energy/house-load endpoints. */
+export interface SmaDailySummary {
+  /** Local date in ISO format (YYYY-MM-DD). */
+  day: string;
+  /** PV energy produced this day in kWh. */
+  yieldKwh: number;
+}
+
+/**
+ * Derived energy balance over a period (kWh), combining SMA production with the
+ * smart meter import/export. Enables self-consumption and self-sufficiency.
+ */
+export interface EnergyBalance {
+  from: string;
+  to: string;
+  /** PV energy produced (from SMA daily_yield). */
+  productionKwh: number;
+  /** Grid import (from the meter). */
+  importKwh: number;
+  /** Grid feed-in / export (from the meter). */
+  exportKwh: number;
+  /** House consumption = production − export + import. */
+  consumptionKwh: number;
+  /** PV used directly in the house = production − export. */
+  selfConsumedKwh: number;
+  /** Self-consumption rate = selfConsumed / production (0..1, null if no PV). */
+  selfConsumptionRate: number | null;
+  /** Self-sufficiency / autarky = selfConsumed / consumption (0..1, null if no load). */
+  autarkyRate: number | null;
+}
+
+/** One bucket of the derived house-load series (combined meter + SMA, 1-min grid). */
+export interface HouseLoadPoint {
+  time: string;
+  /** Derived house consumption in W (PV + import − export). */
+  housePower: number | null;
+  /** PV production in W at this bucket. */
+  pvPower: number | null;
+}

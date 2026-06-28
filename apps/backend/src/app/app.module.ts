@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { MeterModule } from './meter/meter.module';
 import { TariffModule } from './tariff/tariff.module';
 import { WallboxModule } from './wallbox/wallbox.module';
+import { SmaModule } from './sma/sma.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { WallboxModule } from './wallbox/wallbox.module';
     MeterModule,
     TariffModule,
     WallboxModule,
+    SmaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

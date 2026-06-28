@@ -1,10 +1,11 @@
 import { Component, OnInit, input, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import type { Tariff, WallboxConfig } from '@org/shared-types';
+import type { SmaConfig, Tariff, WallboxConfig } from '@org/shared-types';
 
 export interface ConfigSaveEvent {
   tariff: Tariff;
   wallbox: WallboxConfig;
+  sma: SmaConfig;
 }
 
 @Component({
@@ -17,6 +18,7 @@ export interface ConfigSaveEvent {
 export class ConfigModalComponent implements OnInit {
   readonly tariff = input<Tariff | null>(null);
   readonly wallboxConfig = input<WallboxConfig | null>(null);
+  readonly smaConfig = input<SmaConfig | null>(null);
 
   readonly closed = output<void>();
   readonly saved = output<ConfigSaveEvent>();
@@ -30,6 +32,10 @@ export class ConfigModalComponent implements OnInit {
   formWbPort: number | null = 502;
   formWbUnitId: number | null = 1;
   formWbInterval: number | null = 30;
+  formSmaEnabled = false;
+  formSmaName = '';
+  formSmaHost = '';
+  formSmaInterval: number | null = 60;
 
   ngOnInit(): void {
     const t = this.tariff();
@@ -43,6 +49,11 @@ export class ConfigModalComponent implements OnInit {
     this.formWbPort = w?.port ?? 502;
     this.formWbUnitId = w?.unitId ?? 1;
     this.formWbInterval = w?.pollIntervalS ?? 30;
+    const s = this.smaConfig();
+    this.formSmaEnabled = s?.enabled ?? false;
+    this.formSmaName = s?.name ?? '';
+    this.formSmaHost = s?.host ?? '';
+    this.formSmaInterval = s?.pollIntervalS ?? 60;
   }
 
   save(): void {
@@ -59,6 +70,12 @@ export class ConfigModalComponent implements OnInit {
         port: this.formWbPort ?? 502,
         unitId: this.formWbUnitId ?? 1,
         pollIntervalS: this.formWbInterval ?? 30,
+      },
+      sma: {
+        enabled: this.formSmaEnabled,
+        name: this.formSmaName.trim() || null,
+        host: this.formSmaHost.trim() || null,
+        pollIntervalS: this.formSmaInterval ?? 60,
       },
     });
   }
