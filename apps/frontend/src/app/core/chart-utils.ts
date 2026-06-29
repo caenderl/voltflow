@@ -117,31 +117,31 @@ export function liveSparkChart(
   };
 }
 
+/**
+ * Signed net grid power: import (red) above 0, feed-in (green) below 0.
+ * Two series, but CLAMPED rather than null-split: import = max(v, 0),
+ * export = min(v, 0). Both lines are therefore continuous (they ride along 0
+ * when the other sign is active), so the curve stays connected across zero
+ * crossings — a null-split breaks into invisible isolated points when the sign
+ * flips hour to hour. (visualMap colouring crashes on line series in our
+ * ECharts build, so we colour via two series.) Used by the history power chart.
+ */
 export function signedPowerChart(
   data: [string, number][],
   opts: {
-    spark?: boolean;
     axisFormat?: string | ((value: number) => string);
     minInterval?: number;
     min?: string;
     max?: string;
-    showPoints?: boolean;
   } = {},
 ): EChartsCoreOption {
-  const spark = opts.spark === true;
-  const importData = data.map(([t, v]) => [t, v >= 0 ? v : null] as [string, number | null]);
-  const exportData = data.map(([t, v]) => [t, v < 0 ? v : null] as [string, number | null]);
-  // Show point markers when requested (e.g. the week's hourly buckets), so a
-  // lone import/export hour with no neighbour of the same sign is still visible
-  // (a line alone needs >=2 consecutive same-sign points to render anything).
-  const showPoints = opts.showPoints === true;
-  const lineSeries = (name: string, color: string, d: [string, number | null][]) => ({
+  const importData = data.map(([t, v]) => [t, Math.max(v, 0)] as [string, number]);
+  const exportData = data.map(([t, v]) => [t, Math.min(v, 0)] as [string, number]);
+  const lineSeries = (name: string, color: string, d: [string, number][]) => ({
     name,
     type: 'line' as const,
-    showSymbol: showPoints,
-    symbolSize: 5,
+    showSymbol: false,
     smooth: true,
-    connectNulls: false,
     lineStyle: { width: 2 },
     itemStyle: { color },
     areaStyle: { opacity: 0.18 },
@@ -152,12 +152,9 @@ export function signedPowerChart(
       trigger: 'axis',
       valueFormatter: (v: number) => `${Math.abs(Math.round(Number(v)))} W`,
     },
-    grid: spark
-      ? { left: 0, right: 0, top: 8, bottom: 0 }
-      : { left: 60, right: 20, top: 20, bottom: 30 },
+    grid: { left: 60, right: 20, top: 20, bottom: 30 },
     xAxis: {
       type: 'time',
-      show: !spark,
       min: opts.min,
       max: opts.max,
       minInterval: opts.minInterval,
@@ -165,8 +162,7 @@ export function signedPowerChart(
     },
     yAxis: {
       type: 'value',
-      show: !spark,
-      name: spark ? undefined : 'W',
+      name: 'W',
       axisLabel: { color: '#948f9c' },
       splitLine: { lineStyle: { color: '#2a2a30' } },
     },
