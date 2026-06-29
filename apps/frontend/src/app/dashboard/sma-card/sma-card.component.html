@@ -5,7 +5,7 @@
       {{ name() }}
     </span>
     <span class="sma-status" [class.producing]="!state().asleep && state().productionW > 0">
-      {{ state().asleep ? 'Schläft' : 'Produziert' }}
+      {{ state().asleep ? 'Schläft' : (state().productionW > 0 ? 'Produziert' : 'Standby') }}
     </span>
   </div>
   <div class="sma-power">{{ state().productionW | number }}<span>W</span></div>

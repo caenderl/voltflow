@@ -184,6 +184,8 @@ export class Dashboard implements OnInit {
         minInterval: view === 'week' ? ONE_DAY : undefined,
         min: s?.from,
         max: s?.to,
+        // Hourly week buckets can have lone import/export hours -> show markers.
+        showPoints: view === 'week',
       },
     );
   });

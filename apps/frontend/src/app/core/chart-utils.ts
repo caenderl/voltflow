@@ -125,15 +125,21 @@ export function signedPowerChart(
     minInterval?: number;
     min?: string;
     max?: string;
+    showPoints?: boolean;
   } = {},
 ): EChartsCoreOption {
   const spark = opts.spark === true;
   const importData = data.map(([t, v]) => [t, v >= 0 ? v : null] as [string, number | null]);
   const exportData = data.map(([t, v]) => [t, v < 0 ? v : null] as [string, number | null]);
+  // Show point markers when requested (e.g. the week's hourly buckets), so a
+  // lone import/export hour with no neighbour of the same sign is still visible
+  // (a line alone needs >=2 consecutive same-sign points to render anything).
+  const showPoints = opts.showPoints === true;
   const lineSeries = (name: string, color: string, d: [string, number | null][]) => ({
     name,
     type: 'line' as const,
-    showSymbol: false,
+    showSymbol: showPoints,
+    symbolSize: 5,
     smooth: true,
     connectNulls: false,
     lineStyle: { width: 2 },
