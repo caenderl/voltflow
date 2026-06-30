@@ -2,7 +2,7 @@ import { Component, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsCoreOption } from 'echarts/core';
-import type { EnergySummary } from '@org/shared-types';
+import type { EnergyBalance, EnergySummary } from '@org/shared-types';
 import type { View } from '../../core/date-utils';
 
 export interface Costs {
@@ -26,6 +26,7 @@ export class HistoryViewComponent {
   readonly energy = input<EnergySummary | null>(null);
   readonly hasTariff = input<boolean>(false);
   readonly costs = input<Costs | null>(null);
+  readonly balance = input<EnergyBalance | null>(null);
   readonly loading = input<boolean>(false);
   readonly error = input<string | null>(null);
   readonly powerChart = input.required<EChartsCoreOption>();

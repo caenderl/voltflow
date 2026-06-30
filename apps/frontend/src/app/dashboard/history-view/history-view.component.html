@@ -29,6 +29,22 @@
       <span class="value">{{ c.net | number: '1.2-2' }} <small>€</small></span>
     </div>
   }
+  @if (balance(); as b) {
+    @if (b.productionKwh > 0) {
+      <div class="card solar">
+        <span class="label">PV-Erzeugung</span>
+        <span class="value">{{ b.productionKwh | number: '1.2-2' }} <small>kWh</small></span>
+      </div>
+      <div class="card solar">
+        <span class="label">Eigenverbrauch</span>
+        <span class="value">{{ (b.selfConsumptionRate !== null ? b.selfConsumptionRate * 100 : null) | number: '1.0-0' }} <small>%</small></span>
+      </div>
+      <div class="card solar">
+        <span class="label">Autarkie</span>
+        <span class="value">{{ (b.autarkyRate !== null ? b.autarkyRate * 100 : null) | number: '1.0-0' }} <small>%</small></span>
+      </div>
+    }
+  }
 </section>
 
 @if (loading()) {

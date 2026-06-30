@@ -85,7 +85,10 @@ export class Dashboard implements OnInit {
 
   readonly sma = signal<SmaReading | null>(null);
   readonly smaConfig = signal<SmaConfig | null>(null);
+  /** Today's balance for the live SMA card. */
   readonly balance = signal<EnergyBalance | null>(null);
+  /** Balance for the selected history period (day/week/month). */
+  readonly periodBalance = signal<EnergyBalance | null>(null);
 
   readonly wallboxName = computed(() => this.wallboxConfig()?.name?.trim() || 'Wallbox');
 
@@ -362,6 +365,7 @@ export class Dashboard implements OnInit {
     this.view.set(view);
     this.refDate.set(new Date());
     this.wallboxDailyEnergy.set([]);
+    this.periodBalance.set(null);
     if (view !== 'live') this.load();
   }
 
@@ -390,6 +394,11 @@ export class Dashboard implements OnInit {
     this.error.set(null);
     this.series.set(null);
     this.energy.set(null);
+    this.periodBalance.set(null);
+    this.api.energyBalance(from, to).subscribe({
+      next: (b) => this.periodBalance.set(b),
+      error: () => this.periodBalance.set(null),
+    });
     this.api.series(from, to, resolution).subscribe({
       next: (s) => this.series.set(s),
       complete: () => this.loading.set(false),
