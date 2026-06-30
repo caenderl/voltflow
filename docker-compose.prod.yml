@@ -1,7 +1,16 @@
-# Prod stack (runs on the Raspberry Pi 5, arm64).
-# Start:  docker compose -f docker-compose.prod.yml up -d --build
-# Access: http://<pi>:8080
+# Prod stack. Images are cross-built for linux/amd64 on a dev machine and
+# transferred to the server's Docker engine (docker save | ssh ... docker load),
+# so the server runs them without a registry or local build:
 #
+#   # on the dev machine:
+#   docker buildx bake -f docker-compose.prod.yml --set *.platform=linux/amd64 --load
+#   docker save voltflow-collector voltflow-backend voltflow-frontend \
+#     | gzip | ssh <server> 'gunzip | docker load'
+#
+#   # on the server (needs this file + .env + db/init.sql, no source tree):
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Access: http://<server>:8080
 # ANKER credentials come from .env (ANKERUSER/ANKERPASSWORD/ANKERCOUNTRY).
 services:
   db:
@@ -23,6 +32,8 @@ services:
       retries: 10
 
   collector:
+    image: voltflow-collector:latest
+    pull_policy: never
     build:
       context: ./apps/collector
       dockerfile: Dockerfile
@@ -36,6 +47,8 @@ services:
         condition: service_healthy
 
   backend:
+    image: voltflow-backend:latest
+    pull_policy: never
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
@@ -50,6 +63,8 @@ services:
         condition: service_healthy
 
   frontend:
+    image: voltflow-frontend:latest
+    pull_policy: never
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
