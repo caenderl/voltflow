@@ -89,19 +89,48 @@ Frontend: http://localhost:4200 (proxyt `/api` + `/socket.io` -> :3000).
 > Hinweis: Es darf immer nur **ein** Collector pro Anker-Konto laufen (eine
 > MQTT-Session). Den Prod-Stack-Collector also stoppen, wenn lokal entwickelt wird.
 
-## Deployment (Raspberry Pi 5, arm64)
+## Deployment (Ubuntu-Server, amd64)
 
-Alles als Container. Images werden nativ für arm64 gebaut (auf dem Pi selbst oder
-auf einem Apple-Silicon-Mac; sonst `docker buildx --platform linux/arm64`).
+Alles als Container. Die Images werden auf einem Dev-Rechner (z. B. Apple-Silicon-Mac)
+für `linux/amd64` cross-gebaut und **ohne Registry** per `docker save | ssh | docker load`
+auf den Server übertragen. Der Server braucht nur das Bundle (`docker-compose.prod.yml` +
+`.env` + `db/init.sql`) — **keinen Source-Tree und keinen Build**.
 
 ```bash
-# .env mit Credentials muss vorhanden sein
-docker compose -f docker-compose.prod.yml up -d --build
-# -> Dashboard: http://<pi>:8080
+# 1) Auf dem Dev-Rechner: amd64-Images bauen
+docker buildx bake -f docker-compose.prod.yml --set '*.platform=linux/amd64' --load
+
+# 2) Images auf den Server übertragen (kein Registry nötig)
+docker save voltflow-collector voltflow-backend voltflow-frontend \
+  | gzip | ssh <server> 'gunzip | docker load'
+
+# 3) Bundle auf den Server (einmalig bzw. bei Änderung)
+ssh <server> 'mkdir -p ~/voltflow/db'
+scp docker-compose.prod.yml .env <server>:~/voltflow/
+scp db/init.sql <server>:~/voltflow/db/
+
+# 4) Auf dem Server starten/aktualisieren
+ssh <server> 'cd ~/voltflow && docker compose -f docker-compose.prod.yml up -d'
+# -> Dashboard: http://<server>:8080
 ```
+
+`docker-compose.prod.yml` referenziert die drei Images mit `image:`-Tags + `pull_policy: never`,
+sodass der Server sie aus dem `docker load` nutzt (kein Build, kein Registry-Pull). `db` zieht
+`timescale/timescaledb:2.28.1-pg16` direkt (multi-arch). Alle Services laufen mit
+`restart: unless-stopped` (überleben Server-Reboot).
 
 Services: `db` (TimescaleDB), `collector`, `backend`, `frontend` (nginx, Port 8080,
 reverse-proxyt `/api` + `/socket.io` ans Backend). DB-Daten liegen im Volume `voltflow-db-data`.
+
+> **Bestehende DB migrieren:** Dump auf der Quelle ziehen (`scripts/backup.sh`), auf den Server
+> kopieren und in eine **frische** DB restoren (`scripts/restore.sh`, TimescaleDB-aware via
+> `pre_restore`/`post_restore`). Da das Backend beim Start das Schema idempotent anlegt, vor dem
+> Restore `DROP DATABASE … WITH (FORCE)` + neu anlegen (Backend kurz stoppen), sonst kollidiert
+> der Dump mit dem bestehenden Schema. Quell- und Ziel-TimescaleDB-Version müssen übereinstimmen.
+
+> **Nur ein Collector pro Anker-Konto:** Sobald der Server-Collector läuft, darf lokal keiner
+> mehr laufen (eine MQTT-Session). Lokalen Collector-Container ggf. mit
+> `docker update --restart=no <name>` gegen Auto-Restart sichern.
 
 ## API
 
@@ -142,15 +171,16 @@ bestehende DBs neue Tabellen/Spalten **ohne Datenverlust**.
 ```bash
 ./scripts/backup.sh                 # Dump nach ./backups/ (Rotation: 14 neueste)
 ./scripts/restore.sh backups/voltflow-YYYYMMDD-HHMMSS.sql.gz
-# Prod (Pi):
-COMPOSE_FILE=docker-compose.prod.yml COMPOSE_PROJECT_NAME=voltflow-prod ./scripts/backup.sh
+# Prod (Server) — Projektname ist der Verzeichnisname (voltflow), scripts/ muss
+# neben dem Bundle in ~/voltflow/scripts/ liegen:
+COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh
 ```
 
-Geplant z. B. per crontab auf dem Pi (täglich 3 Uhr):
+Geplant z. B. per crontab auf dem Server (täglich 3 Uhr):
 
 ```
-0 3 * * * cd /home/pi/voltflow && COMPOSE_FILE=docker-compose.prod.yml \
-  COMPOSE_PROJECT_NAME=voltflow-prod ./scripts/backup.sh >> backups/backup.log 2>&1
+0 3 * * * cd ~/voltflow && COMPOSE_FILE=docker-compose.prod.yml \
+  ./scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
 DB-Image ist exakt auf `timescale/timescaledb:2.28.1-pg16` gepinnt (PostgreSQL-Major **und**
