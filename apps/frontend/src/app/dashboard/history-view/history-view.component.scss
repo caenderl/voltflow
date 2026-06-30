@@ -55,6 +55,11 @@
   margin-bottom: 1.5rem;
 }
 
+// PV cards always sit on their own row, regardless of day/week/month
+.cards-pv {
+  margin-top: -0.5rem;
+}
+
 .card {
   background: var(--surface-2);
   border-radius: var(--radius);
