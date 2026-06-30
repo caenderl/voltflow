@@ -96,6 +96,16 @@ für `linux/amd64` cross-gebaut und **ohne Registry** per `docker save | ssh | d
 auf den Server übertragen. Der Server braucht nur das Bundle (`docker-compose.prod.yml` +
 `.env` + `db/init.sql`) — **keinen Source-Tree und keinen Build**.
 
+**Komfort-Wrapper** (kapselt alle Schritte unten, niemals `down`/`-v`, DB-Volume bleibt unangetastet):
+
+```bash
+scripts/deploy.sh app      # nur Backend + Frontend (UI/API-Update, Collector läuft weiter)
+scripts/deploy.sh all      # ganzer Stack (collector + backend + frontend), ohne Datenverlust
+scripts/deploy.sh --help   # Optionen: einzelne Services, --env, --prune, --dry-run
+```
+
+Die einzelnen Schritte, die der Wrapper ausführt:
+
 ```bash
 # 1) Auf dem Dev-Rechner: amd64-Images bauen
 docker buildx bake -f docker-compose.prod.yml --set '*.platform=linux/amd64' --load
