@@ -1,13 +1,14 @@
 {
-  "name": "@org/source",
+  "name": "Voltflow",
   "version": "0.3.1",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "scripts": {
     "db": "docker compose up -d db",
     "dev": "nx run-many -t serve -p backend frontend",
     "dev:all": "nx run-many -t serve -p backend frontend collector",
     "collector": "venv/bin/python apps/collector/collector.py",
-    "version": "node scripts/sync-version.js && git add apps/collector/VERSION"
+    "version": "node scripts/sync-version.js && git add apps/collector/VERSION",
+    "deploy:server:app": "scripts/deploy.sh app"
   },
   "private": true,
   "devDependencies": {
