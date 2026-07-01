@@ -340,6 +340,23 @@ const MIGRATIONS: { name: string; sql: string }[] = [
           FROM meter_1min m
           LEFT JOIN sma_1min s ON s.bucket = m.bucket`,
   },
+  {
+    // Manually entered meter checkpoints (Zählerstände), used to validate the
+    // smart meter's cumulative readings against the physical meter.
+    name: '037-meter-checkpoint-table',
+    sql: `CREATE TABLE IF NOT EXISTS meter_checkpoint (
+            id          SERIAL PRIMARY KEY,
+            date        DATE             NOT NULL,
+            import_kwh  DOUBLE PRECISION NOT NULL,
+            export_kwh  DOUBLE PRECISION NOT NULL,
+            created_at  TIMESTAMPTZ      NOT NULL DEFAULT now()
+          )`,
+  },
+  {
+    name: '038-meter-checkpoint-date-index',
+    sql: `CREATE INDEX IF NOT EXISTS meter_checkpoint_date_idx
+            ON meter_checkpoint (date DESC)`,
+  },
 ];
 
 export async function applyMigrations(

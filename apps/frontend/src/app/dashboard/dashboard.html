@@ -62,8 +62,11 @@
       [tariff]="tariff()"
       [wallboxConfig]="wallboxConfig()"
       [smaConfig]="smaConfig()"
+      [checkpoints]="checkpoints()"
       (closed)="closeConfig()"
       (saved)="onConfigSave($event)"
+      (checkpointSaved)="onCheckpointSave($event)"
+      (checkpointDeleted)="onCheckpointDelete($event)"
     />
   }
 </div>

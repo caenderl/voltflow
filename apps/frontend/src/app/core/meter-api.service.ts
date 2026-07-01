@@ -1,11 +1,14 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { toLocalDateString } from './date-utils';
 import type {
   DataRange,
   EnergyBalance,
   EnergyPeriod,
   EnergySummary,
+  MeterCheckpoint,
+  MeterCheckpointInput,
   MeterReading,
   SeriesResolution,
   SeriesResponse,
@@ -58,6 +61,24 @@ export class MeterApiService {
     return this.http.get<EnergySummary>(`${this.base}/energy`, { params });
   }
 
+  // --- Meter checkpoints (manual Zählerstände) ---
+
+  meterCheckpoints(): Observable<MeterCheckpoint[]> {
+    return this.http.get<MeterCheckpoint[]>('/api/meter-checkpoints');
+  }
+
+  createMeterCheckpoint(input: MeterCheckpointInput): Observable<MeterCheckpoint> {
+    return this.http.post<MeterCheckpoint>('/api/meter-checkpoints', input);
+  }
+
+  updateMeterCheckpoint(id: number, input: MeterCheckpointInput): Observable<MeterCheckpoint> {
+    return this.http.put<MeterCheckpoint>(`/api/meter-checkpoints/${id}`, input);
+  }
+
+  deleteMeterCheckpoint(id: number): Observable<void> {
+    return this.http.delete<void>(`/api/meter-checkpoints/${id}`);
+  }
+
   // --- Wallbox ---
 
   wallboxConfig(): Observable<WallboxConfig> {
@@ -100,11 +121,4 @@ export class MeterApiService {
       .set('to', to.toISOString());
     return this.http.get<EnergyBalance>('/api/sma/balance', { params });
   }
-}
-
-function toLocalDateString(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }

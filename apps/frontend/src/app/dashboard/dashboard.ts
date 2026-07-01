@@ -4,6 +4,7 @@ import type {
   DataRange,
   EnergyBalance,
   EnergySummary,
+  MeterCheckpoint,
   MeterReading,
   SeriesResponse,
   SmaConfig,
@@ -18,7 +19,11 @@ import { MeterApiService } from '../core/meter-api.service';
 import { APP_VERSION } from '../../version';
 import { type View, rangeFor, startOfDay, periodLabelFor, dayLabel } from '../core/date-utils';
 import { netWatts, signedPowerChart, liveSparkChart, energySlots, slotKey, round2, ONE_DAY, isoToSlotKey } from '../core/chart-utils';
-import { ConfigModalComponent, type ConfigSaveEvent } from './config-modal/config-modal.component';
+import {
+  ConfigModalComponent,
+  type CheckpointSaveEvent,
+  type ConfigSaveEvent,
+} from './config-modal/config-modal.component';
 import { LiveViewComponent, type FlowState } from './live-view/live-view.component';
 import { HistoryViewComponent, type Costs } from './history-view/history-view.component';
 import type { WallboxState } from './wallbox-card/wallbox-card.component';
@@ -78,6 +83,7 @@ export class Dashboard implements OnInit {
 
   readonly tariff = signal<Tariff | null>(null);
   readonly configOpen = signal(false);
+  readonly checkpoints = signal<MeterCheckpoint[]>([]);
 
   readonly wallbox = signal<WallboxReading | null>(null);
   readonly wallboxConfig = signal<WallboxConfig | null>(null);
@@ -300,6 +306,7 @@ export class Dashboard implements OnInit {
       next: (c) => this.smaConfig.set(c),
       error: () => undefined,
     });
+    this.loadCheckpoints();
     setInterval(() => this.loadToday(), 5 * 60 * 1000);
   }
 
@@ -326,6 +333,32 @@ export class Dashboard implements OnInit {
         this.configOpen.set(false);
       },
       error: () => this.error.set('Tarif konnte nicht gespeichert werden.'),
+    });
+  }
+
+  onCheckpointSave(event: CheckpointSaveEvent): void {
+    const input = { date: event.date, importKwh: event.importKwh, exportKwh: event.exportKwh };
+    const obs =
+      event.id === undefined
+        ? this.api.createMeterCheckpoint(input)
+        : this.api.updateMeterCheckpoint(event.id, input);
+    obs.subscribe({
+      next: () => this.loadCheckpoints(),
+      error: () => this.error.set('Zählerstand konnte nicht gespeichert werden.'),
+    });
+  }
+
+  onCheckpointDelete(id: number): void {
+    this.api.deleteMeterCheckpoint(id).subscribe({
+      next: () => this.checkpoints.set(this.checkpoints().filter((c) => c.id !== id)),
+      error: () => this.error.set('Zählerstand konnte nicht gelöscht werden.'),
+    });
+  }
+
+  private loadCheckpoints(): void {
+    this.api.meterCheckpoints().subscribe({
+      next: (c) => this.checkpoints.set(c),
+      error: () => undefined,
     });
   }
 

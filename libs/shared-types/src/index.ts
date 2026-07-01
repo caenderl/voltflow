@@ -77,6 +77,28 @@ export interface DataRange {
   last: string | null;
 }
 
+/**
+ * Manually entered meter checkpoint (Zählerstand), used to validate the smart
+ * meter's cumulative readings against the physical meter from time to time.
+ */
+export interface MeterCheckpoint {
+  id: number;
+  /** Local date the reading was taken (YYYY-MM-DD). */
+  date: string;
+  /** Cumulative import (Bezug) meter reading in kWh. */
+  importKwh: number;
+  /** Cumulative export (Einspeisung) meter reading in kWh. */
+  exportKwh: number;
+  createdAt: string;
+}
+
+/** Payload to create/update a meter checkpoint. */
+export interface MeterCheckpointInput {
+  date: string;
+  importKwh: number;
+  exportKwh: number;
+}
+
 /** Name of the WebSocket event used to push live readings. */
 export const METER_READING_EVENT = 'reading';
 

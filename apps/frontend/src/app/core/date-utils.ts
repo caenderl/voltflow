@@ -23,6 +23,14 @@ export function rangeFor(view: View, ref: Date): RangeSpec {
   return { from, to: addDays(from, 1), resolution: '1min', period: 'day', date: ref };
 }
 
+/** Format a date as YYYY-MM-DD in local time (for <input type="date"> and date-only API params). */
+export function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);

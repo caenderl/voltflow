@@ -134,6 +134,74 @@
   gap: 0.6rem;
 }
 
+.checkpoint-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.checkpoint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 220px;
+  overflow-y: auto;
+  border-top: 1px solid var(--outline);
+  padding-top: 0.75rem;
+}
+
+.checkpoint-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+
+  &.editing {
+    outline: 1px solid var(--primary);
+  }
+}
+
+.checkpoint-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.checkpoint-date {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.checkpoint-values {
+  font-size: 0.78rem;
+  color: var(--on-surface-var);
+}
+
+.checkpoint-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: var(--on-surface-var);
+
+  &:hover {
+    background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+    color: var(--on-surface);
+  }
+}
+
 .hint-sm {
   margin: 0.25rem 0 0;
   font-size: 0.78rem;
@@ -172,5 +240,10 @@
 
   &:hover {
     filter: brightness(1.05);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }

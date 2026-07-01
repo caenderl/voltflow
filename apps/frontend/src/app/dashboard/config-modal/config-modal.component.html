@@ -28,6 +28,14 @@
       >
         PV-Wechselrichter
       </button>
+      <button
+        type="button"
+        class="tab"
+        [class.active]="activeTab() === 'checkpoints'"
+        (click)="activeTab.set('checkpoints')"
+      >
+        Zählerstände
+      </button>
     </nav>
 
     <div class="tab-panel">
@@ -99,6 +107,56 @@
           Passwort wird aus <code>SMA_PASSWORD</code> (.env) gelesen. Änderungen greifen nach einem Neustart des
           Collectors.
         </p>
+      }
+
+      @if (activeTab() === 'checkpoints') {
+        <div class="field-grid checkpoint-form">
+          <label class="field">
+            <span>Datum</span>
+            <input type="date" [(ngModel)]="formCpDate" />
+          </label>
+          <label class="field">
+            <span>Stand Bezug (kWh)</span>
+            <input type="number" min="0" step="0.01" [(ngModel)]="formCpImport" placeholder="z. B. 12345.6" />
+          </label>
+          <label class="field">
+            <span>Stand Einspeisung (kWh)</span>
+            <input type="number" min="0" step="0.01" [(ngModel)]="formCpExport" placeholder="z. B. 6789.0" />
+          </label>
+        </div>
+        <div class="checkpoint-form-actions">
+          @if (formCpEditingId !== null) {
+            <button type="button" class="btn-text" (click)="resetCheckpointForm()">Abbrechen</button>
+          }
+          <button
+            type="button"
+            class="btn-filled"
+            [disabled]="!formCpDate || formCpImport === null || formCpExport === null"
+            (click)="saveCheckpoint()"
+          >
+            {{ formCpEditingId !== null ? 'Änderungen speichern' : 'Neuer Eintrag' }}
+          </button>
+        </div>
+
+        <div class="checkpoint-list">
+          @for (c of checkpoints(); track c.id) {
+            <div class="checkpoint-row" [class.editing]="formCpEditingId === c.id">
+              <div class="checkpoint-info">
+                <span class="checkpoint-date">{{ c.date | date: 'dd.MM.yyyy' }}</span>
+                <span class="checkpoint-values">
+                  Bezug {{ c.importKwh | number: '1.1-2' : 'de-DE' }} kWh · Einspeisung
+                  {{ c.exportKwh | number: '1.1-2' : 'de-DE' }} kWh
+                </span>
+              </div>
+              <div class="checkpoint-actions">
+                <button type="button" class="icon-btn" title="Bearbeiten" (click)="editCheckpoint(c)">✎</button>
+                <button type="button" class="icon-btn" title="Löschen" (click)="deleteCheckpoint(c)">🗑</button>
+              </div>
+            </div>
+          } @empty {
+            <p class="hint-sm">Noch keine Zählerstände erfasst.</p>
+          }
+        </div>
       }
     </div>
   </div>
