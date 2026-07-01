@@ -1,4 +1,4 @@
-import { Component, OnInit, input, output } from '@angular/core';
+import { Component, OnInit, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { SmaConfig, Tariff, WallboxConfig } from '@org/shared-types';
 
@@ -7,6 +7,8 @@ export interface ConfigSaveEvent {
   wallbox: WallboxConfig;
   sma: SmaConfig;
 }
+
+export type ConfigTab = 'tariff' | 'wallbox' | 'sma';
 
 @Component({
   selector: 'app-config-modal',
@@ -22,6 +24,8 @@ export class ConfigModalComponent implements OnInit {
 
   readonly closed = output<void>();
   readonly saved = output<ConfigSaveEvent>();
+
+  readonly activeTab = signal<ConfigTab>('tariff');
 
   formProvider = '';
   formImport: number | null = null;

@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["nx", "serve", "frontend"],
       "port": 4200
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["nx", "serve", "backend"],
+      "port": 3000
     }
   ]
 }
