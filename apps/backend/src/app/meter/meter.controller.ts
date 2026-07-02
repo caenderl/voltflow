@@ -7,6 +7,7 @@ import type {
   SeriesResolution,
   SeriesResponse,
 } from '@org/shared-types';
+import { parseRange } from '../common/query-params';
 import { MeterService } from './meter.service';
 
 const RESOLUTIONS: SeriesResolution[] = ['raw', '1min', '1hour', '1day'];
@@ -32,13 +33,7 @@ export class MeterController {
     @Query('to') toStr?: string,
     @Query('resolution') resolution?: string,
   ): Promise<SeriesResponse> {
-    const to = toStr ? new Date(toStr) : new Date();
-    const from = fromStr
-      ? new Date(fromStr)
-      : new Date(to.getTime() - 60 * 60 * 1000); // default: last hour
-    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-      throw new BadRequestException('Invalid from/to timestamp.');
-    }
+    const { from, to } = parseRange(fromStr, toStr);
     const res = (resolution ?? '1min') as SeriesResolution;
     if (!RESOLUTIONS.includes(res)) {
       throw new BadRequestException(`resolution must be one of ${RESOLUTIONS}`);

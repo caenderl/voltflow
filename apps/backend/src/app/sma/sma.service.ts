@@ -7,9 +7,16 @@ import type {
   SmaDailySummary,
   SmaReading,
 } from '@org/shared-types';
-import { DbService, rowToSmaReading } from '../database/db.service';
-
-const TIMEZONE = process.env.TZ || 'Europe/Berlin';
+import { TIMEZONE } from '../common/config';
+import { numOrNull, round2, toDataRange } from '../common/db-utils';
+import {
+  SingletonConfigStore,
+  asBool,
+  asNumber,
+  asStringOrNull,
+} from '../common/singleton-config';
+import { DbService } from '../database/db.service';
+import { rowToSmaReading } from './sma.mapper';
 
 const DEFAULT_CONFIG: SmaConfig = {
   enabled: false,
@@ -25,35 +32,28 @@ const READING_COLUMNS = `time, device_sn, asleep, grid_power, pv_power_a, pv_pow
 
 @Injectable()
 export class SmaService {
-  constructor(private readonly db: DbService) {}
+  private readonly config: SingletonConfigStore<SmaConfig>;
 
-  async getConfig(): Promise<SmaConfig> {
-    const { rows } = await this.db.query(
-      `SELECT enabled, name, host, poll_interval_s FROM sma_config WHERE id = 1`,
+  constructor(private readonly db: DbService) {
+    this.config = new SingletonConfigStore<SmaConfig>(
+      db,
+      'sma_config',
+      [
+        { column: 'enabled', key: 'enabled', fromDb: asBool },
+        { column: 'name', key: 'name', fromDb: asStringOrNull },
+        { column: 'host', key: 'host', fromDb: asStringOrNull },
+        { column: 'poll_interval_s', key: 'pollIntervalS', fromDb: asNumber },
+      ],
+      DEFAULT_CONFIG,
     );
-    if (!rows.length) return { ...DEFAULT_CONFIG };
-    const r = rows[0];
-    return {
-      enabled: Boolean(r['enabled']),
-      name: (r['name'] as string) ?? null,
-      host: (r['host'] as string) ?? null,
-      pollIntervalS: Number(r['poll_interval_s']),
-    };
   }
 
-  async saveConfig(c: SmaConfig): Promise<SmaConfig> {
-    await this.db.query(
-      `INSERT INTO sma_config (id, enabled, name, host, poll_interval_s, updated_at)
-       VALUES (1, $1, $2, $3, $4, now())
-       ON CONFLICT (id) DO UPDATE
-         SET enabled = EXCLUDED.enabled,
-             name = EXCLUDED.name,
-             host = EXCLUDED.host,
-             poll_interval_s = EXCLUDED.poll_interval_s,
-             updated_at = now()`,
-      [c.enabled, c.name, c.host, c.pollIntervalS],
-    );
-    return this.getConfig();
+  getConfig(): Promise<SmaConfig> {
+    return this.config.get();
+  }
+
+  saveConfig(c: SmaConfig): Promise<SmaConfig> {
+    return this.config.save(c);
   }
 
   async latest(): Promise<SmaReading | null> {
@@ -67,11 +67,7 @@ export class SmaService {
     const { rows } = await this.db.query(
       `SELECT min(time) AS first, max(time) AS last FROM sma_readings`,
     );
-    const r = rows[0] ?? {};
-    return {
-      first: r['first'] ? new Date(r['first'] as string).toISOString() : null,
-      last: r['last'] ? new Date(r['last'] as string).toISOString() : null,
-    };
+    return toDataRange(rows[0]);
   }
 
   /** Raw SMA readings in [from, to), oldest first. */
@@ -157,12 +153,4 @@ export class SmaService {
       autarkyRate: consumption > 0 ? round2(selfConsumed / consumption) : null,
     };
   }
-}
-
-function numOrNull(v: unknown): number | null {
-  return v === null || v === undefined ? null : Number(v);
-}
-
-function round2(v: number): number {
-  return Math.round(v * 100) / 100;
 }

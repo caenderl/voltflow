@@ -35,9 +35,8 @@ async def create_pool() -> asyncpg.Pool:
     return await asyncpg.create_pool(dsn, min_size=1, max_size=4)
 
 
-async def register_device(pool: asyncpg.Pool, snapshot: dict, dev: dict | None = None) -> None:
-    """Register the device in the device registry (idempotent)."""
-    dev = dev or {}
+async def register_device(pool: asyncpg.Pool, snapshot: dict, device_type: str | None = None) -> None:
+    """Register a device in the device registry (idempotent, any device type)."""
     await pool.execute(
         """
         INSERT INTO device (device_sn, device_pn, type, alias)
@@ -48,9 +47,9 @@ async def register_device(pool: asyncpg.Pool, snapshot: dict, dev: dict | None =
                 alias     = EXCLUDED.alias
         """,
         snapshot.get("device_sn"),
-        dev.get("device_pn"),
-        dev.get("type"),
-        dev.get("alias") or dev.get("name"),
+        snapshot.get("device_pn"),
+        device_type,
+        snapshot.get("alias") or snapshot.get("device_pn"),
     )
 
 
@@ -103,22 +102,6 @@ async def read_wallbox_config(pool: asyncpg.Pool) -> dict | None:
     if row is None:
         return None
     return dict(row)
-
-
-async def register_wallbox(pool: asyncpg.Pool, snapshot: dict) -> None:
-    """Register the wallbox in the device registry (idempotent)."""
-    await pool.execute(
-        """
-        INSERT INTO device (device_sn, device_pn, type, alias)
-        VALUES ($1, $2, 'wallbox', $3)
-        ON CONFLICT (device_sn) DO UPDATE
-            SET device_pn = EXCLUDED.device_pn,
-                type      = EXCLUDED.type
-        """,
-        snapshot.get("device_sn"),
-        snapshot.get("device_pn"),
-        snapshot.get("device_pn"),
-    )
 
 
 async def insert_wallbox_reading(pool: asyncpg.Pool, snapshot: dict) -> None:
@@ -189,22 +172,6 @@ async def last_sma_reading(pool: asyncpg.Pool) -> dict | None:
     except asyncpg.UndefinedTableError:
         return None
     return dict(row) if row else None
-
-
-async def register_sma(pool: asyncpg.Pool, snapshot: dict) -> None:
-    """Register the inverter in the device registry (idempotent)."""
-    await pool.execute(
-        """
-        INSERT INTO device (device_sn, device_pn, type, alias)
-        VALUES ($1, $2, 'inverter', $3)
-        ON CONFLICT (device_sn) DO UPDATE
-            SET device_pn = EXCLUDED.device_pn,
-                type      = EXCLUDED.type
-        """,
-        snapshot.get("device_sn"),
-        snapshot.get("device_pn"),
-        snapshot.get("device_pn"),
-    )
 
 
 async def insert_sma_reading(pool: asyncpg.Pool, snapshot: dict) -> None:

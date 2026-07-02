@@ -7,6 +7,7 @@
     "dev": "nx run-many -t serve -p backend frontend",
     "dev:all": "nx run-many -t serve -p backend frontend collector",
     "collector": "venv/bin/python apps/collector/collector.py",
+    "test": "vitest run",
     "version": "node scripts/sync-version.js && git add apps/collector/VERSION",
     "deploy:server:app": "scripts/deploy.sh app"
   },
@@ -36,6 +37,7 @@
     "prettier": "^3.8.1",
     "tslib": "^2.3.0",
     "typescript": "~5.9.0",
+    "vitest": "^4.1.9",
     "webpack": "^5.101.3",
     "webpack-cli": "^7.0.0",
     "webpack-dev-server": "^5.2.1"

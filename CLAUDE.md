@@ -22,11 +22,13 @@ npm run db          # DB container only (leave it running)
 npm run dev         # backend :3000 + frontend :4200 (native hot-reload)
 npm run dev:all     # + collector in parallel
 npm run collector   # collector alone (venv/bin/python)
+npm test            # vitest (unit tests for pure TS functions, *.spec.ts)
 ```
 
 - venv + `anker-solix-api` (editable install) setup: see @README.md.
-- **There is no test/lint runner** (no jest/vitest/pytest, no `test` targets).
-  Do not invent test commands or claim to run tests.
+- **Tests:** `npm test` runs vitest (root `vitest.config.ts`, colocated
+  `*.spec.ts` files). Covers pure functions only — no DB/HTTP/component tests.
+  There is no lint runner and no pytest for the collector.
 
 ## Hard constraints
 

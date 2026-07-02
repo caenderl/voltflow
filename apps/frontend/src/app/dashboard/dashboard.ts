@@ -1,59 +1,33 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import type { EChartsCoreOption } from 'echarts/core';
-import type {
-  DataRange,
-  EnergyBalance,
-  EnergySummary,
-  MeterCheckpoint,
-  MeterReading,
-  SeriesResponse,
-  SmaConfig,
-  SmaReading,
-  Tariff,
-  WallboxConfig,
-  WallboxReading,
-} from '@org/shared-types';
 import { WALLBOX_STATUS_LABELS } from '@org/shared-types';
-import { LiveService } from '../core/live.service';
-import { MeterApiService } from '../core/meter-api.service';
 import { APP_VERSION } from '../../version';
-import { type View, rangeFor, startOfDay, periodLabelFor, dayLabel } from '../core/date-utils';
-import { netWatts, signedPowerChart, liveSparkChart, energySlots, slotKey, round2, ONE_DAY, isoToSlotKey } from '../core/chart-utils';
+import {
+  CHART_COLORS,
+  ONE_DAY,
+  energyBarChart,
+  energySlots,
+  isoToSlotKey,
+  liveSparkChart,
+  netWatts,
+  round2,
+  signedPowerChart,
+  slotKey,
+} from '../core/chart-utils';
+import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../core/date-utils';
 import {
   ConfigModalComponent,
   type CheckpointSaveEvent,
   type ConfigSaveEvent,
 } from './config-modal/config-modal.component';
-import { LiveViewComponent, type FlowState } from './live-view/live-view.component';
+import { DashboardDataService, LIVE_WINDOW_MS } from './dashboard-data.service';
 import { HistoryViewComponent, type Costs } from './history-view/history-view.component';
-import type { WallboxState } from './wallbox-card/wallbox-card.component';
+import { LiveViewComponent, type FlowState } from './live-view/live-view.component';
 import type { SmaState } from './sma-card/sma-card.component';
-import type { WallboxDailySummary } from '@org/shared-types';
-
-interface LivePoint {
-  time: string;
-  grid: number | null;
-  pv: number | null;
-}
+import type { WallboxState } from './wallbox-card/wallbox-card.component';
 
 // Surplus (W) from which charging makes sense (~6 A single-phase). Configurable later.
 const CHARGE_THRESHOLD_W = 1400;
-
-// Rolling window shown in the live hero chart.
-const LIVE_WINDOW_MIN = 10;
-const LIVE_WINDOW_MS = LIVE_WINDOW_MIN * 60 * 1000;
-
-/** Append points to a time-series buffer, keeping it sorted, de-duped by
- *  timestamp and trimmed to the live window (relative to the newest point). */
-function appendWindowed<T extends { time: string }>(existing: T[], incoming: T[]): T[] {
-  const byTime = new Map<number, T>();
-  for (const p of existing) byTime.set(new Date(p.time).getTime(), p);
-  for (const p of incoming) byTime.set(new Date(p.time).getTime(), p);
-  const sorted = [...byTime.entries()].sort((a, b) => a[0] - b[0]);
-  const newest = sorted.length ? sorted[sorted.length - 1][0] : Date.now();
-  const cutoff = newest - LIVE_WINDOW_MS;
-  return sorted.filter(([t]) => t >= cutoff).map(([, p]) => p);
-}
 
 @Component({
   selector: 'app-dashboard',
@@ -63,38 +37,37 @@ function appendWindowed<T extends { time: string }>(existing: T[], incoming: T[]
   styleUrl: './dashboard.scss',
 })
 export class Dashboard implements OnInit {
-  private readonly api = inject(MeterApiService);
-  private readonly live = inject(LiveService);
+  private readonly data = inject(DashboardDataService);
 
   readonly appVersion = APP_VERSION;
 
+  // View state (everything data-related lives in DashboardDataService)
   readonly view = signal<View>('live');
   readonly refDate = signal<Date>(new Date());
-  readonly dataRange = signal<DataRange | null>(null);
-  readonly loading = signal(false);
-  readonly error = signal<string | null>(null);
-
-  readonly latest = signal<MeterReading | null>(null);
-  readonly today = signal<EnergySummary | null>(null);
-  private readonly liveBuffer = signal<LivePoint[]>([]);
-
-  private readonly series = signal<SeriesResponse | null>(null);
-  readonly energy = signal<EnergySummary | null>(null);
-
-  readonly tariff = signal<Tariff | null>(null);
   readonly configOpen = signal(false);
-  readonly checkpoints = signal<MeterCheckpoint[]>([]);
 
-  readonly wallbox = signal<WallboxReading | null>(null);
-  readonly wallboxConfig = signal<WallboxConfig | null>(null);
-  readonly wallboxDailyEnergy = signal<WallboxDailySummary[]>([]);
+  // Data signals, re-exposed for the template
+  readonly latest = this.data.latest;
+  readonly today = this.data.today;
+  readonly balance = this.data.balance;
+  readonly dataRange = this.data.dataRange;
+  readonly tariff = this.data.tariff;
+  readonly checkpoints = this.data.checkpoints;
+  readonly wallbox = this.data.wallbox;
+  readonly wallboxConfig = this.data.wallboxConfig;
+  readonly sma = this.data.sma;
+  readonly smaConfig = this.data.smaConfig;
+  readonly energy = this.data.energy;
+  readonly periodBalance = this.data.periodBalance;
+  readonly loading = this.data.loading;
+  readonly error = this.data.error;
 
-  readonly sma = signal<SmaReading | null>(null);
-  readonly smaConfig = signal<SmaConfig | null>(null);
-  /** Today's balance for the live SMA card. */
-  readonly balance = signal<EnergyBalance | null>(null);
-  /** Balance for the selected history period (day/week/month). */
-  readonly periodBalance = signal<EnergyBalance | null>(null);
+  readonly views: { id: View; label: string }[] = [
+    { id: 'live', label: 'Live' },
+    { id: 'day', label: 'Tag' },
+    { id: 'week', label: 'Woche' },
+    { id: 'month', label: 'Monat' },
+  ];
 
   readonly wallboxName = computed(() => this.wallboxConfig()?.name?.trim() || 'Wallbox');
 
@@ -136,13 +109,6 @@ export class Dashboard implements OnInit {
     return { importCost, exportRevenue, net: importCost - exportRevenue };
   });
 
-  readonly views: { id: View; label: string }[] = [
-    { id: 'live', label: 'Live' },
-    { id: 'day', label: 'Tag' },
-    { id: 'week', label: 'Woche' },
-    { id: 'month', label: 'Monat' },
-  ];
-
   readonly flow = computed<FlowState>(() => {
     const r = this.latest();
     const imp = r?.gridToHomePower ?? 0;
@@ -169,7 +135,7 @@ export class Dashboard implements OnInit {
   });
 
   readonly liveSpark = computed(() => {
-    const buf = this.liveBuffer();
+    const buf = this.data.liveBuffer();
     const now = Date.now();
     return liveSparkChart(
       buf.map((p) => [p.time, netWatts(p.grid, p.pv)] as [string, number]),
@@ -182,7 +148,7 @@ export class Dashboard implements OnInit {
 
   readonly powerChart = computed(() => {
     const view = this.view();
-    const s = this.series();
+    const s = this.data.series();
     const points = s?.points ?? [];
     return signedPowerChart(
       points.map(
@@ -209,105 +175,43 @@ export class Dashboard implements OnInit {
       cur.exp += b.exportKwh;
       byKey.set(k, cur);
     }
-    return {
-      tooltip: {
-        trigger: 'axis',
-        valueFormatter: (v: number) =>
-          `${Math.abs(Number(v)).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh`,
-      },
-      legend: { data: ['Bezug', 'Einspeisung'], top: 0, textStyle: { color: '#c9c5d0' } },
-      grid: { left: 50, right: 20, top: 40, bottom: 30 },
-      xAxis: {
-        type: 'category',
-        data: slots.map((s) => s.label),
-        // Thin labels automatically on narrow screens instead of forcing all.
-        axisLabel: { color: '#948f9c', interval: 'auto', hideOverlap: true },
-      },
-      yAxis: {
-        type: 'value',
-        name: 'kWh',
-        axisLabel: { color: '#948f9c', formatter: (v: number) => v.toLocaleString('de-DE') },
-        splitLine: { lineStyle: { color: '#2a2a30' } },
-      },
-      series: [
+    return energyBarChart(
+      slots.map((s) => s.label),
+      [
         {
           name: 'Bezug',
-          type: 'bar',
-          stack: 'energy',
-          itemStyle: { color: '#ff8a80' },
+          color: CHART_COLORS.import,
           data: slots.map((s) => round2(byKey.get(s.key)?.imp ?? 0)),
         },
         {
           name: 'Einspeisung',
-          type: 'bar',
-          stack: 'energy',
-          itemStyle: { color: '#7fe0a3' },
+          color: CHART_COLORS.export,
           data: slots.map((s) => -round2(byKey.get(s.key)?.exp ?? 0)),
         },
       ],
-    };
+      { legend: true, stacked: true },
+    );
   });
 
   readonly wallboxDailyChart = computed<EChartsCoreOption | null>(() => {
-    const data = this.wallboxDailyEnergy();
+    const data = this.data.wallboxDailyEnergy();
     if (data.length === 0) return null;
-    const view = this.view();
-    const slots = energySlots(view, this.refDate());
+    const slots = energySlots(this.view(), this.refDate());
     const byKey = new Map(data.map((d) => [isoToSlotKey(d.day), d.chargedKwh]));
-    return {
-      tooltip: {
-        trigger: 'axis',
-        valueFormatter: (v: number) =>
-          `${Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh`,
-      },
-      grid: { left: 50, right: 20, top: 20, bottom: 30 },
-      xAxis: {
-        type: 'category',
-        data: slots.map((s) => s.label),
-        axisLabel: { color: '#948f9c', interval: 'auto', hideOverlap: true },
-      },
-      yAxis: {
-        type: 'value',
-        name: 'kWh',
-        axisLabel: { color: '#948f9c', formatter: (v: number) => v.toLocaleString('de-DE') },
-        splitLine: { lineStyle: { color: '#2a2a30' } },
-      },
-      series: [
+    return energyBarChart(
+      slots.map((s) => s.label),
+      [
         {
           name: 'Geladen',
-          type: 'bar',
-          itemStyle: { color: '#aac7ff' },
+          color: CHART_COLORS.charge,
           data: slots.map((s) => round2(byKey.get(s.key) ?? 0)),
         },
       ],
-    };
+    );
   });
 
   ngOnInit(): void {
-    this.backfillLive();
-    this.live.readings$().subscribe((r) => {
-      this.latest.set(r);
-      this.liveBuffer.set(
-        appendWindowed(this.liveBuffer(), [
-          { time: r.time, grid: r.gridToHomePower, pv: r.pvToGridPower },
-        ]),
-      );
-    });
-    this.live.wallboxReadings$().subscribe((w) => this.wallbox.set(w));
-    this.live.smaReadings$().subscribe((s) => this.sma.set(s));
-    this.loadToday();
-    this.api.range().subscribe({ next: (r) => this.dataRange.set(r), error: () => undefined });
-    this.api.tariff().subscribe({ next: (t) => this.tariff.set(t), error: () => undefined });
-    this.api.wallboxConfig().subscribe({
-      next: (c) => this.wallboxConfig.set(c),
-      error: () => undefined,
-    });
-    this.api.smaConfig().subscribe({
-      next: (c) => this.smaConfig.set(c),
-      error: () => undefined,
-    });
-    this.loadCheckpoints();
-    setInterval(() => this.loadToday(), 5 * 60 * 1000);
+    this.data.start();
   }
 
   openConfig(): void {
@@ -319,87 +223,25 @@ export class Dashboard implements OnInit {
   }
 
   onConfigSave(event: ConfigSaveEvent): void {
-    this.api.saveWallboxConfig(event.wallbox).subscribe({
-      next: (saved) => this.wallboxConfig.set(saved),
-      error: () => this.error.set('Wallbox-Konfiguration konnte nicht gespeichert werden.'),
-    });
-    this.api.saveSmaConfig(event.sma).subscribe({
-      next: (saved) => this.smaConfig.set(saved),
-      error: () => this.error.set('SMA-Konfiguration konnte nicht gespeichert werden.'),
-    });
-    this.api.saveTariff(event.tariff).subscribe({
-      next: (saved) => {
-        this.tariff.set(saved);
-        this.configOpen.set(false);
-      },
-      error: () => this.error.set('Tarif konnte nicht gespeichert werden.'),
+    // Close the modal only when every save succeeded; errors stay visible.
+    void this.data.saveConfig(event).then((ok) => {
+      if (ok) this.configOpen.set(false);
     });
   }
 
   onCheckpointSave(event: CheckpointSaveEvent): void {
-    const input = { date: event.date, importKwh: event.importKwh, exportKwh: event.exportKwh };
-    const obs =
-      event.id === undefined
-        ? this.api.createMeterCheckpoint(input)
-        : this.api.updateMeterCheckpoint(event.id, input);
-    obs.subscribe({
-      next: () => this.loadCheckpoints(),
-      error: () => this.error.set('Zählerstand konnte nicht gespeichert werden.'),
-    });
+    this.data.saveCheckpoint(event);
   }
 
   onCheckpointDelete(id: number): void {
-    this.api.deleteMeterCheckpoint(id).subscribe({
-      next: () => this.checkpoints.set(this.checkpoints().filter((c) => c.id !== id)),
-      error: () => this.error.set('Zählerstand konnte nicht gelöscht werden.'),
-    });
-  }
-
-  private loadCheckpoints(): void {
-    this.api.meterCheckpoints().subscribe({
-      next: (c) => this.checkpoints.set(c),
-      error: () => undefined,
-    });
-  }
-
-  private loadToday(): void {
-    this.api.energy('day', new Date()).subscribe({
-      next: (e) => this.today.set(e),
-      error: () => undefined,
-    });
-    // Today's energy balance (self-consumption / autarky) for the live SMA card.
-    const from = startOfDay(new Date());
-    const to = new Date();
-    this.api.energyBalance(from, to).subscribe({
-      next: (b) => this.balance.set(b),
-      error: () => undefined,
-    });
-  }
-
-  /** Seed the live buffers with the last window of data so the hero chart is
-   *  populated immediately instead of filling up over time. */
-  private backfillLive(): void {
-    const to = new Date();
-    const from = new Date(to.getTime() - LIVE_WINDOW_MS);
-    this.api.series(from, to, 'raw').subscribe({
-      next: (s) => {
-        const points = s.points.map((p) => ({
-          time: p.time,
-          grid: p.gridToHomePowerAvg,
-          pv: p.pvToGridPowerAvg,
-        }));
-        this.liveBuffer.set(appendWindowed(this.liveBuffer(), points));
-      },
-      error: () => undefined,
-    });
+    this.data.deleteCheckpoint(id);
   }
 
   select(view: View): void {
     this.view.set(view);
     this.refDate.set(new Date());
-    this.wallboxDailyEnergy.set([]);
-    this.periodBalance.set(null);
-    if (view !== 'live') this.load();
+    if (view === 'live') this.data.clearPeriod();
+    else this.data.loadPeriod(view, this.refDate());
   }
 
   prev(): void {
@@ -417,38 +259,6 @@ export class Dashboard implements OnInit {
     else if (v === 'week') d.setDate(d.getDate() + 7 * dir);
     else d.setMonth(d.getMonth() + dir);
     this.refDate.set(d);
-    this.load();
-  }
-
-  private load(): void {
-    const view = this.view();
-    const { from, to, resolution, period, date } = rangeFor(view, this.refDate());
-    this.loading.set(true);
-    this.error.set(null);
-    this.series.set(null);
-    this.energy.set(null);
-    this.periodBalance.set(null);
-    this.api.energyBalance(from, to).subscribe({
-      next: (b) => this.periodBalance.set(b),
-      error: () => this.periodBalance.set(null),
-    });
-    this.api.series(from, to, resolution).subscribe({
-      next: (s) => this.series.set(s),
-      complete: () => this.loading.set(false),
-      error: () => {
-        this.loading.set(false);
-        this.error.set('Daten konnten nicht geladen werden (Backend erreichbar?).');
-      },
-    });
-    this.api.energy(period, date).subscribe({
-      next: (e) => this.energy.set(e),
-      error: () => this.error.set('Daten konnten nicht geladen werden (Backend erreichbar?).'),
-    });
-    if (view === 'week' || view === 'month') {
-      this.api.wallboxDailyEnergy(from, to).subscribe({
-        next: (d) => this.wallboxDailyEnergy.set(d),
-        error: () => this.wallboxDailyEnergy.set([]),
-      });
-    }
+    this.data.loadPeriod(v, d);
   }
 }

@@ -9,10 +9,10 @@ import type {
   SeriesResolution,
   SeriesResponse,
 } from '@org/shared-types';
-import { DbService, rowToReading } from '../database/db.service';
-
-/** Timezone for day-boundary bucketing (overridable via TZ env). */
-const TIMEZONE = process.env.TZ || 'Europe/Berlin';
+import { TIMEZONE } from '../common/config';
+import { numOrNull, round3, toDataRange } from '../common/db-utils';
+import { DbService } from '../database/db.service';
+import { rowToReading } from './meter.mapper';
 
 /** Aggregate view per resolution. */
 const VIEW_BY_RESOLUTION: Record<Exclude<SeriesResolution, 'raw'>, string> = {
@@ -29,11 +29,7 @@ export class MeterService {
     const { rows } = await this.db.query(
       `SELECT min(time) AS first, max(time) AS last FROM meter_reading`,
     );
-    const r = rows[0] ?? {};
-    return {
-      first: r['first'] ? new Date(r['first'] as string).toISOString() : null,
-      last: r['last'] ? new Date(r['last'] as string).toISOString() : null,
-    };
+    return toDataRange(rows[0]);
   }
 
   async latest(): Promise<MeterReading | null> {
@@ -146,12 +142,4 @@ export class MeterService {
       buckets,
     };
   }
-}
-
-function numOrNull(v: unknown): number | null {
-  return v === null || v === undefined ? null : Number(v);
-}
-
-function round3(v: number): number {
-  return Math.round(v * 1000) / 1000;
 }

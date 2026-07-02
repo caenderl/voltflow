@@ -29,8 +29,6 @@ from db import (
     read_sma_config,
     read_wallbox_config,
     register_device,
-    register_sma,
-    register_wallbox,
 )
 from meter_stream import stream_readings
 from sma_stream import stream_sma
@@ -71,7 +69,7 @@ async def _run_meter(pool) -> None:
         try:
             async for reading in stream_readings(interval=5):
                 if not device_registered:
-                    await register_device(pool, reading)
+                    await register_device(pool, reading, "smartmeter")
                     device_registered = True
                 await insert_reading(pool, reading)
                 count += 1
@@ -100,7 +98,7 @@ async def _run_wallbox(pool, cfg: dict) -> None:
         try:
             async for snap in stream_wallbox(host, port=port, unit_id=unit_id, interval=interval):
                 if not device_registered:
-                    await register_wallbox(pool, snap)
+                    await register_device(pool, snap, "wallbox")
                     device_registered = True
                 await insert_wallbox_reading(pool, snap)
                 count += 1
@@ -176,7 +174,7 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
                 carry["model"] = snap.get("device_pn") or carry["model"]
                 apply_carry(snap)
                 if not registered:
-                    await register_sma(pool, snap)
+                    await register_device(pool, snap, "inverter")
                     registered = True
                 await insert_sma_reading(pool, snap)
                 log_transition(snap)

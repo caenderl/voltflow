@@ -5,9 +5,16 @@ import type {
   WallboxDailySummary,
   WallboxReading,
 } from '@org/shared-types';
-import { DbService, rowToWallboxReading } from '../database/db.service';
-
-const TIMEZONE = process.env.TZ || 'Europe/Berlin';
+import { TIMEZONE } from '../common/config';
+import { toDataRange } from '../common/db-utils';
+import {
+  SingletonConfigStore,
+  asBool,
+  asNumber,
+  asStringOrNull,
+} from '../common/singleton-config';
+import { DbService } from '../database/db.service';
+import { rowToWallboxReading } from './wallbox.mapper';
 
 const DEFAULT_CONFIG: WallboxConfig = {
   enabled: false,
@@ -25,40 +32,30 @@ const READING_COLUMNS = `time, device_sn, status, cp_signal, active_power_w,
 
 @Injectable()
 export class WallboxService {
-  constructor(private readonly db: DbService) {}
+  private readonly config: SingletonConfigStore<WallboxConfig>;
 
-  async getConfig(): Promise<WallboxConfig> {
-    const { rows } = await this.db.query(
-      `SELECT enabled, name, host, port, unit_id, poll_interval_s
-         FROM wallbox_config WHERE id = 1`,
+  constructor(private readonly db: DbService) {
+    this.config = new SingletonConfigStore<WallboxConfig>(
+      db,
+      'wallbox_config',
+      [
+        { column: 'enabled', key: 'enabled', fromDb: asBool },
+        { column: 'name', key: 'name', fromDb: asStringOrNull },
+        { column: 'host', key: 'host', fromDb: asStringOrNull },
+        { column: 'port', key: 'port', fromDb: asNumber },
+        { column: 'unit_id', key: 'unitId', fromDb: asNumber },
+        { column: 'poll_interval_s', key: 'pollIntervalS', fromDb: asNumber },
+      ],
+      DEFAULT_CONFIG,
     );
-    if (!rows.length) return { ...DEFAULT_CONFIG };
-    const r = rows[0];
-    return {
-      enabled: Boolean(r['enabled']),
-      name: (r['name'] as string) ?? null,
-      host: (r['host'] as string) ?? null,
-      port: Number(r['port']),
-      unitId: Number(r['unit_id']),
-      pollIntervalS: Number(r['poll_interval_s']),
-    };
   }
 
-  async saveConfig(c: WallboxConfig): Promise<WallboxConfig> {
-    await this.db.query(
-      `INSERT INTO wallbox_config (id, enabled, name, host, port, unit_id, poll_interval_s, updated_at)
-       VALUES (1, $1, $2, $3, $4, $5, $6, now())
-       ON CONFLICT (id) DO UPDATE
-         SET enabled = EXCLUDED.enabled,
-             name = EXCLUDED.name,
-             host = EXCLUDED.host,
-             port = EXCLUDED.port,
-             unit_id = EXCLUDED.unit_id,
-             poll_interval_s = EXCLUDED.poll_interval_s,
-             updated_at = now()`,
-      [c.enabled, c.name, c.host, c.port, c.unitId, c.pollIntervalS],
-    );
-    return this.getConfig();
+  getConfig(): Promise<WallboxConfig> {
+    return this.config.get();
+  }
+
+  saveConfig(c: WallboxConfig): Promise<WallboxConfig> {
+    return this.config.save(c);
   }
 
   async latest(): Promise<WallboxReading | null> {
@@ -75,11 +72,7 @@ export class WallboxService {
     const { rows } = await this.db.query(
       `SELECT min(time) AS first, max(time) AS last FROM wallbox_reading`,
     );
-    const r = rows[0] ?? {};
-    return {
-      first: r['first'] ? new Date(r['first'] as string).toISOString() : null,
-      last: r['last'] ? new Date(r['last'] as string).toISOString() : null,
-    };
+    return toDataRange(rows[0]);
   }
 
   /**

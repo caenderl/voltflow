@@ -14,6 +14,7 @@ import type {
   SmaDailySummary,
   SmaReading,
 } from '@org/shared-types';
+import { emptyToNull, parseIntInRange, parseRange } from '../common/query-params';
 import { SmaService } from './sma.service';
 
 @Controller('sma')
@@ -86,34 +87,4 @@ export class SmaController {
     const { from, to } = parseRange(fromStr, toStr);
     return this.sma.balance(from, to);
   }
-}
-
-function emptyToNull(value: unknown): string | null {
-  return value === undefined || value === null || value === ''
-    ? null
-    : String(value).trim();
-}
-
-function parseRange(fromStr?: string, toStr?: string): { from: Date; to: Date } {
-  const to = toStr ? new Date(toStr) : new Date();
-  const from = fromStr ? new Date(fromStr) : new Date(to.getTime() - 60 * 60 * 1000);
-  if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-    throw new BadRequestException('Invalid from/to timestamp.');
-  }
-  return { from, to };
-}
-
-function parseIntInRange(
-  value: unknown,
-  field: string,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
-  if (value === null || value === undefined || value === '') return fallback;
-  const n = Number(value);
-  if (!Number.isInteger(n) || n < min || n > max) {
-    throw new BadRequestException(`${field} must be an integer in [${min}, ${max}]`);
-  }
-  return n;
 }

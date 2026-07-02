@@ -12,6 +12,12 @@ import type {
   WallboxDailySummary,
   WallboxReading,
 } from '@org/shared-types';
+import {
+  emptyToNull,
+  parseIntInRange,
+  parseRange,
+  startOfMonth,
+} from '../common/query-params';
 import { WallboxService } from './wallbox.service';
 
 @Controller('wallbox')
@@ -25,18 +31,10 @@ export class WallboxController {
 
   @Put('config')
   saveConfig(@Body() body: Partial<WallboxConfig>): Promise<WallboxConfig> {
-    const host =
-      body.host === undefined || body.host === null || body.host === ''
-        ? null
-        : String(body.host).trim();
-    const name =
-      body.name === undefined || body.name === null || body.name === ''
-        ? null
-        : String(body.name).trim();
     const config: WallboxConfig = {
       enabled: Boolean(body.enabled),
-      name,
-      host,
+      name: emptyToNull(body.name),
+      host: emptyToNull(body.host),
       port: parseIntInRange(body.port, 'port', 1, 65535, 502),
       unitId: parseIntInRange(body.unitId, 'unitId', 0, 255, 1),
       pollIntervalS: parseIntInRange(body.pollIntervalS, 'pollIntervalS', 5, 3600, 30),
@@ -63,13 +61,7 @@ export class WallboxController {
     @Query('from') fromStr?: string,
     @Query('to') toStr?: string,
   ): Promise<WallboxDailySummary[]> {
-    const to = toStr ? new Date(toStr) : new Date();
-    const from = fromStr
-      ? new Date(fromStr)
-      : new Date(to.getFullYear(), to.getMonth(), 1);
-    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-      throw new BadRequestException('Invalid from/to timestamp.');
-    }
+    const { from, to } = parseRange(fromStr, toStr, startOfMonth);
     return this.wallbox.dailyEnergy(from, to);
   }
 
@@ -78,29 +70,7 @@ export class WallboxController {
     @Query('from') fromStr?: string,
     @Query('to') toStr?: string,
   ): Promise<WallboxReading[]> {
-    const to = toStr ? new Date(toStr) : new Date();
-    const from = fromStr
-      ? new Date(fromStr)
-      : new Date(to.getTime() - 60 * 60 * 1000); // default: last hour
-    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-      throw new BadRequestException('Invalid from/to timestamp.');
-    }
+    const { from, to } = parseRange(fromStr, toStr);
     return this.wallbox.history(from, to);
   }
-}
-
-/** Parse an integer within [min, max]; empty/undefined -> fallback. */
-function parseIntInRange(
-  value: unknown,
-  field: string,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
-  if (value === null || value === undefined || value === '') return fallback;
-  const n = Number(value);
-  if (!Number.isInteger(n) || n < min || n > max) {
-    throw new BadRequestException(`${field} must be an integer in [${min}, ${max}]`);
-  }
-  return n;
 }

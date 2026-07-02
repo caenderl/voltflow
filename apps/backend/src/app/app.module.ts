@@ -7,6 +7,7 @@ import { MeterCheckpointModule } from './meter-checkpoint/meter-checkpoint.modul
 import { TariffModule } from './tariff/tariff.module';
 import { WallboxModule } from './wallbox/wallbox.module';
 import { SmaModule } from './sma/sma.module';
+import { LiveModule } from './live/live.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SmaModule } from './sma/sma.module';
     TariffModule,
     WallboxModule,
     SmaModule,
+    LiveModule,
   ],
   controllers: [AppController],
   providers: [AppService],

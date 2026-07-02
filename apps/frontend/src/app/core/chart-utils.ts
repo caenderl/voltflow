@@ -3,6 +3,44 @@ import { type View, dayLabel, startOfDay, startOfWeek, addDays } from './date-ut
 
 export const ONE_DAY = 24 * 60 * 60 * 1000;
 
+/** Central chart palette - single source for all ECharts colors. */
+export const CHART_COLORS = {
+  /** grid import (red) */
+  import: '#ff8a80',
+  /** feed-in / PV export (green) */
+  export: '#7fe0a3',
+  /** wallbox charging (blue) */
+  charge: '#aac7ff',
+  axisLabel: '#948f9c',
+  gridLine: '#2a2a30',
+  legendText: '#c9c5d0',
+  zeroLine: '#6b6b73',
+} as const;
+
+/** "1.234,57 kWh" tooltip label (absolute value, de-DE). */
+function kwhLabel(v: number): string {
+  return `${Math.abs(Number(v)).toLocaleString('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} kWh`;
+}
+
+/** Append points to a time-series buffer, keeping it sorted, de-duped by
+ *  timestamp and trimmed to `windowMs` (relative to the newest point). */
+export function appendWindowed<T extends { time: string }>(
+  existing: T[],
+  incoming: T[],
+  windowMs: number,
+): T[] {
+  const byTime = new Map<number, T>();
+  for (const p of existing) byTime.set(new Date(p.time).getTime(), p);
+  for (const p of incoming) byTime.set(new Date(p.time).getTime(), p);
+  const sorted = [...byTime.entries()].sort((a, b) => a[0] - b[0]);
+  const newest = sorted.length ? sorted[sorted.length - 1][0] : Date.now();
+  const cutoff = newest - windowMs;
+  return sorted.filter(([t]) => t >= cutoff).map(([, p]) => p);
+}
+
 /**
  * Convert an ISO date string returned by the backend ("2026-05-25") to the
  * slot-key format used by energySlots / localDateKey ("2026-4-25").
@@ -97,22 +135,22 @@ export function liveSparkChart(
     yAxis: {
       type: 'value',
       splitNumber: 3,
-      axisLabel: { color: '#948f9c', formatter: (v: number) => wattLabel(v) },
-      splitLine: { lineStyle: { color: '#2a2a30' } },
+      axisLabel: { color: CHART_COLORS.axisLabel, formatter: (v: number) => wattLabel(v) },
+      splitLine: { lineStyle: { color: CHART_COLORS.gridLine } },
     },
     series: [
       {
-        ...line('Bezug', '#ff8a80', importData),
+        ...line('Bezug', CHART_COLORS.import, importData),
         // Faint horizontal zero line (import above / feed-in below).
         markLine: {
           silent: true,
           symbol: 'none',
           label: { show: false },
-          lineStyle: { color: '#6b6b73', width: 1, opacity: 0.7 },
+          lineStyle: { color: CHART_COLORS.zeroLine, width: 1, opacity: 0.7 },
           data: [{ yAxis: 0 }],
         },
       },
-      line('Einspeisung', '#7fe0a3', exportData),
+      line('Einspeisung', CHART_COLORS.export, exportData),
     ],
   };
 }
@@ -158,17 +196,71 @@ export function signedPowerChart(
       min: opts.min,
       max: opts.max,
       minInterval: opts.minInterval,
-      axisLabel: { color: '#948f9c', formatter: opts.axisFormat },
+      axisLabel: { color: CHART_COLORS.axisLabel, formatter: opts.axisFormat },
     },
     yAxis: {
       type: 'value',
       name: 'W',
-      axisLabel: { color: '#948f9c' },
-      splitLine: { lineStyle: { color: '#2a2a30' } },
+      axisLabel: { color: CHART_COLORS.axisLabel },
+      splitLine: { lineStyle: { color: CHART_COLORS.gridLine } },
     },
     series: [
-      lineSeries('Bezug', '#ff8a80', importData),
-      lineSeries('Einspeisung', '#7fe0a3', exportData),
+      lineSeries('Bezug', CHART_COLORS.import, importData),
+      lineSeries('Einspeisung', CHART_COLORS.export, exportData),
     ],
+  };
+}
+
+interface EnergyBarSeries {
+  name: string;
+  color: string;
+  /** one value per slot, already signed (negative bars hang below 0) */
+  data: number[];
+}
+
+/**
+ * Stacked-capable kWh bar chart over category slots (hours of a day, days of
+ * a week/month). Shared by the energy chart and the wallbox daily chart -
+ * only the series differ.
+ */
+export function energyBarChart(
+  labels: string[],
+  series: EnergyBarSeries[],
+  opts: { legend?: boolean; stacked?: boolean } = {},
+): EChartsCoreOption {
+  return {
+    tooltip: { trigger: 'axis', valueFormatter: kwhLabel },
+    ...(opts.legend
+      ? {
+          legend: {
+            data: series.map((s) => s.name),
+            top: 0,
+            textStyle: { color: CHART_COLORS.legendText },
+          },
+        }
+      : {}),
+    grid: { left: 50, right: 20, top: opts.legend ? 40 : 20, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      // Thin labels automatically on narrow screens instead of forcing all.
+      axisLabel: { color: CHART_COLORS.axisLabel, interval: 'auto', hideOverlap: true },
+    },
+    yAxis: {
+      type: 'value',
+      name: 'kWh',
+      axisLabel: {
+        color: CHART_COLORS.axisLabel,
+        formatter: (v: number) => v.toLocaleString('de-DE'),
+      },
+      splitLine: { lineStyle: { color: CHART_COLORS.gridLine } },
+    },
+    series: series.map((s) => ({
+      name: s.name,
+      type: 'bar',
+      ...(opts.stacked ? { stack: 'energy' } : {}),
+      itemStyle: { color: s.color },
+      data: s.data,
+    })),
   };
 }
