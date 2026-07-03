@@ -121,7 +121,7 @@ scp db/init.sql <server>:~/voltflow/db/
 
 # 4) Auf dem Server starten/aktualisieren
 ssh <server> 'cd ~/voltflow && docker compose -f docker-compose.prod.yml up -d'
-# -> Dashboard: http://<server>:8080
+# -> Dashboard: https://<server> (Port 8080 redirect auf HTTPS)
 ```
 
 `docker-compose.prod.yml` referenziert die drei Images mit `image:`-Tags + `pull_policy: never`,
@@ -129,8 +129,21 @@ sodass der Server sie aus dem `docker load` nutzt (kein Build, kein Registry-Pul
 `timescale/timescaledb:2.28.1-pg16` direkt (multi-arch). Alle Services laufen mit
 `restart: unless-stopped` (überleben Server-Reboot).
 
-Services: `db` (TimescaleDB), `collector`, `backend`, `frontend` (nginx, Port 8080,
-reverse-proxyt `/api` + `/socket.io` ans Backend). DB-Daten liegen im Volume `voltflow-db-data`.
+Services: `db` (TimescaleDB), `collector`, `backend`, `frontend` (nginx, terminiert TLS auf Port
+443/8443 und reverse-proxyt `/api` + `/socket.io` ans Backend; Port 8080 redirected auf HTTPS).
+DB-Daten liegen im Volume `voltflow-db-data`.
+
+**HTTPS-Zertifikat (mkcert, lokales Netz):** `certs/voltflow.crt` + `certs/voltflow.key` liegen
+lokal (gitignored) und werden von `scripts/deploy.sh` mit ins Bundle nach `~/voltflow/certs/`
+kopiert. Neu erzeugen bei IP-/Hostnamewechsel:
+
+```bash
+mkcert -cert-file certs/voltflow.crt -key-file certs/voltflow.key <server-ip> voltflow.local localhost 127.0.0.1
+```
+
+Damit Browser/Geräte im Netz dem Zertifikat vertrauen, einmalig die mkcert-Root-CA installieren
+(`$(mkcert -CAROOT)/rootCA.pem`, z.B. auf dem Mac via `mkcert -install`, auf anderen Geräten
+manuell als vertrauenswürdiges Root-Zertifikat importieren).
 
 > **Bestehende DB migrieren:** Dump auf der Quelle ziehen (`scripts/backup.sh`), auf den Server
 > kopieren und in eine **frische** DB restoren (`scripts/restore.sh`, TimescaleDB-aware via

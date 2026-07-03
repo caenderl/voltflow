@@ -74,11 +74,15 @@ else
   docker save "${images[@]}" | gzip | ssh "$SERVER" 'gunzip | docker load'
 fi
 
-# 3) Sync the deploy bundle (compose always; init.sql harmless; .env opt-in)
+# 3) Sync the deploy bundle (compose always; init.sql/certs harmless; .env opt-in)
 step "Sync bundle"
-run ssh "$SERVER" "mkdir -p ~/$REMOTE_DIR/db"
+run ssh "$SERVER" "mkdir -p ~/$REMOTE_DIR/db ~/$REMOTE_DIR/certs"
 run scp "$COMPOSE_FILE" "$SERVER:$REMOTE_DIR/$COMPOSE_FILE"
 run scp db/init.sql "$SERVER:$REMOTE_DIR/db/init.sql"
+run scp certs/voltflow.crt certs/voltflow.key "$SERVER:$REMOTE_DIR/certs/"
+# nginx-unprivileged runs as a non-root user; scp preserves the local 600 mode
+# on the key, which that user can't read - relax it on the server copy only.
+run ssh "$SERVER" "chmod 644 ~/$REMOTE_DIR/certs/voltflow.key"
 if [ "$PUSH_ENV" -eq 1 ]; then
   run scp .env "$SERVER:$REMOTE_DIR/.env"
 else

@@ -10,8 +10,11 @@
 #   # on the server (needs this file + .env + db/init.sql, no source tree):
 #   docker compose -f docker-compose.prod.yml up -d
 #
-# Access: http://<server>:8080
+# Access: https://<server> (HTTP on :8080 redirects to HTTPS)
 # ANKER credentials come from .env (ANKERUSER/ANKERPASSWORD/ANKERCOUNTRY).
+# TLS cert is mkcert-issued for the local network - the ~/voltflow/ bundle on
+# the server needs a certs/ dir alongside this file, containing voltflow.crt +
+# voltflow.key (see apps/frontend/nginx.conf).
 services:
   db:
     image: timescale/timescaledb:2.28.1-pg16
@@ -72,6 +75,9 @@ services:
     mem_limit: 128m
     ports:
       - "8080:8080"
+      - "443:8443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - backend
 

@@ -5,6 +5,7 @@ anker-solix-api/
 __pycache__/
 *.pyc
 backups/
+certs/
 
 # --- NX / Node ---
 # compiled output
