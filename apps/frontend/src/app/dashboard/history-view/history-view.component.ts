@@ -31,7 +31,8 @@ export class HistoryViewComponent {
   readonly error = input<string | null>(null);
   readonly powerChart = input.required<EChartsCoreOption>();
   readonly energyChart = input.required<EChartsCoreOption>();
-  readonly wallboxDailyChart = input<EChartsCoreOption | null>(null);
+  readonly pvChart = input<EChartsCoreOption | null>(null);
+  readonly wallboxChart = input<EChartsCoreOption | null>(null);
 
   readonly prevClicked = output<void>();
   readonly nextClicked = output<void>();

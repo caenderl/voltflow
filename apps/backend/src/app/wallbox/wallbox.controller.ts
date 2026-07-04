@@ -10,6 +10,7 @@ import type {
   DataRange,
   WallboxConfig,
   WallboxDailySummary,
+  WallboxHourlySummary,
   WallboxReading,
 } from '@org/shared-types';
 import {
@@ -63,6 +64,15 @@ export class WallboxController {
   ): Promise<WallboxDailySummary[]> {
     const { from, to } = parseRange(fromStr, toStr, startOfMonth);
     return this.wallbox.dailyEnergy(from, to);
+  }
+
+  @Get('energy/hourly')
+  hourlyEnergy(
+    @Query('from') fromStr?: string,
+    @Query('to') toStr?: string,
+  ): Promise<WallboxHourlySummary[]> {
+    const { from, to } = parseRange(fromStr, toStr);
+    return this.wallbox.hourlyEnergy(from, to);
   }
 
   @Get('history')

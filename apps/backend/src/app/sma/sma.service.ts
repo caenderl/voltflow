@@ -5,6 +5,7 @@ import type {
   HouseLoadPoint,
   SmaConfig,
   SmaDailySummary,
+  SmaHourlySummary,
   SmaReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
@@ -97,6 +98,34 @@ export class SmaService {
       day: String(r['day']),
       yieldKwh: Number(r['yield_kwh']),
     }));
+  }
+
+  /**
+   * Hourly PV yield (from the sma_1hour continuous aggregate). daily_yield_wh
+   * resets overnight while the inverter is asleep - not necessarily exactly at
+   * local midnight - so each hour's production is the delta to the
+   * chronologically previous hour (fetched via a 1-hour lookback so the first
+   * requested row also gets a real delta instead of the whole day's total).
+   * A reset shows up as a negative delta, clamped to 0 below.
+   */
+  async hourlyEnergy(from: Date, to: Date): Promise<SmaHourlySummary[]> {
+    const { rows } = await this.db.query(
+      `SELECT bucket, delta_wh FROM (
+         SELECT bucket,
+                daily_yield_wh - lag(daily_yield_wh) OVER (ORDER BY bucket) AS delta_wh
+           FROM sma_1hour
+          WHERE bucket >= $1::timestamptz - INTERVAL '1 hour' AND bucket < $2
+       ) s
+       WHERE bucket >= $1
+       ORDER BY bucket`,
+      [from, to],
+    );
+    return rows
+      .map((r) => ({
+        time: new Date(r['bucket'] as string).toISOString(),
+        yieldKwh: round2(Math.max(0, Number(r['delta_wh'] ?? 0)) / 1000),
+      }))
+      .filter((r) => r.yieldKwh > 0);
   }
 
   /** Derived house-load series on the common 1-min grid (meter + SMA). */

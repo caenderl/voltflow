@@ -59,18 +59,28 @@
 
 @if (view() !== 'month') {
   <div class="chart-box">
-    <h2>Leistung (Bezug + / Einspeisung −)</h2>
+    <h2>Leistung</h2>
     <div echarts [options]="powerChart()" class="chart"></div>
   </div>
 }
-<div class="chart-box">
-  <h2>Energie pro {{ view() === 'day' ? 'Stunde' : 'Tag' }}</h2>
-  <div echarts [options]="energyChart()" class="chart"></div>
-</div>
 
-@if (wallboxDailyChart(); as chart) {
+@if (view() !== 'day') {
   <div class="chart-box">
-    <h2>Wallbox — geladene Energie pro Tag</h2>
+    <h2>Energie pro Tag</h2>
+    <div echarts [options]="energyChart()" class="chart"></div>
+  </div>
+}
+
+@if (pvChart(); as chart) {
+  <div class="chart-box">
+    <h2>{{ view() === 'day' ? 'PV-Erzeugung' : 'PV-Erzeugung pro Tag' }}</h2>
+    <div echarts [options]="chart" class="chart"></div>
+  </div>
+}
+
+@if (wallboxChart(); as chart) {
+  <div class="chart-box">
+    <h2>{{ view() === 'day' ? 'Wallbox — geladene Energie' : 'Wallbox — geladene Energie pro Tag' }}</h2>
     <div echarts [options]="chart" class="chart"></div>
   </div>
 }

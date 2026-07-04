@@ -184,6 +184,14 @@ export interface WallboxDailySummary {
   chargedKwh: number;
 }
 
+/** Hourly charging energy summary, returned by GET /api/wallbox/energy/hourly. */
+export interface WallboxHourlySummary {
+  /** ISO timestamp of the hour bucket start. */
+  time: string;
+  /** Energy charged this hour in kWh. */
+  chargedKwh: number;
+}
+
 // ---------------------------------------------------------------------------
 // SMA PV inverter (STP 6000TL-20, Speedwire via pysma-plus)
 // ---------------------------------------------------------------------------
@@ -249,6 +257,14 @@ export interface SmaDailySummary {
   /** Local date in ISO format (YYYY-MM-DD). */
   day: string;
   /** PV energy produced this day in kWh. */
+  yieldKwh: number;
+}
+
+/** Per-hour energy summary, returned by GET /api/sma/energy/hourly. */
+export interface SmaHourlySummary {
+  /** ISO timestamp of the hour bucket start. */
+  time: string;
+  /** PV energy produced this hour in kWh. */
   yieldKwh: number;
 }
 

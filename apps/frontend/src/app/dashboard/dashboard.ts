@@ -5,6 +5,7 @@ import { APP_VERSION } from '../../version';
 import {
   CHART_COLORS,
   ONE_DAY,
+  type EnergyBarSeries,
   energyBarChart,
   energySlots,
   isoToSlotKey,
@@ -175,28 +176,101 @@ export class Dashboard implements OnInit {
       cur.exp += b.exportKwh;
       byKey.set(k, cur);
     }
+    const series: EnergyBarSeries[] = [
+      {
+        name: 'Bezug',
+        color: CHART_COLORS.import,
+        data: slots.map((s) => round2(byKey.get(s.key)?.imp ?? 0)),
+      },
+      {
+        name: 'Einspeisung',
+        color: CHART_COLORS.export,
+        data: slots.map((s) => -round2(byKey.get(s.key)?.exp ?? 0)),
+      },
+    ];
+    // Week: PV production fits as its own (unstacked) bar next to Bezug/Einspeisung.
+    // Month has too many day-slots for a third bar - it gets its own chart instead (see pvChart).
+    if (view === 'week') {
+      const production = this.data.smaDailyEnergy();
+      if (production.length > 0) {
+        const prodByKey = new Map(production.map((d) => [isoToSlotKey(d.day), d.yieldKwh]));
+        series.push({
+          name: 'PV-Erzeugung',
+          color: CHART_COLORS.production,
+          stack: false,
+          data: slots.map((s) => round2(prodByKey.get(s.key) ?? 0)),
+        });
+      }
+    }
     return energyBarChart(
       slots.map((s) => s.label),
-      [
-        {
-          name: 'Bezug',
-          color: CHART_COLORS.import,
-          data: slots.map((s) => round2(byKey.get(s.key)?.imp ?? 0)),
-        },
-        {
-          name: 'Einspeisung',
-          color: CHART_COLORS.export,
-          data: slots.map((s) => -round2(byKey.get(s.key)?.exp ?? 0)),
-        },
-      ],
+      series,
       { legend: true, stacked: true },
     );
   });
 
-  readonly wallboxDailyChart = computed<EChartsCoreOption | null>(() => {
+  /** PV production chart: hourly line (day) or daily bar (month). Week shows
+   *  it merged into energyChart instead, so this is null there. */
+  readonly pvChart = computed<EChartsCoreOption | null>(() => {
+    const view = this.view();
+    if (view === 'day') {
+      const data = this.data.smaHourlyEnergy();
+      if (data.length === 0) return null;
+      const slots = energySlots('day', this.refDate());
+      const byKey = new Map(data.map((d) => [slotKey('day', new Date(d.time).getTime()), d.yieldKwh]));
+      return energyBarChart(
+        slots.map((s) => s.label),
+        [
+          {
+            name: 'PV-Erzeugung',
+            color: CHART_COLORS.production,
+            type: 'line',
+            data: slots.map((s) => round2(byKey.get(s.key) ?? 0)),
+          },
+        ],
+      );
+    }
+    if (view === 'month') {
+      const data = this.data.smaDailyEnergy();
+      if (data.length === 0) return null;
+      const slots = energySlots('month', this.refDate());
+      const byKey = new Map(data.map((d) => [isoToSlotKey(d.day), d.yieldKwh]));
+      return energyBarChart(
+        slots.map((s) => s.label),
+        [
+          {
+            name: 'PV-Erzeugung',
+            color: CHART_COLORS.production,
+            data: slots.map((s) => round2(byKey.get(s.key) ?? 0)),
+          },
+        ],
+      );
+    }
+    return null;
+  });
+
+  /** Wallbox charged-energy chart: hourly bar (day) or daily bar (week/month). */
+  readonly wallboxChart = computed<EChartsCoreOption | null>(() => {
+    const view = this.view();
+    if (view === 'day') {
+      const data = this.data.wallboxHourlyEnergy();
+      if (data.length === 0) return null;
+      const slots = energySlots('day', this.refDate());
+      const byKey = new Map(data.map((d) => [slotKey('day', new Date(d.time).getTime()), d.chargedKwh]));
+      return energyBarChart(
+        slots.map((s) => s.label),
+        [
+          {
+            name: 'Geladen',
+            color: CHART_COLORS.charge,
+            data: slots.map((s) => round2(byKey.get(s.key) ?? 0)),
+          },
+        ],
+      );
+    }
     const data = this.data.wallboxDailyEnergy();
     if (data.length === 0) return null;
-    const slots = energySlots(this.view(), this.refDate());
+    const slots = energySlots(view, this.refDate());
     const byKey = new Map(data.map((d) => [isoToSlotKey(d.day), d.chargedKwh]));
     return energyBarChart(
       slots.map((s) => s.label),
