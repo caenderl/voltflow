@@ -51,6 +51,12 @@ _POWER_FIELDS = (
     "grid_power", "pv_power_a", "pv_power_b", "power_l1", "power_l2", "power_l3",
 )
 
+# Checked to decide "no production reading at all". Must be ALL of these, not
+# just grid_power - a single dropped Speedwire UDP read can leave grid_power
+# missing on an otherwise-normal read where pv_power_a/b came through fine,
+# which is a lossy read, not the inverter actually asleep.
+_PRODUCTION_FIELDS = ("grid_power", "pv_power_a", "pv_power_b")
+
 
 def _num(value) -> float | None:
     if value is None or value == "":
@@ -85,7 +91,7 @@ async def _read_snapshot(device, sensors) -> dict:
             values[field] = _num(s.value)
 
     # No production reading at all -> treat as asleep.
-    if values.get("grid_power") is None:
+    if all(values.get(f) is None for f in _PRODUCTION_FIELDS):
         snap = _asleep_snapshot()
         # keep any energy counters we did get (e.g. total_yield)
         for k in ("daily_yield_wh", "total_yield_kwh"):
