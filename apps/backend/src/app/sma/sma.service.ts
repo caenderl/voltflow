@@ -83,15 +83,17 @@ export class SmaService {
     return rows.map(rowToSmaReading);
   }
 
-  /** Daily PV yield per day (from the sma_1day continuous aggregate). */
+  /** Daily PV yield per day (from the sma_1day continuous aggregate), summed
+   *  across devices (the cagg is grouped by device_sn - one row per day here). */
   async dailyEnergy(from: Date, to: Date): Promise<SmaDailySummary[]> {
     const { rows } = await this.db.query(
       `SELECT (bucket AT TIME ZONE $3)::date::text AS day,
-              ROUND((daily_yield_wh / 1000.0)::numeric, 2) AS yield_kwh
+              ROUND((sum(daily_yield_wh) / 1000.0)::numeric, 2) AS yield_kwh
          FROM sma_1day
         WHERE bucket >= $1 AND bucket < $2
-          AND COALESCE(daily_yield_wh, 0) > 0
-        ORDER BY bucket`,
+        GROUP BY day
+        HAVING COALESCE(sum(daily_yield_wh), 0) > 0
+        ORDER BY day`,
       [from, to, TIMEZONE],
     );
     return rows.map((r) => ({
@@ -106,24 +108,30 @@ export class SmaService {
    * local midnight - so each hour's production is the delta to the
    * chronologically previous hour (fetched via a 1-hour lookback so the first
    * requested row also gets a real delta instead of the whole day's total).
-   * A reset shows up as a negative delta, clamped to 0 below.
+   * Deltas are computed per device and only across consecutive hourly buckets:
+   * after a data gap the accumulated multi-hour yield would otherwise be
+   * dumped into the single resume hour as a spike, so those rows are skipped.
+   * The overnight counter reset shows up as a negative delta, clamped to 0.
    */
   async hourlyEnergy(from: Date, to: Date): Promise<SmaHourlySummary[]> {
     const { rows } = await this.db.query(
-      `SELECT bucket, delta_wh FROM (
+      `SELECT bucket, sum(GREATEST(delta_wh, 0)) AS delta_wh FROM (
          SELECT bucket,
-                daily_yield_wh - lag(daily_yield_wh) OVER (ORDER BY bucket) AS delta_wh
+                daily_yield_wh - lag(daily_yield_wh) OVER w AS delta_wh,
+                bucket - lag(bucket) OVER w AS step
            FROM sma_1hour
           WHERE bucket >= $1::timestamptz - INTERVAL '1 hour' AND bucket < $2
+         WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
        ) s
-       WHERE bucket >= $1
+       WHERE bucket >= $1 AND step = INTERVAL '1 hour'
+       GROUP BY bucket
        ORDER BY bucket`,
       [from, to],
     );
     return rows
       .map((r) => ({
         time: new Date(r['bucket'] as string).toISOString(),
-        yieldKwh: round2(Math.max(0, Number(r['delta_wh'] ?? 0)) / 1000),
+        yieldKwh: round2(Number(r['delta_wh'] ?? 0) / 1000),
       }))
       .filter((r) => r.yieldKwh > 0);
   }

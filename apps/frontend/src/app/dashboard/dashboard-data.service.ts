@@ -118,9 +118,19 @@ export class DashboardDataService {
     setInterval(() => this.loadToday(), TODAY_REFRESH_MS);
   }
 
+  /** Generation counter for period loads: a response only writes its signal
+   *  while it still belongs to the latest loadPeriod/clearPeriod. Without it,
+   *  a slow response for the PREVIOUS period lands after the new period's
+   *  up-front clear and repopulates the charts with the wrong period's data
+   *  (day-view hour keys are date-independent, so it would render as if it
+   *  belonged to the selected day). */
+  private periodSeq = 0;
+
   /** Load series/energy/balance for a history period ([from, to) via rangeFor). */
   loadPeriod(view: View, refDate: Date): void {
     const { from, to, resolution, period, date } = rangeFor(view, refDate);
+    const seq = ++this.periodSeq;
+    const current = () => seq === this.periodSeq;
     this.loading.set(true);
     this.error.set(null);
     this.series.set(null);
@@ -134,44 +144,46 @@ export class DashboardDataService {
     this.smaDailyEnergy.set([]);
     this.smaHourlyEnergy.set([]);
     this.smaApi.balance(from, to).subscribe({
-      next: (b) => this.periodBalance.set(b),
-      error: () => this.periodBalance.set(null),
+      next: (b) => current() && this.periodBalance.set(b),
+      error: () => current() && this.periodBalance.set(null),
     });
     this.meterApi.series(from, to, resolution).subscribe({
-      next: (s) => this.series.set(s),
-      complete: () => this.loading.set(false),
+      next: (s) => current() && this.series.set(s),
+      complete: () => current() && this.loading.set(false),
       error: () => {
+        if (!current()) return;
         this.loading.set(false);
         this.error.set(LOAD_ERROR);
       },
     });
     this.meterApi.energy(period, date).subscribe({
-      next: (e) => this.energy.set(e),
-      error: () => this.error.set(LOAD_ERROR),
+      next: (e) => current() && this.energy.set(e),
+      error: () => current() && this.error.set(LOAD_ERROR),
     });
     if (view === 'week' || view === 'month') {
       this.wallboxApi.dailyEnergy(from, to).subscribe({
-        next: (d) => this.wallboxDailyEnergy.set(d),
-        error: () => this.wallboxDailyEnergy.set([]),
+        next: (d) => current() && this.wallboxDailyEnergy.set(d),
+        error: () => current() && this.wallboxDailyEnergy.set([]),
       });
       this.smaApi.dailyEnergy(from, to).subscribe({
-        next: (d) => this.smaDailyEnergy.set(d),
-        error: () => this.smaDailyEnergy.set([]),
+        next: (d) => current() && this.smaDailyEnergy.set(d),
+        error: () => current() && this.smaDailyEnergy.set([]),
       });
     } else {
       this.wallboxApi.hourlyEnergy(from, to).subscribe({
-        next: (d) => this.wallboxHourlyEnergy.set(d),
-        error: () => this.wallboxHourlyEnergy.set([]),
+        next: (d) => current() && this.wallboxHourlyEnergy.set(d),
+        error: () => current() && this.wallboxHourlyEnergy.set([]),
       });
       this.smaApi.hourlyEnergy(from, to).subscribe({
-        next: (d) => this.smaHourlyEnergy.set(d),
-        error: () => this.smaHourlyEnergy.set([]),
+        next: (d) => current() && this.smaHourlyEnergy.set(d),
+        error: () => current() && this.smaHourlyEnergy.set([]),
       });
     }
   }
 
   /** Reset the history-period state (when switching to the live view). */
   clearPeriod(): void {
+    this.periodSeq++; // invalidate any in-flight period requests
     this.wallboxDailyEnergy.set([]);
     this.wallboxHourlyEnergy.set([]);
     this.smaDailyEnergy.set([]);

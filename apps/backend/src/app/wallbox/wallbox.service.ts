@@ -78,19 +78,21 @@ export class WallboxService {
 
   /**
    * Daily charged energy in [from, to) from the wallbox_1day continuous
-   * aggregate (Berlin-timezone day buckets, 10-year retention).
+   * aggregate (Berlin-timezone day buckets, 10-year retention), summed across
+   * devices (the cagg is grouped by device_sn - one row per bucket here).
    * Only days with actual charging activity are returned.
    */
   async dailyEnergy(from: Date, to: Date): Promise<WallboxDailySummary[]> {
     const { rows } = await this.db.query(
       `SELECT
          (bucket AT TIME ZONE $3)::date::text AS day,
-         ROUND(charged_kwh::numeric, 2)       AS charged_kwh
+         ROUND(sum(charged_kwh)::numeric, 2)  AS charged_kwh
        FROM wallbox_1day
        WHERE bucket >= $1
          AND bucket < $2
-         AND COALESCE(charged_kwh, 0) > 0
-       ORDER BY bucket`,
+       GROUP BY day
+       HAVING COALESCE(sum(charged_kwh), 0) > 0
+       ORDER BY day`,
       [from, to, TIMEZONE],
     );
     return rows.map((r) => ({
@@ -101,17 +103,19 @@ export class WallboxService {
 
   /**
    * Hourly charged energy in [from, to) from the wallbox_1hour continuous
-   * aggregate. Only hours with actual charging activity are returned.
+   * aggregate, summed across devices (the cagg is grouped by device_sn).
+   * Only hours with actual charging activity are returned.
    */
   async hourlyEnergy(from: Date, to: Date): Promise<WallboxHourlySummary[]> {
     const { rows } = await this.db.query(
       `SELECT
          bucket,
-         ROUND(charged_kwh::numeric, 2) AS charged_kwh
+         ROUND(sum(charged_kwh)::numeric, 2) AS charged_kwh
        FROM wallbox_1hour
        WHERE bucket >= $1
          AND bucket < $2
-         AND COALESCE(charged_kwh, 0) > 0
+       GROUP BY bucket
+       HAVING COALESCE(sum(charged_kwh), 0) > 0
        ORDER BY bucket`,
       [from, to],
     );

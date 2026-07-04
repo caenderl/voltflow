@@ -63,6 +63,15 @@ run()  { echo "+ $*"; [ "$DRY" -eq 1 ] || "$@"; }
 
 step "Deploy [${services[*]}] -> $SERVER:~/$REMOTE_DIR (platform $PLATFORM)"
 
+# 0) Pre-flight: the bundle sync (step 3) ships the TLS cert for nginx; fail
+# fast BEFORE building/transferring images instead of aborting mid-deploy
+# with the new images already loaded on the server.
+if [ ! -f certs/voltflow.crt ] || [ ! -f certs/voltflow.key ]; then
+  echo "ERROR: certs/voltflow.crt / certs/voltflow.key missing (gitignored, per-machine)." >&2
+  echo "       Generate them with mkcert - see README, 'HTTPS-Zertifikat' section." >&2
+  exit 1
+fi
+
 # 1) Cross-build the selected images for amd64
 run docker buildx bake -f "$COMPOSE_FILE" --set "*.platform=$PLATFORM" --load "${services[@]}"
 

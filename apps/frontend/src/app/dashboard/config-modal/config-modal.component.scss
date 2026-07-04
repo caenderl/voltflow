@@ -134,6 +134,17 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.6rem;
+
+  // The inputs' intrinsic min width must not dictate the track width - let
+  // the three columns shrink with the panel (tablet / half-screen window),
+  // otherwise the third column overflows into a horizontal scrollbar.
+  .field {
+    min-width: 0;
+  }
+  input {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .checkpoint-form-actions {

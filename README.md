@@ -82,9 +82,13 @@ npm run dev         # Backend (:3000) + Frontend (:4200) mit Hot-Reload
 npm run collector   # Collector separat (schreibt Live-Werte in die DB)
 # oder alles zusammen:
 npm run dev:all     # Backend + Frontend + Collector parallel
+npm test            # Unit-Tests (vitest, pure TS-Funktionen)
 ```
 
 Frontend: http://localhost:4200 (proxyt `/api` + `/socket.io` -> :3000).
+
+**CI:** GitHub Actions (`.github/workflows/ci.yml`) läuft bei jedem Push auf `main` und
+bei jedem PR: `npm ci` → `npm test` (vitest) → `nx run-many -t build` (Backend + Frontend).
 
 > Hinweis: Es darf immer nur **ein** Collector pro Anker-Konto laufen (eine
 > MQTT-Session). Den Prod-Stack-Collector also stoppen, wenn lokal entwickelt wird.
@@ -94,7 +98,7 @@ Frontend: http://localhost:4200 (proxyt `/api` + `/socket.io` -> :3000).
 Alles als Container. Die Images werden auf einem Dev-Rechner (z. B. Apple-Silicon-Mac)
 für `linux/amd64` cross-gebaut und **ohne Registry** per `docker save | ssh | docker load`
 auf den Server übertragen. Der Server braucht nur das Bundle (`docker-compose.prod.yml` +
-`.env` + `db/init.sql`) — **keinen Source-Tree und keinen Build**.
+`.env` + `db/init.sql` + `certs/`) — **keinen Source-Tree und keinen Build**.
 
 **Komfort-Wrapper** (kapselt alle Schritte unten, niemals `down`/`-v`, DB-Volume bleibt unangetastet):
 
@@ -115,9 +119,11 @@ docker save voltflow-collector voltflow-backend voltflow-frontend \
   | gzip | ssh <server> 'gunzip | docker load'
 
 # 3) Bundle auf den Server (einmalig bzw. bei Änderung)
-ssh <server> 'mkdir -p ~/voltflow/db'
+ssh <server> 'mkdir -p ~/voltflow/db ~/voltflow/certs'
 scp docker-compose.prod.yml .env <server>:~/voltflow/
 scp db/init.sql <server>:~/voltflow/db/
+scp certs/voltflow.crt certs/voltflow.key <server>:~/voltflow/certs/   # nginx startet ohne Zertifikat nicht
+ssh <server> 'chmod 644 ~/voltflow/certs/voltflow.key'                 # non-root nginx muss den Key lesen können
 
 # 4) Auf dem Server starten/aktualisieren
 ssh <server> 'cd ~/voltflow && docker compose -f docker-compose.prod.yml up -d'
@@ -145,6 +151,10 @@ Damit Browser/Geräte im Netz dem Zertifikat vertrauen, einmalig die mkcert-Root
 (`$(mkcert -CAROOT)/rootCA.pem`, z.B. auf dem Mac via `mkcert -install`, auf anderen Geräten
 manuell als vertrauenswürdiges Root-Zertifikat importieren).
 
+> **Nach Zertifikat-Neuerzeugung:** nginx liest das Zertifikat nur beim Container-Start —
+> ein `docker compose up -d` ohne Image-Änderung wendet ein neues Zertifikat **nicht** an.
+> Auf dem Server einmal `docker compose -f docker-compose.prod.yml restart frontend` ausführen.
+
 > **Bestehende DB migrieren:** Dump auf der Quelle ziehen (`scripts/backup.sh`), auf den Server
 > kopieren und in eine **frische** DB restoren (`scripts/restore.sh`, TimescaleDB-aware via
 > `pre_restore`/`post_restore`). Da das Backend beim Start das Schema idempotent anlegt, vor dem
@@ -163,15 +173,18 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/meter/series?from&to&resolution=raw\|1min\|1hour\|1day` | Leistungs-Zeitreihe |
 | `GET /api/meter/energy?period=day\|week\|month&date=YYYY-MM-DD` | kWh-Bezug/Einspeisung |
 | `GET /api/meter/range` | Verfügbarer Datenzeitraum |
+| `GET` / `POST` / `PUT` / `DELETE /api/meter-checkpoints` | Manuelle Zählerstände (Abgleich mit dem physischen Zähler) |
 | `GET` / `PUT /api/tariff` | Stromtarif (Preise ct/kWh) |
 | `GET` / `PUT /api/wallbox/config` | Wallbox-Verbindung (Name, IP, Port, Unit-ID, Intervall, an/aus) |
 | `GET /api/wallbox/latest` | Letzter Wallbox-Messwert |
 | `GET /api/wallbox/history?from&to` | Rohe Wallbox-Messwerte |
 | `GET /api/wallbox/energy/daily?from&to` | Geladene Energie pro Tag (kWh) |
+| `GET /api/wallbox/energy/hourly?from&to` | Geladene Energie pro Stunde (kWh, Tagesansicht) |
 | `GET` / `PUT /api/sma/config` | SMA-Verbindung (Name, IP, Intervall, an/aus) |
 | `GET /api/sma/latest` | Letzter SMA-Messwert |
 | `GET /api/sma/history?from&to` | Rohe SMA-Messwerte |
 | `GET /api/sma/energy/daily?from&to` | PV-Ertrag pro Tag (kWh) |
+| `GET /api/sma/energy/hourly?from&to` | PV-Ertrag pro Stunde (kWh, Tagesansicht) |
 | `GET /api/sma/house-load?from&to` | Abgeleitete Hauslast-Zeitreihe (W) |
 | `GET /api/sma/balance?from&to` | Energiebilanz: Eigenverbrauch & Autarkie |
 | WS-Event `reading` | Live-Messwert Smart Meter (~alle 5 s) |

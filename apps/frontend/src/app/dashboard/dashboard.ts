@@ -14,6 +14,7 @@ import {
   round2,
   signedPowerChart,
   slotKey,
+  sumByHourKey,
 } from '../core/chart-utils';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../core/date-utils';
 import {
@@ -217,7 +218,12 @@ export class Dashboard implements OnInit {
       const data = this.data.smaHourlyEnergy();
       if (data.length === 0) return null;
       const slots = energySlots('day', this.refDate());
-      const byKey = new Map(data.map((d) => [slotKey('day', new Date(d.time).getTime()), d.yieldKwh]));
+      const byKey = sumByHourKey(data, (d) => d.yieldKwh);
+      // Draw the line only across hours that have data: null outside
+      // [first, last] so hours without readings yet (e.g. the rest of today)
+      // render as a gap instead of a fake plunge to 0.
+      const first = slots.findIndex((s) => byKey.has(s.key));
+      const last = slots.length - 1 - [...slots].reverse().findIndex((s) => byKey.has(s.key));
       return energyBarChart(
         slots.map((s) => s.label),
         [
@@ -225,7 +231,9 @@ export class Dashboard implements OnInit {
             name: 'PV-Erzeugung',
             color: CHART_COLORS.production,
             type: 'line',
-            data: slots.map((s) => round2(byKey.get(s.key) ?? 0)),
+            data: slots.map((s, i) =>
+              i < first || i > last ? null : round2(byKey.get(s.key) ?? 0),
+            ),
           },
         ],
       );
@@ -256,7 +264,7 @@ export class Dashboard implements OnInit {
       const data = this.data.wallboxHourlyEnergy();
       if (data.length === 0) return null;
       const slots = energySlots('day', this.refDate());
-      const byKey = new Map(data.map((d) => [slotKey('day', new Date(d.time).getTime()), d.chargedKwh]));
+      const byKey = sumByHourKey(data, (d) => d.chargedKwh);
       return energyBarChart(
         slots.map((s) => s.label),
         [

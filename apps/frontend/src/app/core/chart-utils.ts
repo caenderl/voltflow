@@ -19,8 +19,9 @@ export const CHART_COLORS = {
   zeroLine: '#6b6b73',
 } as const;
 
-/** "1.234,57 kWh" tooltip label (absolute value, de-DE). */
-function kwhLabel(v: number): string {
+/** "1.234,57 kWh" tooltip label (absolute value, de-DE); "–" for gaps. */
+function kwhLabel(v: number | null): string {
+  if (v == null) return '–';
   return `${Math.abs(Number(v)).toLocaleString('de-DE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -74,6 +75,23 @@ function localDateKey(ms: number): string {
 export function slotKey(view: View, ms: number): string {
   if (view === 'day') return String(new Date(ms).getHours());
   return localDateKey(ms);
+}
+
+/**
+ * Sum hourly API rows into day-view slot keys (local hour). Accumulates on
+ * key collision: on the DST fall-back day two UTC buckets map to the same
+ * local hour - a plain `new Map(...)` would silently drop one of them.
+ */
+export function sumByHourKey<T extends { time: string }>(
+  rows: T[],
+  value: (row: T) => number,
+): Map<string, number> {
+  const byKey = new Map<string, number>();
+  for (const r of rows) {
+    const k = slotKey('day', new Date(r.time).getTime());
+    byKey.set(k, (byKey.get(k) ?? 0) + value(r));
+  }
+  return byKey;
 }
 
 export function energySlots(view: View, ref: Date): Slot[] {
@@ -216,8 +234,9 @@ export function signedPowerChart(
 export interface EnergyBarSeries {
   name: string;
   color: string;
-  /** one value per slot, already signed (negative bars hang below 0) */
-  data: number[];
+  /** one value per slot, already signed (negative bars hang below 0);
+   *  null renders a gap (line series: no point instead of a fake 0) */
+  data: (number | null)[];
   /** 'bar' (default) or 'line' - lines are drawn on top of the bars. */
   type?: 'bar' | 'line';
   /** Set to false to keep this bar out of the shared stack (opts.stacked)
@@ -269,7 +288,11 @@ export function energyBarChart(
         name: s.name,
         type,
         ...(stack ? { stack } : {}),
-        ...(type === 'line' ? { smooth: true, showSymbol: false, lineStyle: { width: 2 } } : {}),
+        // smoothMonotone keeps the cubic interpolation from over/undershooting
+        // (e.g. dipping below 0 kWh between the night zeros and the PV ramp).
+        ...(type === 'line'
+          ? { smooth: true, smoothMonotone: 'x', showSymbol: false, lineStyle: { width: 2 } }
+          : {}),
         itemStyle: { color: s.color },
         data: s.data,
       };
