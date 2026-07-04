@@ -9,7 +9,7 @@ import type {
   SeriesResponse,
   SmaConfig,
   SmaDailySummary,
-  SmaHourlySummary,
+  SmaMinuteSummary,
   SmaReading,
   Tariff,
   WallboxConfig,
@@ -82,7 +82,7 @@ export class DashboardDataService {
   readonly wallboxDailyEnergy = signal<WallboxDailySummary[]>([]);
   readonly wallboxHourlyEnergy = signal<WallboxHourlySummary[]>([]);
   readonly smaDailyEnergy = signal<SmaDailySummary[]>([]);
-  readonly smaHourlyEnergy = signal<SmaHourlySummary[]>([]);
+  readonly smaMinuteEnergy = signal<SmaMinuteSummary[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
@@ -142,7 +142,7 @@ export class DashboardDataService {
     this.wallboxDailyEnergy.set([]);
     this.wallboxHourlyEnergy.set([]);
     this.smaDailyEnergy.set([]);
-    this.smaHourlyEnergy.set([]);
+    this.smaMinuteEnergy.set([]);
     this.smaApi.balance(from, to).subscribe({
       next: (b) => current() && this.periodBalance.set(b),
       error: () => current() && this.periodBalance.set(null),
@@ -174,9 +174,9 @@ export class DashboardDataService {
         next: (d) => current() && this.wallboxHourlyEnergy.set(d),
         error: () => current() && this.wallboxHourlyEnergy.set([]),
       });
-      this.smaApi.hourlyEnergy(from, to).subscribe({
-        next: (d) => current() && this.smaHourlyEnergy.set(d),
-        error: () => current() && this.smaHourlyEnergy.set([]),
+      this.smaApi.minuteEnergy(from, to).subscribe({
+        next: (d) => current() && this.smaMinuteEnergy.set(d),
+        error: () => current() && this.smaMinuteEnergy.set([]),
       });
     }
   }
@@ -187,7 +187,7 @@ export class DashboardDataService {
     this.wallboxDailyEnergy.set([]);
     this.wallboxHourlyEnergy.set([]);
     this.smaDailyEnergy.set([]);
-    this.smaHourlyEnergy.set([]);
+    this.smaMinuteEnergy.set([]);
     this.periodBalance.set(null);
   }
 

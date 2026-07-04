@@ -2,6 +2,17 @@ import type { EChartsCoreOption } from 'echarts/core';
 import { type View, dayLabel, startOfDay, startOfWeek, addDays } from './date-utils';
 
 export const ONE_DAY = 24 * 60 * 60 * 1000;
+export const TWO_HOURS = 2 * 60 * 60 * 1000;
+
+/** Explicit tick timestamps [min, min+step, ..., max], for forcing a fixed
+ *  time-axis tick spacing (see signedPowerChart's tickIntervalMs). */
+function fixedTimeTicks(min: string, max: string, stepMs: number): number[] {
+  const start = new Date(min).getTime();
+  const end = new Date(max).getTime();
+  const ticks: number[] = [];
+  for (let t = start; t <= end; t += stepMs) ticks.push(t);
+  return ticks;
+}
 
 /** Central chart palette - single source for all ECharts colors. */
 export const CHART_COLORS = {
@@ -89,6 +100,37 @@ export function sumByHourKey<T extends { time: string }>(
   const byKey = new Map<string, number>();
   for (const r of rows) {
     const k = slotKey('day', new Date(r.time).getTime());
+    byKey.set(k, (byKey.get(k) ?? 0) + value(r));
+  }
+  return byKey;
+}
+
+/** Minute-of-day slots for the day view's PV production line (1-minute
+ *  resolution, matching the Leistung chart's '1min' meter resolution). */
+export function minuteSlots(ref: Date): Slot[] {
+  const slots: Slot[] = [];
+  const base = startOfDay(ref);
+  for (let m = 0; m < 24 * 60; m++) {
+    const d = new Date(base);
+    d.setMinutes(m);
+    slots.push({ key: String(m), label: dayLabel('day', d.getTime()) });
+  }
+  return slots;
+}
+
+/**
+ * Sum minute-resolution API rows into minuteSlots keys (local minute-of-day).
+ * Accumulates on key collision, same reasoning as sumByHourKey: on the DST
+ * fall-back day two UTC buckets can map to the same local minute.
+ */
+export function sumByMinuteKey<T extends { time: string }>(
+  rows: T[],
+  value: (row: T) => number,
+): Map<string, number> {
+  const byKey = new Map<string, number>();
+  for (const r of rows) {
+    const d = new Date(r.time);
+    const k = String(d.getHours() * 60 + d.getMinutes());
     byKey.set(k, (byKey.get(k) ?? 0) + value(r));
   }
   return byKey;
@@ -188,7 +230,11 @@ export function signedPowerChart(
   data: [string, number][],
   opts: {
     axisFormat?: string | ((value: number) => string);
-    minInterval?: number;
+    /** Force an exact tick every N ms (e.g. TWO_HOURS), anchored at opts.min.
+     *  ECharts' automatic minInterval/maxInterval on a time axis doesn't
+     *  reliably land on the requested spacing, so this computes the explicit
+     *  tick timestamps instead (requires both min and max to be set). */
+    tickIntervalMs?: number;
     min?: string;
     max?: string;
   } = {},
@@ -205,6 +251,10 @@ export function signedPowerChart(
     areaStyle: { opacity: 0.18 },
     data: d,
   });
+  const ticks =
+    opts.tickIntervalMs && opts.min && opts.max
+      ? fixedTimeTicks(opts.min, opts.max, opts.tickIntervalMs)
+      : undefined;
   return {
     tooltip: {
       trigger: 'axis',
@@ -215,8 +265,8 @@ export function signedPowerChart(
       type: 'time',
       min: opts.min,
       max: opts.max,
-      minInterval: opts.minInterval,
-      axisLabel: { color: CHART_COLORS.axisLabel, formatter: opts.axisFormat },
+      axisTick: { customValues: ticks },
+      axisLabel: { color: CHART_COLORS.axisLabel, formatter: opts.axisFormat, customValues: ticks },
     },
     yAxis: {
       type: 'value',
@@ -252,7 +302,7 @@ export interface EnergyBarSeries {
 export function energyBarChart(
   labels: string[],
   series: EnergyBarSeries[],
-  opts: { legend?: boolean; stacked?: boolean } = {},
+  opts: { legend?: boolean; stacked?: boolean; xAxisLabelInterval?: number | 'auto' } = {},
 ): EChartsCoreOption {
   return {
     tooltip: { trigger: 'axis', valueFormatter: kwhLabel },
@@ -269,8 +319,14 @@ export function energyBarChart(
     xAxis: {
       type: 'category',
       data: labels,
-      // Thin labels automatically on narrow screens instead of forcing all.
-      axisLabel: { color: CHART_COLORS.axisLabel, interval: 'auto', hideOverlap: true },
+      // Thin labels automatically on narrow screens instead of forcing all,
+      // unless a fixed interval is requested (e.g. many-slot minute charts,
+      // where 'auto' wouldn't reliably land on round-hour boundaries).
+      axisLabel: {
+        color: CHART_COLORS.axisLabel,
+        interval: opts.xAxisLabelInterval ?? 'auto',
+        hideOverlap: true,
+      },
     },
     yAxis: {
       type: 'value',

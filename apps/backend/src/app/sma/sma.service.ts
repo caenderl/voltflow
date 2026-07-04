@@ -5,7 +5,7 @@ import type {
   HouseLoadPoint,
   SmaConfig,
   SmaDailySummary,
-  SmaHourlySummary,
+  SmaMinuteSummary,
   SmaReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
@@ -103,27 +103,28 @@ export class SmaService {
   }
 
   /**
-   * Hourly PV yield (from the sma_1hour continuous aggregate). daily_yield_wh
-   * resets overnight while the inverter is asleep - not necessarily exactly at
-   * local midnight - so each hour's production is the delta to the
-   * chronologically previous hour (fetched via a 1-hour lookback so the first
-   * requested row also gets a real delta instead of the whole day's total).
-   * Deltas are computed per device and only across consecutive hourly buckets:
-   * after a data gap the accumulated multi-hour yield would otherwise be
-   * dumped into the single resume hour as a spike, so those rows are skipped.
-   * The overnight counter reset shows up as a negative delta, clamped to 0.
+   * Per-minute PV yield (from the sma_1min continuous aggregate). Same delta
+   * logic as the daily/hourly aggregates: daily_yield_wh resets overnight
+   * while the inverter is asleep - not necessarily exactly at local midnight
+   * - so each minute's production is the delta to the chronologically
+   * previous minute (fetched via a 1-minute lookback so the first requested
+   * row also gets a real delta instead of the whole day's total). Deltas are
+   * computed per device and only across consecutive minute buckets: after a
+   * data gap the accumulated multi-minute yield would otherwise be dumped
+   * into the single resume minute as a spike, so those rows are skipped. The
+   * overnight counter reset shows up as a negative delta, clamped to 0.
    */
-  async hourlyEnergy(from: Date, to: Date): Promise<SmaHourlySummary[]> {
+  async minuteEnergy(from: Date, to: Date): Promise<SmaMinuteSummary[]> {
     const { rows } = await this.db.query(
       `SELECT bucket, sum(GREATEST(delta_wh, 0)) AS delta_wh FROM (
          SELECT bucket,
                 daily_yield_wh - lag(daily_yield_wh) OVER w AS delta_wh,
                 bucket - lag(bucket) OVER w AS step
-           FROM sma_1hour
-          WHERE bucket >= $1::timestamptz - INTERVAL '1 hour' AND bucket < $2
+           FROM sma_1min
+          WHERE bucket >= $1::timestamptz - INTERVAL '1 minute' AND bucket < $2
          WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
        ) s
-       WHERE bucket >= $1 AND step = INTERVAL '1 hour'
+       WHERE bucket >= $1 AND step = INTERVAL '1 minute'
        GROUP BY bucket
        ORDER BY bucket`,
       [from, to],

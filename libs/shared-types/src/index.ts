@@ -260,11 +260,11 @@ export interface SmaDailySummary {
   yieldKwh: number;
 }
 
-/** Per-hour energy summary, returned by GET /api/sma/energy/hourly. */
-export interface SmaHourlySummary {
-  /** ISO timestamp of the hour bucket start. */
+/** Per-minute energy summary, returned by GET /api/sma/energy/minute. */
+export interface SmaMinuteSummary {
+  /** ISO timestamp of the minute bucket start. */
   time: string;
-  /** PV energy produced this hour in kWh. */
+  /** PV energy produced this minute in kWh. */
   yieldKwh: number;
 }
 

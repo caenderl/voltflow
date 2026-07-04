@@ -5,16 +5,19 @@ import { APP_VERSION } from '../../version';
 import {
   CHART_COLORS,
   ONE_DAY,
+  TWO_HOURS,
   type EnergyBarSeries,
   energyBarChart,
   energySlots,
   isoToSlotKey,
   liveSparkChart,
+  minuteSlots,
   netWatts,
   round2,
   signedPowerChart,
   slotKey,
   sumByHourKey,
+  sumByMinuteKey,
 } from '../core/chart-utils';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../core/date-utils';
 import {
@@ -158,7 +161,7 @@ export class Dashboard implements OnInit {
       ),
       {
         axisFormat: (v: number) => dayLabel(view, v),
-        minInterval: view === 'week' ? ONE_DAY : undefined,
+        tickIntervalMs: view === 'week' ? ONE_DAY : view === 'day' ? TWO_HOURS : undefined,
         min: s?.from,
         max: s?.to,
       },
@@ -210,18 +213,19 @@ export class Dashboard implements OnInit {
     );
   });
 
-  /** PV production chart: hourly line (day) or daily bar (month). Week shows
-   *  it merged into energyChart instead, so this is null there. */
+  /** PV production chart: minute-resolution line (day, matching the Leistung
+   *  chart's granularity) or daily bar (month). Week shows it merged into
+   *  energyChart instead, so this is null there. */
   readonly pvChart = computed<EChartsCoreOption | null>(() => {
     const view = this.view();
     if (view === 'day') {
-      const data = this.data.smaHourlyEnergy();
+      const data = this.data.smaMinuteEnergy();
       if (data.length === 0) return null;
-      const slots = energySlots('day', this.refDate());
-      const byKey = sumByHourKey(data, (d) => d.yieldKwh);
-      // Draw the line only across hours that have data: null outside
-      // [first, last] so hours without readings yet (e.g. the rest of today)
-      // render as a gap instead of a fake plunge to 0.
+      const slots = minuteSlots(this.refDate());
+      const byKey = sumByMinuteKey(data, (d) => d.yieldKwh);
+      // Draw the line only across minutes that have data: null outside
+      // [first, last] so minutes without readings yet (e.g. the rest of
+      // today) render as a gap instead of a fake plunge to 0.
       const first = slots.findIndex((s) => byKey.has(s.key));
       const last = slots.length - 1 - [...slots].reverse().findIndex((s) => byKey.has(s.key));
       return energyBarChart(
@@ -236,6 +240,10 @@ export class Dashboard implements OnInit {
             ),
           },
         ],
+        // 1440 one-minute slots - force a label every 2h (120 slots) so it
+        // lines up with the Leistung chart instead of 'auto' picking an
+        // uneven spacing at this density.
+        { xAxisLabelInterval: 120 - 1 },
       );
     }
     if (view === 'month') {

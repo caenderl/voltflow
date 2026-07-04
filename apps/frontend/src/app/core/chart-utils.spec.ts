@@ -4,10 +4,12 @@ import {
   energySlots,
   isoToSlotKey,
   liveSparkChart,
+  minuteSlots,
   netWatts,
   round2,
   signedPowerChart,
   slotKey,
+  sumByMinuteKey,
 } from './chart-utils';
 
 describe('isoToSlotKey', () => {
@@ -72,6 +74,29 @@ describe('energySlots', () => {
     expect(energySlots('month', new Date(2026, 4, 20))).toHaveLength(31);
     expect(energySlots('month', new Date(2028, 1, 10))).toHaveLength(29);
     expect(energySlots('month', new Date(2026, 1, 10))).toHaveLength(28);
+  });
+});
+
+describe('minuteSlots', () => {
+  it('1440 minute-of-day slots, keyed 0..1439, HH:MM labels', () => {
+    const slots = minuteSlots(new Date(2026, 4, 20));
+    expect(slots).toHaveLength(24 * 60);
+    expect(slots[0].key).toBe('0');
+    expect(slots[1439].key).toBe('1439');
+    expect(slots[90].label).toBe('01:30');
+  });
+});
+
+describe('sumByMinuteKey', () => {
+  it('keys rows by local minute-of-day, summing on collision', () => {
+    const rows = [
+      { time: new Date(2026, 4, 20, 14, 5).toISOString(), yieldKwh: 0.02 },
+      { time: new Date(2026, 4, 20, 14, 5).toISOString(), yieldKwh: 0.01 },
+      { time: new Date(2026, 4, 20, 14, 6).toISOString(), yieldKwh: 0.03 },
+    ];
+    const byKey = sumByMinuteKey(rows, (r) => r.yieldKwh);
+    expect(byKey.get(String(14 * 60 + 5))).toBeCloseTo(0.03);
+    expect(byKey.get(String(14 * 60 + 6))).toBeCloseTo(0.03);
   });
 });
 
