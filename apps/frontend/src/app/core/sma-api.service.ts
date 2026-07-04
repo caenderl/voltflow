@@ -5,7 +5,7 @@ import type {
   EnergyBalance,
   SmaConfig,
   SmaDailySummary,
-  SmaHourlySummary,
+  SmaMinuteSummary,
   SmaReading,
 } from '@org/shared-types';
 
@@ -43,11 +43,11 @@ export class SmaApiService {
     return this.http.get<SmaDailySummary[]>(`${this.base}/energy/daily`, { params });
   }
 
-  /** Hourly PV yield over [from, to). */
-  hourlyEnergy(from: Date, to: Date): Observable<SmaHourlySummary[]> {
+  /** Per-minute PV yield over [from, to). */
+  minuteEnergy(from: Date, to: Date): Observable<SmaMinuteSummary[]> {
     const params = new HttpParams()
       .set('from', from.toISOString())
       .set('to', to.toISOString());
-    return this.http.get<SmaHourlySummary[]>(`${this.base}/energy/hourly`, { params });
+    return this.http.get<SmaMinuteSummary[]>(`${this.base}/energy/minute`, { params });
   }
 }
