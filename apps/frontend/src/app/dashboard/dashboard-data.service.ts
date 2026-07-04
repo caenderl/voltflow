@@ -126,6 +126,13 @@ export class DashboardDataService {
     this.series.set(null);
     this.energy.set(null);
     this.periodBalance.set(null);
+    // Clear all period-energy signals up front so a chart never renders the
+    // previous period's data mapped onto the new slots while the refetch is in
+    // flight (hourly keys are date-independent, so stale data would collide).
+    this.wallboxDailyEnergy.set([]);
+    this.wallboxHourlyEnergy.set([]);
+    this.smaDailyEnergy.set([]);
+    this.smaHourlyEnergy.set([]);
     this.smaApi.balance(from, to).subscribe({
       next: (b) => this.periodBalance.set(b),
       error: () => this.periodBalance.set(null),
@@ -151,8 +158,6 @@ export class DashboardDataService {
         next: (d) => this.smaDailyEnergy.set(d),
         error: () => this.smaDailyEnergy.set([]),
       });
-      this.wallboxHourlyEnergy.set([]);
-      this.smaHourlyEnergy.set([]);
     } else {
       this.wallboxApi.hourlyEnergy(from, to).subscribe({
         next: (d) => this.wallboxHourlyEnergy.set(d),
@@ -162,8 +167,6 @@ export class DashboardDataService {
         next: (d) => this.smaHourlyEnergy.set(d),
         error: () => this.smaHourlyEnergy.set([]),
       });
-      this.wallboxDailyEnergy.set([]);
-      this.smaDailyEnergy.set([]);
     }
   }
 
