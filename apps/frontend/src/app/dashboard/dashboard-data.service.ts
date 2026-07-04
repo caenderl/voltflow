@@ -8,10 +8,13 @@ import type {
   MeterReading,
   SeriesResponse,
   SmaConfig,
+  SmaDailySummary,
+  SmaHourlySummary,
   SmaReading,
   Tariff,
   WallboxConfig,
   WallboxDailySummary,
+  WallboxHourlySummary,
   WallboxReading,
 } from '@org/shared-types';
 import { appendWindowed } from '../core/chart-utils';
@@ -77,6 +80,9 @@ export class DashboardDataService {
   /** Balance for the selected history period. */
   readonly periodBalance = signal<EnergyBalance | null>(null);
   readonly wallboxDailyEnergy = signal<WallboxDailySummary[]>([]);
+  readonly wallboxHourlyEnergy = signal<WallboxHourlySummary[]>([]);
+  readonly smaDailyEnergy = signal<SmaDailySummary[]>([]);
+  readonly smaHourlyEnergy = signal<SmaHourlySummary[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
@@ -141,14 +147,32 @@ export class DashboardDataService {
         next: (d) => this.wallboxDailyEnergy.set(d),
         error: () => this.wallboxDailyEnergy.set([]),
       });
+      this.smaApi.dailyEnergy(from, to).subscribe({
+        next: (d) => this.smaDailyEnergy.set(d),
+        error: () => this.smaDailyEnergy.set([]),
+      });
+      this.wallboxHourlyEnergy.set([]);
+      this.smaHourlyEnergy.set([]);
     } else {
+      this.wallboxApi.hourlyEnergy(from, to).subscribe({
+        next: (d) => this.wallboxHourlyEnergy.set(d),
+        error: () => this.wallboxHourlyEnergy.set([]),
+      });
+      this.smaApi.hourlyEnergy(from, to).subscribe({
+        next: (d) => this.smaHourlyEnergy.set(d),
+        error: () => this.smaHourlyEnergy.set([]),
+      });
       this.wallboxDailyEnergy.set([]);
+      this.smaDailyEnergy.set([]);
     }
   }
 
   /** Reset the history-period state (when switching to the live view). */
   clearPeriod(): void {
     this.wallboxDailyEnergy.set([]);
+    this.wallboxHourlyEnergy.set([]);
+    this.smaDailyEnergy.set([]);
+    this.smaHourlyEnergy.set([]);
     this.periodBalance.set(null);
   }
 

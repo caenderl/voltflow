@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import type {
   WallboxConfig,
   WallboxDailySummary,
+  WallboxHourlySummary,
   WallboxReading,
 } from '@org/shared-types';
 
@@ -30,5 +31,12 @@ export class WallboxApiService {
       .set('from', from.toISOString())
       .set('to', to.toISOString());
     return this.http.get<WallboxDailySummary[]>(`${this.base}/energy/daily`, { params });
+  }
+
+  hourlyEnergy(from: Date, to: Date): Observable<WallboxHourlySummary[]> {
+    const params = new HttpParams()
+      .set('from', from.toISOString())
+      .set('to', to.toISOString());
+    return this.http.get<WallboxHourlySummary[]>(`${this.base}/energy/hourly`, { params });
   }
 }

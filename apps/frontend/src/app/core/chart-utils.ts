@@ -11,6 +11,8 @@ export const CHART_COLORS = {
   export: '#7fe0a3',
   /** wallbox charging (blue) */
   charge: '#aac7ff',
+  /** PV production (amber) */
+  production: '#ffd54f',
   axisLabel: '#948f9c',
   gridLine: '#2a2a30',
   legendText: '#c9c5d0',
@@ -211,16 +213,21 @@ export function signedPowerChart(
   };
 }
 
-interface EnergyBarSeries {
+export interface EnergyBarSeries {
   name: string;
   color: string;
   /** one value per slot, already signed (negative bars hang below 0) */
   data: number[];
+  /** 'bar' (default) or 'line' - lines are drawn on top of the bars. */
+  type?: 'bar' | 'line';
+  /** Set to false to keep this bar out of the shared stack (opts.stacked)
+   *  even though the others stack together - renders as its own column. */
+  stack?: string | false;
 }
 
 /**
- * Stacked-capable kWh bar chart over category slots (hours of a day, days of
- * a week/month). Shared by the energy chart and the wallbox daily chart -
+ * Stacked-capable kWh chart (bars and/or lines) over category slots (hours of
+ * a day, days of a week/month). Shared by the energy, PV and wallbox charts -
  * only the series differ.
  */
 export function energyBarChart(
@@ -255,12 +262,17 @@ export function energyBarChart(
       },
       splitLine: { lineStyle: { color: CHART_COLORS.gridLine } },
     },
-    series: series.map((s) => ({
-      name: s.name,
-      type: 'bar',
-      ...(opts.stacked ? { stack: 'energy' } : {}),
-      itemStyle: { color: s.color },
-      data: s.data,
-    })),
+    series: series.map((s) => {
+      const type = s.type ?? 'bar';
+      const stack = s.stack === false ? undefined : (s.stack ?? (opts.stacked && type === 'bar' ? 'energy' : undefined));
+      return {
+        name: s.name,
+        type,
+        ...(stack ? { stack } : {}),
+        ...(type === 'line' ? { smooth: true, showSymbol: false, lineStyle: { width: 2 } } : {}),
+        itemStyle: { color: s.color },
+        data: s.data,
+      };
+    }),
   };
 }

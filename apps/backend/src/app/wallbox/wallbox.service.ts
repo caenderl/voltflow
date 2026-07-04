@@ -3,6 +3,7 @@ import type {
   DataRange,
   WallboxConfig,
   WallboxDailySummary,
+  WallboxHourlySummary,
   WallboxReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
@@ -94,6 +95,28 @@ export class WallboxService {
     );
     return rows.map((r) => ({
       day: String(r['day']),
+      chargedKwh: Number(r['charged_kwh']),
+    }));
+  }
+
+  /**
+   * Hourly charged energy in [from, to) from the wallbox_1hour continuous
+   * aggregate. Only hours with actual charging activity are returned.
+   */
+  async hourlyEnergy(from: Date, to: Date): Promise<WallboxHourlySummary[]> {
+    const { rows } = await this.db.query(
+      `SELECT
+         bucket,
+         ROUND(charged_kwh::numeric, 2) AS charged_kwh
+       FROM wallbox_1hour
+       WHERE bucket >= $1
+         AND bucket < $2
+         AND COALESCE(charged_kwh, 0) > 0
+       ORDER BY bucket`,
+      [from, to],
+    );
+    return rows.map((r) => ({
+      time: new Date(r['bucket'] as string).toISOString(),
       chargedKwh: Number(r['charged_kwh']),
     }));
   }
