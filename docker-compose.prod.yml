@@ -44,6 +44,10 @@ services:
     volumes:
       - voltflow-db-data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # Loopback-only publish so the host-networked collector-sma can reach the DB
+    # at 127.0.0.1:5432. Not exposed to the LAN. Other containers still use `db`.
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-voltflow} -d ${POSTGRES_DB:-voltflow}"]
       interval: 5s
@@ -65,6 +69,14 @@ services:
       context: ./apps/collector
       dockerfile: Dockerfile.sma
     mem_limit: 128m
+    # SMA Speedwire is UDP/multicast and does NOT survive the Docker bridge NAT
+    # (measured ~81% dropped reads vs 0% natively / for the TCP wallbox on the
+    # same host). Host networking gives the collector direct L2 access to the
+    # inverter. Trade-off: it can no longer resolve the `db` service name, so it
+    # reaches the DB over the loopback port published by the db service below.
+    network_mode: host
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-voltflow}:${POSTGRES_PASSWORD:-voltflow}@127.0.0.1:5432/${POSTGRES_DB:-voltflow}
 
   collector-wallbox:
     <<: *collector
