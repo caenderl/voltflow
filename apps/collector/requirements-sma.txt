@@ -1,0 +1,4 @@
+# SMA PV inverter collector (STP 6000TL-20) over Speedwire.
+-r requirements-common.txt
+aiohttp>=3.9
+pysma-plus<2

@@ -8,9 +8,11 @@
 #   scripts/deploy.sh [TARGET ...] [options]
 #
 # TARGET:
-#   all            collector + backend + frontend   (default if omitted)
-#   app            backend + frontend  (UI/API update, leaves collector running)
-#   backend | frontend | collector   pick individual services
+#   all              3 collectors + backend + frontend   (default if omitted)
+#   app              backend + frontend  (UI/API update, leaves collectors running)
+#   collector        all 3 collector containers (meter + sma + wallbox)
+#   collector-meter | collector-sma | collector-wallbox   pick one collector
+#   backend | frontend                                    pick one service
 #
 # Options:
 #   --env          also push the local .env to the server (default: keep server's)
@@ -20,7 +22,10 @@
 #
 # Safety: never runs `down` and never `-v`. The `db` service is never built or
 # transferred; its container is only (re)started if needed and its named volume
-# `voltflow-db-data` is never touched -> no data loss.
+# `voltflow-db-data` is never touched -> no data loss. A full deploy adds
+# `--remove-orphans` so the pre-split `collector` monolith container is cleaned
+# up (otherwise it keeps a second Anker MQTT session alive alongside
+# collector-meter); partial deploys never touch other containers.
 #
 # Config via env vars:
 #   SERVER        ssh alias/host         (default: voltflow)
@@ -34,23 +39,29 @@ REMOTE_DIR="${REMOTE_DIR:-voltflow}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 PLATFORM="linux/amd64"
 
-PUSH_ENV=0; PRUNE=0; DRY=0
+COLLECTORS=(collector-meter collector-sma collector-wallbox)
+PUSH_ENV=0; PRUNE=0; DRY=0; DEPLOY_ALL=0
 services=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    all)                          services=(collector backend frontend) ;;
+    all)                          services=("${COLLECTORS[@]}" backend frontend); DEPLOY_ALL=1 ;;
     app)                          services+=(backend frontend) ;;
-    backend|frontend|collector)   services+=("$1") ;;
+    collector)                    services+=("${COLLECTORS[@]}") ;;
+    collector-meter|collector-sma|collector-wallbox|backend|frontend)
+                                  services+=("$1") ;;
     --env)                        PUSH_ENV=1 ;;
     --prune)                      PRUNE=1 ;;
     --dry-run)                    DRY=1 ;;
-    -h|--help)                    sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    # Print the header comment block (robust to its length: stop at first non-#).
+    -h|--help)                    awk 'NR>1{ if(/^#/){sub(/^# ?/,"");print} else exit }' "$0"; exit 0 ;;
     *) echo "Unknown argument: $1 (try --help)" >&2; exit 2 ;;
   esac
   shift
 done
-[ ${#services[@]} -eq 0 ] && services=(collector backend frontend)
+if [ ${#services[@]} -eq 0 ]; then
+  services=("${COLLECTORS[@]}" backend frontend); DEPLOY_ALL=1
+fi
 
 # de-duplicate while preserving order (e.g. `app frontend`)
 mapfile -t services < <(printf '%s\n' "${services[@]}" | awk '!seen[$0]++')
@@ -100,8 +111,10 @@ fi
 
 # 4) Start / update on the server — never `down`, never `-v`
 step "Start/update on server"
-if [ ${#services[@]} -eq 3 ]; then
-  run ssh "$SERVER" "cd ~/$REMOTE_DIR && docker compose -f $COMPOSE_FILE up -d"
+if [ "$DEPLOY_ALL" -eq 1 ]; then
+  # Full deploy: start everything and drop orphans (e.g. the pre-split monolith
+  # `collector` container) so it can't keep a second Anker session alive.
+  run ssh "$SERVER" "cd ~/$REMOTE_DIR && docker compose -f $COMPOSE_FILE up -d --remove-orphans"
 else
   run ssh "$SERVER" "cd ~/$REMOTE_DIR && docker compose -f $COMPOSE_FILE up -d ${services[*]}"
 fi

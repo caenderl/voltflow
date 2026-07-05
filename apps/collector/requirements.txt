@@ -1,12 +1,6 @@
-# Collector-Abhaengigkeiten.
-asyncpg>=0.30
-python-dotenv>=1.0
-# Wallbox (Anker SOLIX V1 / A5191) ueber Modbus TCP
-pymodbus>=3.11,<4
-# SMA PV-Wechselrichter (STP 6000TL-20) ueber Speedwire
-pysma-plus<2
-# von anker-solix-api benoetigt (wird nicht zwingend mitinstalliert)
-aiohttp>=3.9
-aiofiles>=23
-paho-mqtt>=2.0
-cryptography>=42
+# Aggregate for the dev venv: COLLECTOR=all runs all three collectors in one
+# process (npm run collector / dev:all), so the venv needs every dependency.
+# The prod images each install only their own requirements-<collector>.txt.
+-r requirements-meter.txt
+-r requirements-sma.txt
+-r requirements-wallbox.txt

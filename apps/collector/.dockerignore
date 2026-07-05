@@ -1,0 +1,12 @@
+# Keep the collector images lean. VERSION is needed (read at runtime) so it is
+# NOT ignored; the .py modules are tiny and stay in every image (unused stream
+# modules are never imported thanks to the lazy imports in collector.py).
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+# Reference docs (a ~270 KB Modbus PDF) — not needed at runtime.
+docs/
+# NX project config — not used inside the container.
+project.json

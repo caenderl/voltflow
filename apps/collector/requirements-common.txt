@@ -1,0 +1,3 @@
+# Shared collector dependencies (all three images + the dev venv).
+asyncpg>=0.30
+python-dotenv>=1.0

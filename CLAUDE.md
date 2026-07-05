@@ -32,8 +32,10 @@ npm test            # vitest (unit tests for pure TS functions, *.spec.ts)
 
 ## Hard constraints
 
-- **Only ONE collector per Anker account** (a single MQTT session). When developing
-  locally, stop the prod collector or the sessions collide.
+- **Only ONE _meter_ collector per Anker account** (a single MQTT session) — the
+  `collector-meter` container / `COLLECTOR=meter`. Locally don't run `COLLECTOR=all`
+  or `meter` while the prod meter collector is up, or the sessions collide
+  (`COLLECTOR=sma`/`wallbox` are safe). sma/wallbox have no such limit.
 - **Never `docker compose down -v`** — it deletes the `voltflow-db-data` volume
   with all measurement data.
 - **Schema changes belong in `apps/backend/src/app/database/schema.ts`**
@@ -48,8 +50,22 @@ npm test            # vitest (unit tests for pure TS functions, *.spec.ts)
 
 Each device is its own `apps/collector/<device>_stream.py` exporting an
 **async generator** `stream_<device>(...)` that yields readings. `collector.py`
-wraps it in a `_run_<device>(pool, cfg)` task with reconnect logic and gathers all
-tasks in `run()` via `asyncio.gather`.
+wraps it in a `_run_<device>(pool, cfg)` task with reconnect logic.
+
+`collector.py` runs one or all collectors, chosen by the **`COLLECTOR`** env
+(`meter | sma | wallbox | all`). In prod each collector is its own slim image /
+container (`Dockerfile.<device>`, `requirements-<device>.txt`, `COLLECTOR` baked
+in) shipping only its own deps; `all` — the default, used by `npm run collector`
+— runs all three in one process. Stream modules are therefore imported **lazily
+inside** each `_run_*`, never at module top (the sma/wallbox images don't have
+anker-solix-api/pymodbus). Config-gated collectors (sma/wallbox) run under
+`_supervise(...)`, which polls `<device>_config` and starts/stops the task as the
+device is enabled/disabled in the UI — no restart needed.
+
+Adding a device: new `<device>_stream.py` + `_run_<device>` + a `COLLECTOR`
+branch in `run()`; then `Dockerfile.<device>`, `requirements-<device>.txt`, a
+`collector-<device>` service in `docker-compose.prod.yml`, and a deploy target in
+`scripts/deploy.sh`.
 
 → **Template: `apps/collector/wallbox_stream.py`** (config-gated: only polls when
 the device is enabled in the UI settings).

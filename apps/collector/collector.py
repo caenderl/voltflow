@@ -1,11 +1,17 @@
 """
-collector.py - Reads the smart meter values via MQTT and writes them to the DB.
+collector.py - Streams device readings into the DB.
 
-Start (locally, in the root venv):
+Which collectors run is selected by the COLLECTOR env var:
+    meter | sma | wallbox   -> only that collector  (one per prod container)
+    all (default)           -> all three in one process (dev: npm run collector)
+
+Start (locally, in the root venv, all collectors):
     python apps/collector/collector.py
 
 Configuration via .env / env:
-    ANKERUSER, ANKERPASSWORD, ANKERCOUNTRY
+    COLLECTOR (default "all")
+    ANKERUSER, ANKERPASSWORD, ANKERCOUNTRY   (meter)
+    SMA_PASSWORD                             (sma)
     DATABASE_URL=postgresql://voltflow:voltflow@localhost:5432/voltflow
 """
 
@@ -30,9 +36,9 @@ from db import (
     read_wallbox_config,
     register_device,
 )
-from meter_stream import stream_readings
-from sma_stream import stream_sma
-from wallbox_stream import stream_wallbox
+# Stream modules are imported lazily inside each _run_* function so a single
+# collector image only needs its own heavy deps (e.g. the sma/wallbox images
+# ship without anker-solix-api / pymodbus).
 
 # Local timezone for the daily_yield day boundary (matches the DB day buckets).
 _TZ = ZoneInfo("Europe/Berlin")
@@ -41,13 +47,19 @@ _SMA_POWER_FIELDS = ("grid_power", "pv_power_a", "pv_power_b", "power_l1", "powe
 
 load_dotenv()
 
+# Which collector(s) this process runs: meter | sma | wallbox | all (default).
+# Prod runs one per container (COLLECTOR set in each image); dev runs "all".
+COLLECTOR = os.getenv("COLLECTOR", "all").lower()
+
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 LOG = logging.getLogger("voltflow.collector")
 LOG.setLevel(logging.INFO)
-LOG.info("Voltflow collector %s starting", __version__)
+LOG.info("Voltflow collector %s starting (COLLECTOR=%s)", __version__, COLLECTOR)
 
-# Seconds before reconnecting if the MQTT stream breaks
+# Seconds before reconnecting if a stream breaks
 RECONNECT_DELAY = 10
+# Seconds between config polls for gated collectors (sma/wallbox)
+CONFIG_POLL_S = 30
 
 
 async def _create_pool_with_retry():
@@ -63,6 +75,8 @@ async def _create_pool_with_retry():
 
 async def _run_meter(pool) -> None:
     """Continuously stream smart meter readings into the DB (with reconnect)."""
+    from meter_stream import stream_readings
+
     device_registered = False
     count = 0
     while True:
@@ -88,6 +102,8 @@ async def _run_meter(pool) -> None:
 
 async def _run_wallbox(pool, cfg: dict) -> None:
     """Continuously poll the wallbox via Modbus into the DB (with reconnect)."""
+    from wallbox_stream import stream_wallbox
+
     host = cfg["host"]
     port = cfg.get("port") or 502
     unit_id = cfg.get("unit_id") or 1
@@ -119,6 +135,8 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
     (0 W) with the daily_yield carried over within the same local day, instead
     of crashing or spamming the log. Logs only on wake<->sleep transitions.
     """
+    from sma_stream import stream_sma
+
     host = cfg["host"]
     interval = cfg.get("poll_interval_s") or 60
 
@@ -198,31 +216,94 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
             await asyncio.sleep(interval)
 
 
+async def _supervise(pool, kind: str, read_config, run_factory) -> None:
+    """Run a config-gated collector (SMA/wallbox) whenever its device is enabled.
+
+    Polls <device>_config every CONFIG_POLL_S seconds: starts the collector task
+    once `enabled` + `host` are set, and cancels/restarts it when the config
+    changes or the device is disabled. No process restart is needed to pick up a
+    device that is enabled (or reconfigured) later in the UI.
+    """
+    task: asyncio.Task | None = None
+    active_key = None  # config the running task was started with
+
+    def key_of(cfg: dict):
+        # A change to any of these requires restarting the underlying stream.
+        return (cfg.get("host"), cfg.get("port"),
+                cfg.get("unit_id"), cfg.get("poll_interval_s"))
+
+    async def stop():
+        nonlocal task, active_key
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
+            task, active_key = None, None
+
+    waiting_logged = False
+    try:
+        while True:
+            try:
+                cfg = await read_config(pool)
+            except Exception as err:  # noqa: BLE001 - a config read must not kill the loop
+                LOG.warning("%s config read failed (%s: %s) - retrying",
+                            kind, type(err).__name__, err)
+                cfg = None
+            enabled = bool(cfg and cfg.get("enabled") and cfg.get("host"))
+
+            if enabled:
+                new_key = key_of(cfg)
+                if task is not None and (task.done() or new_key != active_key):
+                    await stop()
+                if task is None:
+                    LOG.info("%s enabled (%s) - starting collector", kind, cfg["host"])
+                    task = asyncio.create_task(run_factory(pool, cfg))
+                    active_key = new_key
+                    waiting_logged = False
+            else:
+                if task is not None:
+                    LOG.info("%s disabled - stopping collector", kind)
+                    await stop()
+                if not waiting_logged:
+                    LOG.info("%s not enabled - waiting; auto-starts when enabled in the UI", kind)
+                    waiting_logged = True
+
+            await asyncio.sleep(CONFIG_POLL_S)
+    finally:
+        await stop()
+
+
 async def run() -> None:
+    valid = {"all", "meter", "sma", "wallbox"}
+    if COLLECTOR not in valid:
+        LOG.error("Invalid COLLECTOR=%r (expected one of %s)", COLLECTOR, sorted(valid))
+        return
+
     pool = await _create_pool_with_retry()
     try:
-        tasks = [asyncio.create_task(_run_meter(pool))]
+        tasks: list[asyncio.Task] = []
 
-        cfg = await read_wallbox_config(pool)
-        if cfg and cfg.get("enabled") and cfg.get("host"):
-            LOG.info("Wallbox configured (%s:%s) - starting wallbox collector",
-                     cfg["host"], cfg.get("port") or 502)
-            tasks.append(asyncio.create_task(_run_wallbox(pool, cfg)))
-        else:
-            LOG.info("No wallbox configured - skipping wallbox collector "
-                     "(restart after enabling it in the settings)")
+        if COLLECTOR in ("all", "meter"):
+            tasks.append(asyncio.create_task(_run_meter(pool)))
 
-        sma_cfg = await read_sma_config(pool)
-        sma_password = os.getenv("SMA_PASSWORD")
-        if sma_cfg and sma_cfg.get("enabled") and sma_cfg.get("host"):
+        if COLLECTOR in ("all", "sma"):
+            sma_password = os.getenv("SMA_PASSWORD")
             if not sma_password:
-                LOG.warning("SMA configured but SMA_PASSWORD not set - skipping SMA collector")
+                LOG.warning("SMA_PASSWORD not set - SMA collector disabled")
             else:
-                LOG.info("SMA configured (%s) - starting SMA collector", sma_cfg["host"])
-                tasks.append(asyncio.create_task(_run_sma(pool, sma_cfg, sma_password)))
-        else:
-            LOG.info("No SMA inverter configured - skipping SMA collector "
-                     "(restart after enabling it in the settings)")
+                tasks.append(asyncio.create_task(
+                    _supervise(pool, "SMA", read_sma_config,
+                               lambda p, c: _run_sma(p, c, sma_password))))
+
+        if COLLECTOR in ("all", "wallbox"):
+            tasks.append(asyncio.create_task(
+                _supervise(pool, "Wallbox", read_wallbox_config, _run_wallbox)))
+
+        if not tasks:
+            LOG.error("COLLECTOR=%r started no collectors", COLLECTOR)
+            return
 
         await asyncio.gather(*tasks)
     finally:

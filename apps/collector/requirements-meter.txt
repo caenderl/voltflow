@@ -1,0 +1,8 @@
+# Anker smart meter collector (MQTT).
+# anker-solix-api itself is installed separately: git-pinned in Dockerfile.meter,
+# editable from anker-solix-api/ in the dev venv (see README).
+-r requirements-common.txt
+aiohttp>=3.9
+aiofiles>=23
+paho-mqtt>=2.0
+cryptography>=42

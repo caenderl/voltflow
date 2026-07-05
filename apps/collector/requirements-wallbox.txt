@@ -1,0 +1,3 @@
+# Anker SOLIX V1 / A5191 wallbox collector over Modbus TCP.
+-r requirements-common.txt
+pymodbus>=3.11,<4

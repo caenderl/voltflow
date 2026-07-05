@@ -103,9 +103,11 @@ auf den Server übertragen. Der Server braucht nur das Bundle (`docker-compose.p
 **Komfort-Wrapper** (kapselt alle Schritte unten, niemals `down`/`-v`, DB-Volume bleibt unangetastet):
 
 ```bash
-scripts/deploy.sh app      # nur Backend + Frontend (UI/API-Update, Collector läuft weiter)
-scripts/deploy.sh all      # ganzer Stack (collector + backend + frontend), ohne Datenverlust
-scripts/deploy.sh --help   # Optionen: einzelne Services, --env, --prune, --dry-run
+scripts/deploy.sh app         # nur Backend + Frontend (UI/API-Update, Collectors laufen weiter)
+scripts/deploy.sh all         # ganzer Stack (3 Collectors + Backend + Frontend), ohne Datenverlust
+scripts/deploy.sh collector   # alle drei Collector-Container
+scripts/deploy.sh collector-sma   # nur ein einzelner Collector (meter|sma|wallbox)
+scripts/deploy.sh --help      # Optionen: einzelne Services, --env, --prune, --dry-run
 ```
 
 Die einzelnen Schritte, die der Wrapper ausführt:
@@ -115,8 +117,8 @@ Die einzelnen Schritte, die der Wrapper ausführt:
 docker buildx bake -f docker-compose.prod.yml --set '*.platform=linux/amd64' --load
 
 # 2) Images auf den Server übertragen (kein Registry nötig)
-docker save voltflow-collector voltflow-backend voltflow-frontend \
-  | gzip | ssh <server> 'gunzip | docker load'
+docker save voltflow-collector-meter voltflow-collector-sma voltflow-collector-wallbox \
+  voltflow-backend voltflow-frontend | gzip | ssh <server> 'gunzip | docker load'
 
 # 3) Bundle auf den Server (einmalig bzw. bei Änderung)
 ssh <server> 'mkdir -p ~/voltflow/db ~/voltflow/certs'
@@ -130,14 +132,23 @@ ssh <server> 'cd ~/voltflow && docker compose -f docker-compose.prod.yml up -d'
 # -> Dashboard: https://<server> (Port 8080 redirect auf HTTPS)
 ```
 
-`docker-compose.prod.yml` referenziert die drei Images mit `image:`-Tags + `pull_policy: never`,
+`docker-compose.prod.yml` referenziert die App-Images mit `image:`-Tags + `pull_policy: never`,
 sodass der Server sie aus dem `docker load` nutzt (kein Build, kein Registry-Pull). `db` zieht
 `timescale/timescaledb:2.28.1-pg16` direkt (multi-arch). Alle Services laufen mit
 `restart: unless-stopped` (überleben Server-Reboot).
 
-Services: `db` (TimescaleDB), `collector`, `backend`, `frontend` (nginx, terminiert TLS auf Port
-443/8443 und reverse-proxyt `/api` + `/socket.io` ans Backend; Port 8080 redirected auf HTTPS).
+Services: `db` (TimescaleDB), die drei Collector-Container `collector-meter` / `collector-sma` /
+`collector-wallbox`, `backend`, `frontend` (nginx, terminiert TLS auf Port 443/8443 und
+reverse-proxyt `/api` + `/socket.io` ans Backend; Port 8080 redirected auf HTTPS).
 DB-Daten liegen im Volume `voltflow-db-data`.
+
+**Collector-Aufteilung:** Jedes Gerät läuft in einem eigenen, schlanken Image — `collector-meter`
+(Anker-MQTT), `collector-sma` (Speedwire) und `collector-wallbox` (Modbus) — mit je nur den eigenen
+Abhängigkeiten (nur `meter` braucht `git` + `anker-solix-api`). Welchen Collector ein Container
+startet, steuert die im Image gesetzte `COLLECTOR`-Env; lokal ohne `COLLECTOR` läuft weiterhin alles
+in einem Prozess (`npm run collector`). Nur `collector-meter` unterliegt der Anker-Single-Session-Regel.
+Beim ersten `all`-Deploy nach der Aufteilung entfernt `scripts/deploy.sh` den alten Monolith-Container
+`collector` automatisch (`--remove-orphans`), damit keine zweite Anker-Session entsteht.
 
 **HTTPS-Zertifikat (mkcert, lokales Netz):** `certs/voltflow.crt` + `certs/voltflow.key` liegen
 lokal (gitignored) und werden von `scripts/deploy.sh` mit ins Bundle nach `~/voltflow/certs/`
