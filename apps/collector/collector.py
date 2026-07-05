@@ -62,6 +62,35 @@ RECONNECT_DELAY = 10
 CONFIG_POLL_S = 30
 
 
+def _apply_daily_carry(carry: dict, snap: dict, today) -> None:
+    """Fill daily_yield_wh / total_yield_kwh on a snapshot from carry state.
+
+    daily_yield_wh restarts at 0 each local day. The inverter keeps reporting the
+    PREVIOUS day's daily_yield through the night until its own reset at first
+    production (NOT at local midnight), so a real read early in a new day would
+    otherwise carry yesterday's kWh into today. Guard: today's daily_yield stays
+    0 until the inverter has actually produced today (grid_power > 0); only then
+    are reported values trusted. total_yield_kwh is a monotonic lifetime counter,
+    carried verbatim when a read is missing it.
+    """
+    if carry["date"] != today:
+        carry["date"], carry["daily_wh"], carry["produced"] = today, 0.0, False
+    if (snap.get("grid_power") or 0) > 0:
+        carry["produced"] = True
+
+    reported = snap.get("daily_yield_wh")
+    if reported is not None and carry["produced"]:
+        carry["daily_wh"] = float(reported)
+    # Before the first production of the day (stale night reads) or on an asleep
+    # read, keep the carried value: 0 early in a new day, today's total later.
+    snap["daily_yield_wh"] = carry["daily_wh"]
+
+    if snap.get("total_yield_kwh") is not None:
+        carry["total_kwh"] = float(snap["total_yield_kwh"])
+    elif carry["total_kwh"] is not None:
+        snap["total_yield_kwh"] = carry["total_kwh"]
+
+
 async def _create_pool_with_retry():
     """Build the pool; retry if the DB is not (yet) reachable."""
     while True:
@@ -142,7 +171,7 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
 
     # Carry state (seeded from the DB so a night restart keeps today's yield).
     carry = {"date": None, "daily_wh": None, "total_kwh": None,
-             "serial": None, "model": None}
+             "produced": False, "serial": None, "model": None}
     try:
         seed = await last_sma_reading(pool)
     except Exception as err:  # noqa: BLE001 - seed must never crash the collector
@@ -157,21 +186,12 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
         if seed.get("time") is not None and seed.get("daily_yield_wh") is not None:
             carry["date"] = seed["time"].astimezone(_TZ).date()
             carry["daily_wh"] = float(seed["daily_yield_wh"])
+            # A non-zero yield for today means the inverter already produced
+            # today, so later reads are trusted straight away after a restart.
+            carry["produced"] = carry["daily_wh"] > 0
 
     registered = False
     awake = None  # None = unknown; for wake/sleep transition logging
-
-    def apply_carry(snap: dict) -> None:
-        today = datetime.now(_TZ).date()
-        if snap.get("daily_yield_wh") is not None:
-            carry["date"], carry["daily_wh"] = today, float(snap["daily_yield_wh"])
-        else:
-            # Carry only within the same local day; a new day starts at 0.
-            snap["daily_yield_wh"] = carry["daily_wh"] if carry["date"] == today else 0.0
-        if snap.get("total_yield_kwh") is not None:
-            carry["total_kwh"] = float(snap["total_yield_kwh"])
-        elif carry["total_kwh"] is not None:
-            snap["total_yield_kwh"] = carry["total_kwh"]
 
     def log_transition(snap: dict) -> None:
         nonlocal awake
@@ -190,7 +210,7 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
             async for snap in stream_sma(host, password, interval=interval):
                 carry["serial"] = snap.get("device_sn") or carry["serial"]
                 carry["model"] = snap.get("device_pn") or carry["model"]
-                apply_carry(snap)
+                _apply_daily_carry(carry, snap, datetime.now(_TZ).date())
                 if not registered:
                     await register_device(pool, snap, "inverter")
                     registered = True
@@ -203,7 +223,7 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
             if carry["serial"]:
                 snap = {f: 0.0 for f in _SMA_POWER_FIELDS}
                 snap.update(asleep=True, device_sn=carry["serial"], device_pn=carry["model"])
-                apply_carry(snap)
+                _apply_daily_carry(carry, snap, datetime.now(_TZ).date())
                 try:
                     await insert_sma_reading(pool, snap)
                 except Exception:  # noqa: BLE001
