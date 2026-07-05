@@ -8,11 +8,13 @@ values every `interval` seconds. Used by the collector (collector.py).
 Lifecycle: one persistent aiohttp.ClientSession + device session (new_session /
 close_session) is held for the whole stream, NOT rebuilt per poll.
 
-Night behaviour: after sunset the inverter sleeps. A read timeout / empty read
-during an established session is the NORMAL night state -> an `asleep` snapshot
-(0 W) is yielded instead of raising, so the caller does not reconnect-spam.
-Only a failure to establish the session at all raises (caller reconnects).
-The daily_yield carry-over is handled by the caller (collector._run_sma).
+Night behaviour: after sunset the inverter sleeps and reads fail. A failed read
+is first retried a few times; only after several consecutive failed cycles is an
+`asleep` snapshot (0 W) yielded, so the caller neither reconnect-spams nor
+records a real daytime read glitch as 0 W. Isolated failures while producing are
+skipped (no row yielded) instead. Only a failure to establish the session at all
+raises (caller reconnects). The daily_yield carry-over is handled by the caller
+(collector._run_sma).
 """
 
 import asyncio
@@ -57,6 +59,17 @@ _POWER_FIELDS = (
 # which is a lossy read, not the inverter actually asleep.
 _PRODUCTION_FIELDS = ("grid_power", "pv_power_a", "pv_power_b")
 
+# A failed read is retried this many times (immediately) before it counts as a
+# failed cycle - most Speedwire read losses are transient and recover at once.
+READ_RETRIES = 2
+RETRY_DELAY = 2.0        # seconds between immediate retries
+
+# Only after this many consecutive failed cycles is the inverter declared asleep
+# (0 W written). Below the threshold a failed cycle yields nothing (no row), so a
+# daytime read glitch can neither zero out the live value nor drag the minute
+# averages down. At night, sustained failures cross the threshold as normal.
+ASLEEP_AFTER = 3
+
 
 def _num(value) -> float | None:
     if value is None or value == "":
@@ -75,32 +88,43 @@ def _asleep_snapshot() -> dict:
     return snap
 
 
-async def _read_snapshot(device, sensors) -> dict:
-    """One read cycle. Returns a values dict; asleep snapshot on timeout/empty."""
+async def _attempt_read(device, sensors) -> dict | None:
+    """One raw read attempt.
+
+    Returns None on a hard failure (timeout / OSError / empty read). Otherwise a
+    parsed values dict, which may still have all production fields None (a lossy
+    read). The awake/asleep decision is made across attempts and cycles by the
+    caller - a single attempt is never enough to declare the inverter asleep.
+    """
     try:
         ok = await device.read(sensors)
     except (asyncio.TimeoutError, OSError):
-        return _asleep_snapshot()
+        return None
     if not ok:
-        return _asleep_snapshot()
+        return None
 
     values: dict = {}
     for s in sensors:
         field = _FIELD_MAP.get(s.name)
         if field is not None:
             values[field] = _num(s.value)
+    return values
 
-    # No production reading at all -> treat as asleep.
-    if all(values.get(f) is None for f in _PRODUCTION_FIELDS):
-        snap = _asleep_snapshot()
-        # keep any energy counters we did get (e.g. total_yield)
-        for k in ("daily_yield_wh", "total_yield_kwh"):
-            if values.get(k) is not None:
-                snap[k] = values[k]
-        return snap
 
+def _has_production(values: dict | None) -> bool:
+    """True if the read carries at least one real production value.
+
+    A failed/lossy read (None, or all production fields None) is NOT production;
+    it must not be recorded as 0 W while the inverter may still be awake.
+    """
+    if values is None:
+        return False
+    return any(values.get(f) is not None for f in _PRODUCTION_FIELDS)
+
+
+def _finalize_awake(values: dict) -> dict:
+    """Mark a good read as an awake snapshot (status float -> int)."""
     values["asleep"] = False
-    # status comes through as float -> int for the SMALLINT/INT column
     if values.get("status") is not None:
         values["status"] = int(values["status"])
     return values
@@ -113,11 +137,13 @@ async def stream_sma(
 ) -> AsyncIterator[dict]:
     """Async generator yielding SMA snapshots every `interval` seconds.
 
-    Raises on failure to establish the session (caller reconnects). Read
-    timeouts during an established session yield an asleep snapshot instead.
+    Raises on failure to establish the session (caller reconnects). Failed reads
+    during an established session are retried, then skipped, and only yield an
+    asleep snapshot (0 W) after ASLEEP_AFTER consecutive failed cycles.
 
     Yields:
-        dict with device_sn, device_pn and the live measurement fields.
+        dict with device_sn, device_pn and the live measurement fields. A cycle
+        yields nothing when a transient read failure is skipped.
     """
     session = ClientSession()
     device = None
@@ -138,8 +164,41 @@ async def stream_sma(
         LOG.info("SMA connected: %s (%s) at %s", model, serial, host)
 
         sensors = await device.get_sensors()
+        consecutive_fail = 0
         while True:
-            snap = await _read_snapshot(device, sensors)
+            # Retry a failed read a few times before believing it: a single
+            # dropped Speedwire read while the inverter is producing must not be
+            # recorded as 0 W. Once already declared asleep (night), one attempt
+            # per cycle is enough - no point retrying into a dark inverter.
+            retries = READ_RETRIES if consecutive_fail < ASLEEP_AFTER else 0
+            values: dict | None = None
+            for attempt in range(1 + retries):
+                values = await _attempt_read(device, sensors)
+                if _has_production(values):
+                    break
+                if attempt < retries:
+                    await asyncio.sleep(RETRY_DELAY)
+
+            if _has_production(values):
+                consecutive_fail = 0
+                snap = _finalize_awake(values)  # type: ignore[arg-type]
+            else:
+                consecutive_fail += 1
+                if consecutive_fail < ASLEEP_AFTER:
+                    # Transient blip while (probably) awake: skip this cycle
+                    # rather than writing a false 0 W row.
+                    LOG.debug("SMA read blip %d/%d - skipping cycle",
+                              consecutive_fail, ASLEEP_AFTER)
+                    await asyncio.sleep(interval)
+                    continue
+                # Sustained failure -> genuine sleep/outage: yield 0 W, keeping
+                # any energy counter that did come through on the last attempt.
+                snap = _asleep_snapshot()
+                if values is not None:
+                    for k in ("daily_yield_wh", "total_yield_kwh"):
+                        if values.get(k) is not None:
+                            snap[k] = values[k]
+
             snap["device_sn"] = serial
             snap["device_pn"] = model
             yield snap
