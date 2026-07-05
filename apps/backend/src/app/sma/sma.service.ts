@@ -83,16 +83,28 @@ export class SmaService {
     return rows.map(rowToSmaReading);
   }
 
-  /** Daily PV yield per day (from the sma_1day continuous aggregate), summed
-   *  across devices (the cagg is grouped by device_sn - one row per day here). */
+  /**
+   * Daily PV yield per local day, as the delta of the monotonic lifetime
+   * counter total_yield_kwh (max - min per day, per device, then summed).
+   *
+   * NOT max(daily_yield_wh): the inverter keeps reporting the *previous* day's
+   * daily_yield through the night until its own reset at first production, so
+   * max() picked up yesterday's total - a day showing the prior day's value in
+   * the morning. total_yield_kwh never resets, so its per-day delta is robust
+   * (and matches daily_yield_wh exactly on a clean day).
+   */
   async dailyEnergy(from: Date, to: Date): Promise<SmaDailySummary[]> {
     const { rows } = await this.db.query(
-      `SELECT (bucket AT TIME ZONE $3)::date::text AS day,
-              ROUND((sum(daily_yield_wh) / 1000.0)::numeric, 2) AS yield_kwh
-         FROM sma_1day
-        WHERE bucket >= $1 AND bucket < $2
+      `SELECT day, ROUND(sum(dev_yield)::numeric, 2) AS yield_kwh
+         FROM (
+           SELECT (bucket AT TIME ZONE $3)::date::text AS day, device_sn,
+                  max(total_yield_kwh) - min(total_yield_kwh) AS dev_yield
+             FROM sma_1hour
+            WHERE bucket >= $1 AND bucket < $2
+            GROUP BY 1, 2
+         ) d
         GROUP BY day
-        HAVING COALESCE(sum(daily_yield_wh), 0) > 0
+        HAVING sum(dev_yield) > 0
         ORDER BY day`,
       [from, to, TIMEZONE],
     );
