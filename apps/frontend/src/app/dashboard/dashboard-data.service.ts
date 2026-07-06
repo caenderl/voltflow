@@ -14,7 +14,6 @@ import type {
   Tariff,
   WallboxConfig,
   WallboxDailySummary,
-  WallboxHourlySummary,
   WallboxReading,
 } from '@org/shared-types';
 import { appendWindowed } from '../core/chart-utils';
@@ -80,7 +79,7 @@ export class DashboardDataService {
   /** Balance for the selected history period. */
   readonly periodBalance = signal<EnergyBalance | null>(null);
   readonly wallboxDailyEnergy = signal<WallboxDailySummary[]>([]);
-  readonly wallboxHourlyEnergy = signal<WallboxHourlySummary[]>([]);
+  readonly wallboxHistory = signal<WallboxReading[]>([]);
   readonly smaDailyEnergy = signal<SmaDailySummary[]>([]);
   readonly smaMinuteEnergy = signal<SmaMinuteSummary[]>([]);
   readonly loading = signal(false);
@@ -140,7 +139,7 @@ export class DashboardDataService {
     // previous period's data mapped onto the new slots while the refetch is in
     // flight (hourly keys are date-independent, so stale data would collide).
     this.wallboxDailyEnergy.set([]);
-    this.wallboxHourlyEnergy.set([]);
+    this.wallboxHistory.set([]);
     this.smaDailyEnergy.set([]);
     this.smaMinuteEnergy.set([]);
     this.smaApi.balance(from, to).subscribe({
@@ -170,9 +169,9 @@ export class DashboardDataService {
         error: () => current() && this.smaDailyEnergy.set([]),
       });
     } else {
-      this.wallboxApi.hourlyEnergy(from, to).subscribe({
-        next: (d) => current() && this.wallboxHourlyEnergy.set(d),
-        error: () => current() && this.wallboxHourlyEnergy.set([]),
+      this.wallboxApi.history(from, to).subscribe({
+        next: (d) => current() && this.wallboxHistory.set(d),
+        error: () => current() && this.wallboxHistory.set([]),
       });
       this.smaApi.minuteEnergy(from, to).subscribe({
         next: (d) => current() && this.smaMinuteEnergy.set(d),
@@ -185,7 +184,7 @@ export class DashboardDataService {
   clearPeriod(): void {
     this.periodSeq++; // invalidate any in-flight period requests
     this.wallboxDailyEnergy.set([]);
-    this.wallboxHourlyEnergy.set([]);
+    this.wallboxHistory.set([]);
     this.smaDailyEnergy.set([]);
     this.smaMinuteEnergy.set([]);
     this.periodBalance.set(null);

@@ -89,48 +89,36 @@ export function slotKey(view: View, ms: number): string {
 }
 
 /**
- * Sum hourly API rows into day-view slot keys (local hour). Accumulates on
- * key collision: on the DST fall-back day two UTC buckets map to the same
- * local hour - a plain `new Map(...)` would silently drop one of them.
+ * 5-minute-of-day slots for the day-view lines (288 per day). Coarser than raw
+ * minutes so the per-minute counter quantization (PV yield is only ~10-70 Wh
+ * per minute, rounded to 10 Wh) and single-minute sampling gaps average out
+ * into a smooth curve instead of a saw-tooth.
  */
-export function sumByHourKey<T extends { time: string }>(
-  rows: T[],
-  value: (row: T) => number,
-): Map<string, number> {
-  const byKey = new Map<string, number>();
-  for (const r of rows) {
-    const k = slotKey('day', new Date(r.time).getTime());
-    byKey.set(k, (byKey.get(k) ?? 0) + value(r));
-  }
-  return byKey;
-}
-
-/** Minute-of-day slots for the day view's PV production line (1-minute
- *  resolution, matching the Leistung chart's '1min' meter resolution). */
-export function minuteSlots(ref: Date): Slot[] {
+export function fiveMinuteSlots(ref: Date): Slot[] {
   const slots: Slot[] = [];
   const base = startOfDay(ref);
-  for (let m = 0; m < 24 * 60; m++) {
+  for (let i = 0; i < (24 * 60) / 5; i++) {
     const d = new Date(base);
-    d.setMinutes(m);
-    slots.push({ key: String(m), label: dayLabel('day', d.getTime()) });
+    d.setMinutes(i * 5);
+    slots.push({ key: String(i), label: dayLabel('day', d.getTime()) });
   }
   return slots;
 }
 
 /**
- * Sum minute-resolution API rows into minuteSlots keys (local minute-of-day).
- * Accumulates on key collision, same reasoning as sumByHourKey: on the DST
- * fall-back day two UTC buckets can map to the same local minute.
+ * Sum sub-5-minute API rows (or raw readings) into fiveMinuteSlots keys (local
+ * 5-minute bucket of day). Accumulates on key collision: on the DST fall-back
+ * day two UTC buckets can map to the same local bucket - a plain `new Map(...)`
+ * would silently drop one of them.
  */
-export function sumByMinuteKey<T extends { time: string }>(
+export function sumByFiveMinKey<T extends { time: string }>(
   rows: T[],
   value: (row: T) => number,
 ): Map<string, number> {
   const byKey = new Map<string, number>();
   for (const r of rows) {
     const d = new Date(r.time);
-    const k = String(d.getHours() * 60 + d.getMinutes());
+    const k = String(Math.floor((d.getHours() * 60 + d.getMinutes()) / 5));
     byKey.set(k, (byKey.get(k) ?? 0) + value(r));
   }
   return byKey;

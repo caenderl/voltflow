@@ -9,15 +9,14 @@ import {
   type EnergyBarSeries,
   energyBarChart,
   energySlots,
+  fiveMinuteSlots,
   isoToSlotKey,
   liveSparkChart,
-  minuteSlots,
   netWatts,
   round2,
   signedPowerChart,
   slotKey,
-  sumByHourKey,
-  sumByMinuteKey,
+  sumByFiveMinKey,
 } from '../core/chart-utils';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../core/date-utils';
 import {
@@ -221,10 +220,13 @@ export class Dashboard implements OnInit {
     if (view === 'day') {
       const data = this.data.smaMinuteEnergy();
       if (data.length === 0) return null;
-      const slots = minuteSlots(this.refDate());
-      const byKey = sumByMinuteKey(data, (d) => d.yieldKwh);
-      // Draw the line only across minutes that have data: null outside
-      // [first, last] so minutes without readings yet (e.g. the rest of
+      const slots = fiveMinuteSlots(this.refDate());
+      // Sum the per-minute yield into 5-minute buckets: at this coarser
+      // resolution the 10-Wh rounding and the occasional dropped minute
+      // average out, so the line is smooth instead of a saw-tooth.
+      const byKey = sumByFiveMinKey(data, (d) => d.yieldKwh);
+      // Draw the line only across buckets that have data: null outside
+      // [first, last] so buckets without readings yet (e.g. the rest of
       // today) render as a gap instead of a fake plunge to 0.
       const first = slots.findIndex((s) => byKey.has(s.key));
       const last = slots.length - 1 - [...slots].reverse().findIndex((s) => byKey.has(s.key));
@@ -240,10 +242,10 @@ export class Dashboard implements OnInit {
             ),
           },
         ],
-        // 1440 one-minute slots - force a label every 2h (120 slots) so it
+        // 288 five-minute slots - force a label every 2h (24 slots) so it
         // lines up with the Leistung chart instead of 'auto' picking an
         // uneven spacing at this density.
-        { xAxisLabelInterval: 120 - 1 },
+        { xAxisLabelInterval: 24 - 1 },
       );
     }
     if (view === 'month') {
@@ -265,7 +267,7 @@ export class Dashboard implements OnInit {
     return null;
   });
 
-  /** Wallbox charged-energy chart: hourly bar (day) or daily bar (week/month).
+  /** Wallbox charged-energy chart: 5-min line (day) or daily bar (week/month).
    *  Rendered whenever the wallbox is enabled - a wallbox that is offline (no
    *  readings for the period) shows an empty all-zero chart rather than the whole
    *  section vanishing, which looked like a bug. Hidden only when the wallbox is
@@ -274,18 +276,25 @@ export class Dashboard implements OnInit {
     if (!this.wallboxConfig()?.enabled) return null;
     const view = this.view();
     if (view === 'day') {
-      const data = this.data.wallboxHourlyEnergy();
-      const slots = energySlots('day', this.refDate());
-      const byKey = sumByHourKey(data, (d) => d.chargedKwh);
+      const hist = this.data.wallboxHistory();
+      const slots = fiveMinuteSlots(this.refDate());
+      // Charged energy per 5-min bucket from raw readings, replicating the
+      // wallbox_1hour aggregate's formula: sum of active power while charging
+      // (status 2), over 30-second samples, / 120000 -> kWh. Unlike the PV
+      // line, 0 is a real value here (not charging), so every slot is drawn.
+      const byKey = sumByFiveMinKey(hist, (r) => (r.status === 2 ? (r.activePowerW ?? 0) : 0));
       return energyBarChart(
         slots.map((s) => s.label),
         [
           {
             name: 'Geladen',
             color: CHART_COLORS.charge,
-            data: slots.map((s) => round2(byKey.get(s.key) ?? 0)),
+            type: 'line',
+            data: slots.map((s) => round2((byKey.get(s.key) ?? 0) / 120000)),
           },
         ],
+        // 288 five-minute slots - label every 2h (24 slots), matching the PV line.
+        { xAxisLabelInterval: 24 - 1 },
       );
     }
     if (view === 'week' || view === 'month') {
