@@ -265,12 +265,16 @@ export class Dashboard implements OnInit {
     return null;
   });
 
-  /** Wallbox charged-energy chart: hourly bar (day) or daily bar (week/month). */
+  /** Wallbox charged-energy chart: hourly bar (day) or daily bar (week/month).
+   *  Rendered whenever the wallbox is enabled - a wallbox that is offline (no
+   *  readings for the period) shows an empty all-zero chart rather than the whole
+   *  section vanishing, which looked like a bug. Hidden only when the wallbox is
+   *  not enabled at all. */
   readonly wallboxChart = computed<EChartsCoreOption | null>(() => {
+    if (!this.wallboxConfig()?.enabled) return null;
     const view = this.view();
     if (view === 'day') {
       const data = this.data.wallboxHourlyEnergy();
-      if (data.length === 0) return null;
       const slots = energySlots('day', this.refDate());
       const byKey = sumByHourKey(data, (d) => d.chargedKwh);
       return energyBarChart(
@@ -284,20 +288,22 @@ export class Dashboard implements OnInit {
         ],
       );
     }
-    const data = this.data.wallboxDailyEnergy();
-    if (data.length === 0) return null;
-    const slots = energySlots(view, this.refDate());
-    const byKey = new Map(data.map((d) => [isoToSlotKey(d.day), d.chargedKwh]));
-    return energyBarChart(
-      slots.map((s) => s.label),
-      [
-        {
-          name: 'Geladen',
-          color: CHART_COLORS.charge,
-          data: slots.map((s) => round2(byKey.get(s.key) ?? 0)),
-        },
-      ],
-    );
+    if (view === 'week' || view === 'month') {
+      const data = this.data.wallboxDailyEnergy();
+      const slots = energySlots(view, this.refDate());
+      const byKey = new Map(data.map((d) => [isoToSlotKey(d.day), d.chargedKwh]));
+      return energyBarChart(
+        slots.map((s) => s.label),
+        [
+          {
+            name: 'Geladen',
+            color: CHART_COLORS.charge,
+            data: slots.map((s) => round2(byKey.get(s.key) ?? 0)),
+          },
+        ],
+      );
+    }
+    return null;
   });
 
   ngOnInit(): void {
