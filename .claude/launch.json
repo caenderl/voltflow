@@ -12,6 +12,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["nx", "serve", "backend"],
       "port": 3000
+    },
+    {
+      "name": "frontend-prod-static",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["nx", "serve-static", "frontend", "--port=4300"],
+      "port": 4300
     }
   ]
 }
