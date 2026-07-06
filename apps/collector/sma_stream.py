@@ -70,6 +70,14 @@ RETRY_DELAY = 2.0        # seconds between immediate retries
 # averages down. At night, sustained failures cross the threshold as normal.
 ASLEEP_AFTER = 3
 
+# A run of reads that SUCCEED (ok=True) but carry no production data - only e.g.
+# total_yield - is NOT a sleeping inverter (which times out); it is a stale,
+# long-held Speedwire session that has gone half-dead (observed after the
+# inverter's overnight sleep: total_yield keeps updating while grid_power/pv/
+# daily_yield stop arriving). Rebuild the session after this many so daytime
+# reads recover on their own instead of the whole day reading as "asleep".
+PARTIAL_RECONNECT = 3
+
 
 def _num(value) -> float | None:
     if value is None or value == "":
@@ -165,6 +173,7 @@ async def stream_sma(
 
         sensors = await device.get_sensors()
         consecutive_fail = 0
+        partial_streak = 0
         while True:
             # Retry a failed read a few times before believing it: a single
             # dropped Speedwire read while the inverter is producing must not be
@@ -181,9 +190,23 @@ async def stream_sma(
 
             if _has_production(values):
                 consecutive_fail = 0
+                partial_streak = 0
                 snap = _finalize_awake(values)  # type: ignore[arg-type]
             else:
                 consecutive_fail += 1
+                # A successful read that carries data but no production fields is
+                # a stale session, not a sleeping inverter (which returns None) ->
+                # rebuild the session so daytime reads recover.
+                if values is not None:
+                    partial_streak += 1
+                    if partial_streak >= PARTIAL_RECONNECT:
+                        LOG.warning(
+                            "SMA session stale: %d reads with data but no "
+                            "production fields (total_yield=%s) - reconnecting",
+                            partial_streak, values.get("total_yield_kwh"))
+                        raise RuntimeError("SMA session stale - reconnecting")
+                else:
+                    partial_streak = 0
                 if consecutive_fail < ASLEEP_AFTER:
                     # Transient blip while (probably) awake: skip this cycle
                     # rather than writing a false 0 W row.
