@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   appendWindowed,
   energySlots,
-  fiveMinuteSlots,
+  minuteBucketSlots,
   isoToSlotKey,
   liveSparkChart,
   netWatts,
   round2,
   signedPowerChart,
   slotKey,
-  sumByFiveMinKey,
+  sumByMinuteBucket,
 } from './chart-utils';
 
 describe('isoToSlotKey', () => {
@@ -77,27 +77,45 @@ describe('energySlots', () => {
   });
 });
 
-describe('fiveMinuteSlots', () => {
-  it('288 five-minute-of-day slots, keyed 0..287, HH:MM labels', () => {
-    const slots = fiveMinuteSlots(new Date(2026, 4, 20));
+describe('minuteBucketSlots', () => {
+  it('288 five-minute-of-day slots by default, keyed 0..287, HH:MM labels', () => {
+    const slots = minuteBucketSlots(new Date(2026, 4, 20));
     expect(slots).toHaveLength((24 * 60) / 5);
     expect(slots[0].key).toBe('0');
     expect(slots[287].key).toBe('287');
     expect(slots[18].label).toBe('01:30'); // 18 * 5 min = 90 min
   });
+
+  it('stepMin = 1 gives 1440 one-minute slots, keyed 0..1439', () => {
+    const slots = minuteBucketSlots(new Date(2026, 4, 20), 1);
+    expect(slots).toHaveLength(24 * 60);
+    expect(slots[0].key).toBe('0');
+    expect(slots[1439].key).toBe('1439');
+    expect(slots[90].label).toBe('01:30'); // 90 * 1 min
+  });
 });
 
-describe('sumByFiveMinKey', () => {
-  it('keys rows by local 5-minute bucket of day, summing on collision', () => {
+describe('sumByMinuteBucket', () => {
+  it('keys rows by local 5-minute bucket of day by default, summing on collision', () => {
     const rows = [
       { time: new Date(2026, 4, 20, 14, 2).toISOString(), yieldKwh: 0.02 },
       { time: new Date(2026, 4, 20, 14, 4).toISOString(), yieldKwh: 0.01 }, // same bucket as 14:02
       { time: new Date(2026, 4, 20, 14, 6).toISOString(), yieldKwh: 0.03 },
     ];
-    const byKey = sumByFiveMinKey(rows, (r) => r.yieldKwh);
+    const byKey = sumByMinuteBucket(rows, (r) => r.yieldKwh);
     // 14:00-14:05 -> bucket floor(845/5)=169; 14:05-14:10 -> bucket 170
     expect(byKey.get(String(Math.floor((14 * 60 + 2) / 5)))).toBeCloseTo(0.03);
     expect(byKey.get(String(Math.floor((14 * 60 + 6) / 5)))).toBeCloseTo(0.03);
+  });
+
+  it('stepMin = 1 keys rows by the exact minute of day', () => {
+    const rows = [
+      { time: new Date(2026, 4, 20, 14, 2).toISOString(), yieldKwh: 0.02 },
+      { time: new Date(2026, 4, 20, 14, 4).toISOString(), yieldKwh: 0.01 }, // distinct minute now
+    ];
+    const byKey = sumByMinuteBucket(rows, (r) => r.yieldKwh, 1);
+    expect(byKey.get(String(14 * 60 + 2))).toBeCloseTo(0.02);
+    expect(byKey.get(String(14 * 60 + 4))).toBeCloseTo(0.01);
   });
 });
 
