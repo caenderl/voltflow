@@ -9,14 +9,14 @@ import {
   type EnergyBarSeries,
   energyBarChart,
   energySlots,
-  fiveMinuteSlots,
+  minuteBucketSlots,
   isoToSlotKey,
   liveSparkChart,
   netWatts,
   round2,
   signedPowerChart,
   slotKey,
-  sumByFiveMinKey,
+  sumByMinuteBucket,
 } from '../core/chart-utils';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../core/date-utils';
 import {
@@ -218,16 +218,18 @@ export class Dashboard implements OnInit {
   readonly pvChart = computed<EChartsCoreOption | null>(() => {
     const view = this.view();
     if (view === 'day') {
+      // Rendered whenever the PV inverter is enabled - an enabled inverter with
+      // no yield yet (e.g. before sunrise) shows a flat zero line rather than the
+      // whole section vanishing. Hidden only when the inverter is not enabled.
+      if (!this.smaConfig()?.enabled) return null;
       const data = this.data.smaMinuteEnergy();
-      if (data.length === 0) return null;
-      const slots = fiveMinuteSlots(this.refDate());
-      // Sum the per-minute yield into 5-minute buckets: at this coarser
-      // resolution the 10-Wh rounding and the occasional dropped minute
-      // average out, so the line is smooth instead of a saw-tooth.
-      const byKey = sumByFiveMinKey(data, (d) => d.yieldKwh);
+      // Full minute resolution (1440 slots), matching the Leistung chart.
+      const slots = minuteBucketSlots(this.refDate(), 1);
+      const byKey = sumByMinuteBucket(data, (d) => d.yieldKwh, 1);
       // Draw the line only across buckets that have data: null outside
       // [first, last] so buckets without readings yet (e.g. the rest of
-      // today) render as a gap instead of a fake plunge to 0.
+      // today) render as a gap instead of a fake plunge to 0. With no data at
+      // all, first = -1 / last = length, so every slot is 0 -> a zero line.
       const first = slots.findIndex((s) => byKey.has(s.key));
       const last = slots.length - 1 - [...slots].reverse().findIndex((s) => byKey.has(s.key));
       return energyBarChart(
@@ -242,10 +244,10 @@ export class Dashboard implements OnInit {
             ),
           },
         ],
-        // 288 five-minute slots - force a label every 2h (24 slots) so it
+        // 1440 one-minute slots - force a label every 2h (120 slots) so it
         // lines up with the Leistung chart instead of 'auto' picking an
         // uneven spacing at this density.
-        { xAxisLabelInterval: 24 - 1 },
+        { xAxisLabelInterval: 120 - 1 },
       );
     }
     if (view === 'month') {
@@ -277,12 +279,12 @@ export class Dashboard implements OnInit {
     const view = this.view();
     if (view === 'day') {
       const hist = this.data.wallboxHistory();
-      const slots = fiveMinuteSlots(this.refDate());
+      const slots = minuteBucketSlots(this.refDate());
       // Charged energy per 5-min bucket from raw readings, replicating the
       // wallbox_1hour aggregate's formula: sum of active power while charging
       // (status 2), over 30-second samples, / 120000 -> kWh. Unlike the PV
       // line, 0 is a real value here (not charging), so every slot is drawn.
-      const byKey = sumByFiveMinKey(hist, (r) => (r.status === 2 ? (r.activePowerW ?? 0) : 0));
+      const byKey = sumByMinuteBucket(hist, (r) => (r.status === 2 ? (r.activePowerW ?? 0) : 0));
       return energyBarChart(
         slots.map((s) => s.label),
         [

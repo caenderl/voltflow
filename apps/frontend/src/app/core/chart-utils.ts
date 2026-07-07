@@ -89,36 +89,39 @@ export function slotKey(view: View, ms: number): string {
 }
 
 /**
- * 5-minute-of-day slots for the day-view lines (288 per day). Coarser than raw
- * minutes so the per-minute counter quantization (PV yield is only ~10-70 Wh
- * per minute, rounded to 10 Wh) and single-minute sampling gaps average out
- * into a smooth curve instead of a saw-tooth.
+ * Minute-bucket-of-day slots for the day-view lines, `stepMin` minutes apart
+ * ((24*60)/stepMin per day). A coarser step (e.g. 5) smooths the per-minute
+ * counter quantization (PV yield is only ~10-70 Wh per minute, rounded to
+ * 10 Wh) and single-minute sampling gaps into a smoother curve; stepMin = 1
+ * keeps the full minute resolution (matching the Leistung chart).
  */
-export function fiveMinuteSlots(ref: Date): Slot[] {
+export function minuteBucketSlots(ref: Date, stepMin = 5): Slot[] {
   const slots: Slot[] = [];
   const base = startOfDay(ref);
-  for (let i = 0; i < (24 * 60) / 5; i++) {
+  for (let i = 0; i < (24 * 60) / stepMin; i++) {
     const d = new Date(base);
-    d.setMinutes(i * 5);
+    d.setMinutes(i * stepMin);
     slots.push({ key: String(i), label: dayLabel('day', d.getTime()) });
   }
   return slots;
 }
 
 /**
- * Sum sub-5-minute API rows (or raw readings) into fiveMinuteSlots keys (local
- * 5-minute bucket of day). Accumulates on key collision: on the DST fall-back
- * day two UTC buckets can map to the same local bucket - a plain `new Map(...)`
- * would silently drop one of them.
+ * Sum sub-`stepMin` API rows (or raw readings) into minuteBucketSlots keys
+ * (local minute bucket of day). MUST be called with the same `stepMin` as the
+ * matching minuteBucketSlots or the keys won't line up. Accumulates on key
+ * collision: on the DST fall-back day two UTC buckets can map to the same local
+ * bucket - a plain `new Map(...)` would silently drop one of them.
  */
-export function sumByFiveMinKey<T extends { time: string }>(
+export function sumByMinuteBucket<T extends { time: string }>(
   rows: T[],
   value: (row: T) => number,
+  stepMin = 5,
 ): Map<string, number> {
   const byKey = new Map<string, number>();
   for (const r of rows) {
     const d = new Date(r.time);
-    const k = String(Math.floor((d.getHours() * 60 + d.getMinutes()) / 5));
+    const k = String(Math.floor((d.getHours() * 60 + d.getMinutes()) / stepMin));
     byKey.set(k, (byKey.get(k) ?? 0) + value(r));
   }
   return byKey;
