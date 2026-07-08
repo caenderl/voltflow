@@ -76,3 +76,6 @@ the device is enabled in the UI settings).
 - `venv/`, `node_modules/`, `dist/`, `.angular/`, `.nx/` — generated
 - `backups/` — DB dumps
 - `.env` — credentials, never commit (template: `.env.example`)
+- `README.md` — the block between `<!-- HUMAN-WRITTEN:START -->` and
+  `<!-- HUMAN-WRITTEN:END -->` is written and maintained solely by the repo owner;
+  never edit, rewrite, or remove it, even as part of a broader README change.

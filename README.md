@@ -239,3 +239,13 @@ TimescaleDB-Version). Upgrades nur bewusst: Tag hochziehen → Backup → `docke
 - Wallbox **steuern**: Schreibzugriff auf die Modbus-Steuerregister (Start/Stop, Max-Strom,
   Phasen) für PV-Überschussladen (Auslesen ist bereits umgesetzt)
 - Auth (aktuell für lokales Heimnetz ausgelegt)
+
+<!-- HUMAN-WRITTEN:START — Dieser Block wird ausschließlich vom Repo-Owner geschrieben
+     und gepflegt. KI-Assistenten/Agenten (inkl. Claude Code) dürfen Inhalte zwischen
+     diesen Markern nicht bearbeiten, umschreiben oder entfernen. -->
+
+## ✍️ Notiz vom Entwickler *(human written)*
+
+_Platz für ein paar persönliche Worte — hier direkt reinschreiben._
+
+<!-- HUMAN-WRITTEN:END -->
