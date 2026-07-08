@@ -27,35 +27,9 @@
   </header>
 
   @if (view() === 'live') {
-    <app-live-view
-      [flow]="flow()"
-      [today]="today()"
-      [liveSpark]="liveSpark()"
-      [wallboxState]="wallboxState()"
-      [wallboxName]="wallboxName()"
-      [smaState]="smaState()"
-      [smaName]="smaName()"
-      [balance]="balance()"
-    />
+    <app-live-container />
   } @else {
-    <app-history-view
-      [view]="view()"
-      [periodLabel]="periodLabel()"
-      [canPrev]="canPrev()"
-      [canNext]="canNext()"
-      [energy]="energy()"
-      [hasTariff]="hasTariff()"
-      [costs]="costs()"
-      [balance]="periodBalance()"
-      [loading]="loading()"
-      [error]="error()"
-      [powerChart]="powerChart()"
-      [energyChart]="energyChart()"
-      [pvChart]="pvChart()"
-      [wallboxChart]="wallboxChart()"
-      (prevClicked)="prev()"
-      (nextClicked)="next()"
-    />
+    <app-history-container [view]="view()" />
   }
 
   @if (configOpen()) {
