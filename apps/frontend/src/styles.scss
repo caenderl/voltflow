@@ -1,11 +1,32 @@
 /* Global styles */
+
+// --- Material 3 dark design tokens (shared by all routed pages) ---
+:root {
+  --surface: #131316;
+  --surface-1: #1b1b1f;
+  --surface-2: #212127;
+  --surface-3: #28282f;
+  --on-surface: #e5e1e6;
+  --on-surface-var: #c9c5d0;
+  --muted: #948f9c;
+  --outline: #38343c;
+  --primary: #aac7ff;
+  --primary-container: #284777;
+  --on-primary-container: #d6e3ff;
+  --import: #ff8a80; // grid import (red)
+  --export: #7fe0a3; // feed-in (green)
+  --radius: 16px;
+  --radius-sm: 12px;
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background: #131316; /* Material dark surface (matches the dashboard) */
-  color: #e5e1e6;
+  background: var(--surface);
+  color: var(--on-surface);
   font-family: 'Roboto', system-ui, -apple-system, sans-serif;
 }
 

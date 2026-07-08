@@ -7,13 +7,13 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
 import { SwUpdate, VersionReadyEvent } from '@angular/service-worker';
-import { Dashboard } from './dashboard/dashboard';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
-  imports: [Dashboard],
+  imports: [RouterOutlet],
   selector: 'app-root',
   template: `
-    <app-dashboard />
+    <router-outlet />
     @if (updateReady()) {
     <div class="update-banner" role="status">
       <span>Neue Version verfügbar.</span>

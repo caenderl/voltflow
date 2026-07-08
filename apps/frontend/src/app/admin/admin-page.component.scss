@@ -1,49 +1,83 @@
 :host {
-  display: contents;
+  display: block;
+  min-height: 100vh;
+  background: var(--surface);
+  color: var(--on-surface);
+  -webkit-font-smoothing: antialiased;
 }
 
-.scrim {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 20;
+.admin-page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 1rem 3rem;
 }
 
-.modal {
-  position: fixed;
-  z-index: 21;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(860px, calc(100vw - 2rem));
-  max-height: calc(100vh - 2rem);
+/* ---------- Header ---------- */
+.admin-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.25rem;
+  margin-bottom: 1.5rem;
+  background: var(--surface);
+
+  h1 {
+    margin: 0;
+    font-size: 1.375rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  color: var(--on-surface-var);
+  text-decoration: none;
+  transition: background 0.15s;
+
+  svg {
+    width: 1.6rem;
+    height: 1.6rem;
+    fill: currentColor;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+  }
+}
+
+/* Shown only when the viewport is too narrow for the admin form. */
+.mobile-note {
+  display: none;
+  margin: 2rem 0.25rem;
+  color: var(--muted);
+}
+
+/* ---------- Card with tabs + form ---------- */
+.admin-card {
   background: var(--surface-3);
   border-radius: var(--radius);
   padding: 1.5rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 500;
-}
-
-.modal-body {
-  display: flex;
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  grid-template-areas:
+    'tabs panel'
+    'actions actions';
   gap: 1.5rem;
-  min-height: 0;
-  overflow: hidden;
 }
 
 .tabs {
+  grid-area: tabs;
   display: flex;
   flex-direction: column;
-  flex: 0 0 170px;
-  width: 170px;
   gap: 0.25rem;
 }
 
@@ -70,24 +104,20 @@
 }
 
 .tab-panel {
-  flex: 1;
+  grid-area: panel;
   min-width: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-@media (max-width: 560px) {
-  .modal-body {
-    flex-direction: column;
+@media (max-width: 640px) {
+  // Below this the form is cramped; admin is desktop-only, so show the note.
+  .admin-card {
+    display: none;
   }
-
-  .tabs {
-    flex-direction: row;
-    flex: 0 0 auto;
-    width: auto;
-    overflow-x: auto;
+  .mobile-note {
+    display: block;
   }
 }
 
@@ -135,9 +165,6 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 0.6rem;
 
-  // The inputs' intrinsic min width must not dictate the track width - let
-  // the three columns shrink with the panel (tablet / half-screen window),
-  // otherwise the third column overflows into a horizontal scrollbar.
   .field {
     min-width: 0;
   }
@@ -157,7 +184,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  max-height: 220px;
+  max-height: 320px;
   overflow-y: auto;
   border-top: 1px solid var(--outline);
   padding-top: 0.75rem;
@@ -221,11 +248,21 @@
   color: var(--muted);
 }
 
-.modal-actions {
+/* ---------- Footer actions ---------- */
+.admin-actions {
+  grid-area: actions;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: 0.75rem;
+  border-top: 1px solid var(--outline);
+  padding-top: 1rem;
+}
+
+.save-error {
+  margin-right: auto;
+  font-size: 0.85rem;
+  color: var(--import);
 }
 
 .btn-text,
@@ -235,6 +272,7 @@
   padding: 0.6rem 1.4rem;
   font: inherit;
   font-weight: 500;
+  text-decoration: none;
   cursor: pointer;
 }
 

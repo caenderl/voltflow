@@ -1,8 +1,16 @@
-<div class="scrim" (click)="closed.emit()"></div>
-<div class="modal" role="dialog" aria-label="Einstellungen">
-  <h2 class="modal-title">Einstellungen</h2>
+<div class="admin-page">
+  <header class="admin-bar">
+    <a class="back-link" routerLink="/live" aria-label="Zurück">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z" /></svg>
+    </a>
+    <h1>Einstellungen</h1>
+  </header>
 
-  <div class="modal-body">
+  <!-- Admin needs the desktop width; the entry point is hidden on phones, but a
+       direct URL could still land here. -->
+  <p class="mobile-note">Die Einstellungen sind nur am Desktop verfügbar.</p>
+
+  <div class="admin-card">
     <nav class="tabs">
       <button
         type="button"
@@ -159,10 +167,13 @@
         </div>
       }
     </div>
-  </div>
 
-  <div class="modal-actions">
-    <button class="btn-text" (click)="closed.emit()">Abbrechen</button>
-    <button class="btn-filled" (click)="save()">Speichern</button>
+    <div class="admin-actions">
+      @if (saveError()) {
+        <span class="save-error">Speichern fehlgeschlagen.</span>
+      }
+      <a class="btn-text" routerLink="/live">Abbrechen</a>
+      <button class="btn-filled" (click)="save()">Speichern</button>
+    </div>
   </div>
 </div>
