@@ -23,10 +23,7 @@ import { MeterApiService } from '../core/meter-api.service';
 import { SettingsApiService } from '../core/settings-api.service';
 import { SmaApiService } from '../core/sma-api.service';
 import { WallboxApiService } from '../core/wallbox-api.service';
-import type {
-  CheckpointSaveEvent,
-  ConfigSaveEvent,
-} from './config-modal/config-modal.component';
+import type { CheckpointSaveEvent, ConfigSaveEvent } from '../core/config-types';
 
 export interface LivePoint {
   time: string;

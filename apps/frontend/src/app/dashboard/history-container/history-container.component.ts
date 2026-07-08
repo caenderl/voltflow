@@ -1,5 +1,8 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router } from '@angular/router';
 import type { EChartsCoreOption } from 'echarts/core';
+import { filter } from 'rxjs';
 import {
   CHART_COLORS,
   ONE_DAY,
@@ -46,7 +49,9 @@ import { HistoryViewComponent, type Costs } from '../history-view/history-view.c
 })
 export class HistoryContainerComponent {
   private readonly data = inject(DashboardDataService);
+  private readonly router = inject(Router);
 
+  // Bound from the route's `data: { view }` via withComponentInputBinding().
   readonly view = input.required<View>();
 
   readonly refDate = signal<Date>(new Date());
@@ -246,18 +251,18 @@ export class HistoryContainerComponent {
   });
 
   constructor() {
-    // Reacts to the view input changing (today: switching to a different
-    // history tab on the same instance; under routing: a route param/data
-    // change) by jumping to "now" and loading that period. Also fires once on
-    // init.
-    effect(() => this.loadNow(this.view()));
-  }
-
-  /** Jump back to the current period ("today"/this week/month) and reload.
-   *  Called when the already-active history tab is re-clicked: the view input
-   *  is unchanged then, so the constructor effect does not fire. */
-  reset(): void {
-    this.loadNow(this.view());
+    // Load - and reset to "today" - on every navigation that lands here: the
+    // first activation, switching between history tabs (a fresh instance each
+    // time), and, thanks to onSameUrlNavigation:'reload', re-clicking the
+    // already-active tab (same instance, so the input is unchanged and only
+    // this fires). The component input is set before NavigationEnd, so view()
+    // is current here.
+    this.router.events
+      .pipe(
+        filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => this.loadNow(this.view()));
   }
 
   /** Reset refDate to now and load that period. */
