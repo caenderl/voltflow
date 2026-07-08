@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, inject, linkedSignal, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import type { MeterCheckpoint } from '@org/shared-types';
@@ -23,88 +23,60 @@ export class AdminPageComponent {
   readonly activeTab = signal<ConfigTab>('tariff');
   readonly saveError = signal(false);
 
-  formProvider = '';
-  formImport: number | null = null;
-  formExport: number | null = null;
-  formWbEnabled = false;
-  formWbName = '';
-  formWbHost = '';
-  formWbPort: number | null = 502;
-  formWbUnitId: number | null = 1;
-  formWbInterval: number | null = 30;
-  formSmaEnabled = false;
-  formSmaName = '';
-  formSmaHost = '';
-  formSmaInterval: number | null = 60;
-
-  formCpEditingId: number | null = null;
-  formCpDate = toLocalDateString(new Date());
-  formCpImport: number | null = null;
-  formCpExport: number | null = null;
-
   // The config signals load asynchronously (and may not be ready when this page
-  // is opened). Sync each section into the form the first time its value
-  // arrives, then stop so later saves don't clobber in-progress edits.
-  private tariffSynced = false;
-  private wallboxSynced = false;
-  private smaSynced = false;
+  // is opened directly). linkedSignal seeds each field from the loaded value
+  // and re-seeds if it arrives late, while still letting the user overwrite it -
+  // no manual "synced" flags and no post-render writes (which would trip
+  // NG0100). The config only changes again on our own save, after which we
+  // navigate away, so in-progress edits are never clobbered.
+  readonly formProvider = linkedSignal(() => this.data.tariff()?.provider ?? '');
+  readonly formImport = linkedSignal(() => this.data.tariff()?.importCtPerKwh ?? null);
+  readonly formExport = linkedSignal(() => this.data.tariff()?.exportCtPerKwh ?? null);
+  readonly formWbEnabled = linkedSignal(() => this.data.wallboxConfig()?.enabled ?? false);
+  readonly formWbName = linkedSignal(() => this.data.wallboxConfig()?.name ?? '');
+  readonly formWbHost = linkedSignal(() => this.data.wallboxConfig()?.host ?? '');
+  // Number fields are `number | null`: clearing the input sets null (save() then
+  // falls back to the default), so the type must admit it.
+  readonly formWbPort = linkedSignal<number | null>(() => this.data.wallboxConfig()?.port ?? 502);
+  readonly formWbUnitId = linkedSignal<number | null>(() => this.data.wallboxConfig()?.unitId ?? 1);
+  readonly formWbInterval = linkedSignal<number | null>(
+    () => this.data.wallboxConfig()?.pollIntervalS ?? 30,
+  );
+  readonly formSmaEnabled = linkedSignal(() => this.data.smaConfig()?.enabled ?? false);
+  readonly formSmaName = linkedSignal(() => this.data.smaConfig()?.name ?? '');
+  readonly formSmaHost = linkedSignal(() => this.data.smaConfig()?.host ?? '');
+  readonly formSmaInterval = linkedSignal<number | null>(
+    () => this.data.smaConfig()?.pollIntervalS ?? 60,
+  );
 
-  constructor() {
-    effect(() => {
-      const t = this.data.tariff();
-      if (t && !this.tariffSynced) {
-        this.formProvider = t.provider ?? '';
-        this.formImport = t.importCtPerKwh ?? null;
-        this.formExport = t.exportCtPerKwh ?? null;
-        this.tariffSynced = true;
-      }
-    });
-    effect(() => {
-      const w = this.data.wallboxConfig();
-      if (w && !this.wallboxSynced) {
-        this.formWbEnabled = w.enabled ?? false;
-        this.formWbName = w.name ?? '';
-        this.formWbHost = w.host ?? '';
-        this.formWbPort = w.port ?? 502;
-        this.formWbUnitId = w.unitId ?? 1;
-        this.formWbInterval = w.pollIntervalS ?? 30;
-        this.wallboxSynced = true;
-      }
-    });
-    effect(() => {
-      const s = this.data.smaConfig();
-      if (s && !this.smaSynced) {
-        this.formSmaEnabled = s.enabled ?? false;
-        this.formSmaName = s.name ?? '';
-        this.formSmaHost = s.host ?? '';
-        this.formSmaInterval = s.pollIntervalS ?? 60;
-        this.smaSynced = true;
-      }
-    });
-  }
+  // Checkpoint editor state - plain transient UI state, not derived from config.
+  readonly formCpEditingId = signal<number | null>(null);
+  readonly formCpDate = signal(toLocalDateString(new Date()));
+  readonly formCpImport = signal<number | null>(null);
+  readonly formCpExport = signal<number | null>(null);
 
   save(): void {
     this.saveError.set(false);
     void this.data
       .saveConfig({
         tariff: {
-          provider: this.formProvider.trim() || null,
-          importCtPerKwh: this.formImport ?? null,
-          exportCtPerKwh: this.formExport ?? null,
+          provider: this.formProvider().trim() || null,
+          importCtPerKwh: this.formImport() ?? null,
+          exportCtPerKwh: this.formExport() ?? null,
         },
         wallbox: {
-          enabled: this.formWbEnabled,
-          name: this.formWbName.trim() || null,
-          host: this.formWbHost.trim() || null,
-          port: this.formWbPort ?? 502,
-          unitId: this.formWbUnitId ?? 1,
-          pollIntervalS: this.formWbInterval ?? 30,
+          enabled: this.formWbEnabled(),
+          name: this.formWbName().trim() || null,
+          host: this.formWbHost().trim() || null,
+          port: this.formWbPort() ?? 502,
+          unitId: this.formWbUnitId() ?? 1,
+          pollIntervalS: this.formWbInterval() ?? 30,
         },
         sma: {
-          enabled: this.formSmaEnabled,
-          name: this.formSmaName.trim() || null,
-          host: this.formSmaHost.trim() || null,
-          pollIntervalS: this.formSmaInterval ?? 60,
+          enabled: this.formSmaEnabled(),
+          name: this.formSmaName().trim() || null,
+          host: this.formSmaHost().trim() || null,
+          pollIntervalS: this.formSmaInterval() ?? 60,
         },
       })
       .then((ok) => {
@@ -116,32 +88,35 @@ export class AdminPageComponent {
   }
 
   resetCheckpointForm(): void {
-    this.formCpEditingId = null;
-    this.formCpDate = toLocalDateString(new Date());
-    this.formCpImport = null;
-    this.formCpExport = null;
+    this.formCpEditingId.set(null);
+    this.formCpDate.set(toLocalDateString(new Date()));
+    this.formCpImport.set(null);
+    this.formCpExport.set(null);
   }
 
   editCheckpoint(c: MeterCheckpoint): void {
-    this.formCpEditingId = c.id;
-    this.formCpDate = c.date;
-    this.formCpImport = c.importKwh;
-    this.formCpExport = c.exportKwh;
+    this.formCpEditingId.set(c.id);
+    this.formCpDate.set(c.date);
+    this.formCpImport.set(c.importKwh);
+    this.formCpExport.set(c.exportKwh);
   }
 
   saveCheckpoint(): void {
-    if (!this.formCpDate || this.formCpImport == null || this.formCpExport == null) return;
+    const date = this.formCpDate();
+    const importKwh = this.formCpImport();
+    const exportKwh = this.formCpExport();
+    if (!date || importKwh == null || exportKwh == null) return;
     this.data.saveCheckpoint({
-      id: this.formCpEditingId ?? undefined,
-      date: this.formCpDate,
-      importKwh: this.formCpImport,
-      exportKwh: this.formCpExport,
+      id: this.formCpEditingId() ?? undefined,
+      date,
+      importKwh,
+      exportKwh,
     });
     this.resetCheckpointForm();
   }
 
   deleteCheckpoint(c: MeterCheckpoint): void {
-    if (this.formCpEditingId === c.id) this.resetCheckpointForm();
+    if (this.formCpEditingId() === c.id) this.resetCheckpointForm();
     this.data.deleteCheckpoint(c.id);
   }
 }

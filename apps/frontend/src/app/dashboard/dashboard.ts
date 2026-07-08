@@ -1,9 +1,9 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { APP_VERSION } from '../../version';
-import { DashboardDataService } from './dashboard-data.service';
+import { type View } from '../core/date-utils';
 
 @Component({
   selector: 'app-dashboard',
@@ -12,13 +12,14 @@ import { DashboardDataService } from './dashboard-data.service';
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
-export class Dashboard implements OnInit {
-  private readonly data = inject(DashboardDataService);
+export class Dashboard {
   private readonly router = inject(Router);
 
   readonly appVersion = APP_VERSION;
 
-  readonly views: { path: string; label: string }[] = [
+  // The nav tabs map 1:1 onto the four data-view routes, so their paths are the
+  // View union - a typo would fail to compile.
+  readonly views: { path: View; label: string }[] = [
     { path: 'live', label: 'Live' },
     { path: 'day', label: 'Tag' },
     { path: 'week', label: 'Woche' },
@@ -34,8 +35,4 @@ export class Dashboard implements OnInit {
     ),
     { initialValue: this.router.url === '/' || this.router.url.startsWith('/live') },
   );
-
-  ngOnInit(): void {
-    this.data.start();
-  }
 }

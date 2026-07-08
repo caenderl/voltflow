@@ -8,6 +8,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
 import { SwUpdate, VersionReadyEvent } from '@angular/service-worker';
 import { RouterOutlet } from '@angular/router';
+import { DashboardDataService } from './dashboard/dashboard-data.service';
 
 @Component({
   imports: [RouterOutlet],
@@ -59,10 +60,17 @@ import { RouterOutlet } from '@angular/router';
 export class App {
   private readonly swUpdate = inject(SwUpdate);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly data = inject(DashboardDataService);
 
   protected readonly updateReady = signal(false);
 
   constructor() {
+    // App-lifetime data load, tied to the root component so it runs regardless
+    // of which route is entered first (e.g. a direct load of /admin, which does
+    // not mount the dashboard shell). Idempotent. Must run before the
+    // SW-disabled early return below, or dev (no service worker) would skip it.
+    this.data.start();
+
     if (!this.swUpdate.isEnabled) {
       return;
     }

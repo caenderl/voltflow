@@ -50,43 +50,93 @@
       @if (activeTab() === 'tariff') {
         <label class="field">
           <span>Anbieter</span>
-          <input type="text" [(ngModel)]="formProvider" placeholder="z. B. Stadtwerke" />
+          <input
+            type="text"
+            [ngModel]="formProvider()"
+            (ngModelChange)="formProvider.set($event)"
+            placeholder="z. B. Stadtwerke"
+          />
         </label>
         <label class="field">
           <span>Verbrauch (ct/kWh)</span>
-          <input type="number" min="0" step="0.01" [(ngModel)]="formImport" placeholder="z. B. 30" />
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            [ngModel]="formImport()"
+            (ngModelChange)="formImport.set($event)"
+            placeholder="z. B. 30"
+          />
         </label>
         <label class="field">
           <span>Einspeisung (ct/kWh)</span>
-          <input type="number" min="0" step="0.01" [(ngModel)]="formExport" placeholder="z. B. 8" />
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            [ngModel]="formExport()"
+            (ngModelChange)="formExport.set($event)"
+            placeholder="z. B. 8"
+          />
         </label>
       }
 
       @if (activeTab() === 'wallbox') {
         <label class="field">
           <span>Name</span>
-          <input type="text" [(ngModel)]="formWbName" placeholder="z. B. Garage" />
+          <input
+            type="text"
+            [ngModel]="formWbName()"
+            (ngModelChange)="formWbName.set($event)"
+            placeholder="z. B. Garage"
+          />
         </label>
         <label class="field-row">
-          <input type="checkbox" [(ngModel)]="formWbEnabled" />
+          <input type="checkbox" [ngModel]="formWbEnabled()" (ngModelChange)="formWbEnabled.set($event)" />
           <span>Wallbox aktivieren (Modbus TCP)</span>
         </label>
         <label class="field">
           <span>IP-Adresse</span>
-          <input type="text" [(ngModel)]="formWbHost" placeholder="z. B. 192.168.0.206" />
+          <input
+            type="text"
+            [ngModel]="formWbHost()"
+            (ngModelChange)="formWbHost.set($event)"
+            placeholder="z. B. 192.168.0.206"
+          />
         </label>
         <div class="field-grid">
           <label class="field">
             <span>Port</span>
-            <input type="number" min="1" max="65535" [(ngModel)]="formWbPort" placeholder="502" />
+            <input
+              type="number"
+              min="1"
+              max="65535"
+              [ngModel]="formWbPort()"
+              (ngModelChange)="formWbPort.set($event)"
+              placeholder="502"
+            />
           </label>
           <label class="field">
             <span>Unit-ID</span>
-            <input type="number" min="0" max="255" [(ngModel)]="formWbUnitId" placeholder="1" />
+            <input
+              type="number"
+              min="0"
+              max="255"
+              [ngModel]="formWbUnitId()"
+              (ngModelChange)="formWbUnitId.set($event)"
+              placeholder="1"
+            />
           </label>
           <label class="field">
             <span>Intervall (s)</span>
-            <input type="number" min="5" max="3600" [(ngModel)]="formWbInterval" placeholder="30" />
+            <input
+              type="number"
+              min="5"
+              max="3600"
+              [ngModel]="formWbInterval()"
+              (ngModelChange)="formWbInterval.set($event)"
+              placeholder="30"
+            />
           </label>
         </div>
         <p class="hint-sm">Änderungen am Wallbox-Anschluss greifen nach einem Neustart des Collectors.</p>
@@ -95,20 +145,37 @@
       @if (activeTab() === 'sma') {
         <label class="field">
           <span>Name</span>
-          <input type="text" [(ngModel)]="formSmaName" placeholder="z. B. Dach" />
+          <input
+            type="text"
+            [ngModel]="formSmaName()"
+            (ngModelChange)="formSmaName.set($event)"
+            placeholder="z. B. Dach"
+          />
         </label>
         <label class="field-row">
-          <input type="checkbox" [(ngModel)]="formSmaEnabled" />
+          <input type="checkbox" [ngModel]="formSmaEnabled()" (ngModelChange)="formSmaEnabled.set($event)" />
           <span>Wechselrichter aktivieren (Speedwire)</span>
         </label>
         <div class="field-grid">
           <label class="field">
             <span>IP-Adresse</span>
-            <input type="text" [(ngModel)]="formSmaHost" placeholder="z. B. 192.168.0.110" />
+            <input
+              type="text"
+              [ngModel]="formSmaHost()"
+              (ngModelChange)="formSmaHost.set($event)"
+              placeholder="z. B. 192.168.0.110"
+            />
           </label>
           <label class="field">
             <span>Intervall (s)</span>
-            <input type="number" min="5" max="3600" [(ngModel)]="formSmaInterval" placeholder="60" />
+            <input
+              type="number"
+              min="5"
+              max="3600"
+              [ngModel]="formSmaInterval()"
+              (ngModelChange)="formSmaInterval.set($event)"
+              placeholder="60"
+            />
           </label>
         </div>
         <p class="hint-sm">
@@ -121,34 +188,48 @@
         <div class="field-grid checkpoint-form">
           <label class="field">
             <span>Datum</span>
-            <input type="date" [(ngModel)]="formCpDate" />
+            <input type="date" [ngModel]="formCpDate()" (ngModelChange)="formCpDate.set($event)" />
           </label>
           <label class="field">
             <span>Stand Bezug (kWh)</span>
-            <input type="number" min="0" step="0.01" [(ngModel)]="formCpImport" placeholder="z. B. 12345.6" />
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              [ngModel]="formCpImport()"
+              (ngModelChange)="formCpImport.set($event)"
+              placeholder="z. B. 12345.6"
+            />
           </label>
           <label class="field">
             <span>Stand Einspeisung (kWh)</span>
-            <input type="number" min="0" step="0.01" [(ngModel)]="formCpExport" placeholder="z. B. 6789.0" />
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              [ngModel]="formCpExport()"
+              (ngModelChange)="formCpExport.set($event)"
+              placeholder="z. B. 6789.0"
+            />
           </label>
         </div>
         <div class="checkpoint-form-actions">
-          @if (formCpEditingId !== null) {
+          @if (formCpEditingId() !== null) {
             <button type="button" class="btn-text" (click)="resetCheckpointForm()">Abbrechen</button>
           }
           <button
             type="button"
             class="btn-filled"
-            [disabled]="!formCpDate || formCpImport === null || formCpExport === null"
+            [disabled]="!formCpDate() || formCpImport() === null || formCpExport() === null"
             (click)="saveCheckpoint()"
           >
-            {{ formCpEditingId !== null ? 'Änderungen speichern' : 'Neuer Eintrag' }}
+            {{ formCpEditingId() !== null ? 'Änderungen speichern' : 'Neuer Eintrag' }}
           </button>
         </div>
 
         <div class="checkpoint-list">
           @for (c of checkpoints(); track c.id) {
-            <div class="checkpoint-row" [class.editing]="formCpEditingId === c.id">
+            <div class="checkpoint-row" [class.editing]="formCpEditingId() === c.id">
               <div class="checkpoint-info">
                 <span class="checkpoint-date">{{ c.date | date: 'dd.MM.yyyy' }}</span>
                 <span class="checkpoint-values">
