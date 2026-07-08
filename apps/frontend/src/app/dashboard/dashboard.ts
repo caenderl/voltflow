@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, viewChild } from '@angular/core';
 import { APP_VERSION } from '../../version';
 import { type View } from '../core/date-utils';
 import {
@@ -39,6 +39,10 @@ export class Dashboard implements OnInit {
     { id: 'month', label: 'Monat' },
   ];
 
+  // Present only while a history view is shown (the @else branch); used to
+  // reset it to "today" when its already-active tab is re-clicked.
+  private readonly history = viewChild(HistoryContainerComponent);
+
   ngOnInit(): void {
     this.data.start();
   }
@@ -67,6 +71,14 @@ export class Dashboard implements OnInit {
   }
 
   select(view: View): void {
+    if (view === this.view()) {
+      // Re-clicking the already-active tab jumps a history view back to the
+      // current period ("today"/this week/month). The view signal is unchanged,
+      // so HistoryContainer's view-driven effect won't fire - reset it directly.
+      // (Live has no period to reset, so history() is absent and this no-ops.)
+      this.history()?.reset();
+      return;
+    }
     this.view.set(view);
   }
 }
