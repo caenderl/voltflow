@@ -82,6 +82,9 @@ export class LiveContainerComponent {
   });
 
   constructor() {
+    // Entering the live view: drop any history-period data still held in the
+    // service (and invalidate in-flight period requests) so a later switch back
+    // to a history tab starts clean instead of flashing stale charts.
     this.data.clearPeriod();
   }
 }

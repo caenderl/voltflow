@@ -246,15 +246,25 @@ export class HistoryContainerComponent {
   });
 
   constructor() {
-    // Reacts to the view input changing (today: tab switch on the same
-    // instance; under routing: a route param/data change) by resetting to
-    // "now" and loading that period. Also fires once on init.
-    effect(() => {
-      const view = this.view();
-      const d = new Date();
-      this.refDate.set(d);
-      this.data.loadPeriod(view, d);
-    });
+    // Reacts to the view input changing (today: switching to a different
+    // history tab on the same instance; under routing: a route param/data
+    // change) by jumping to "now" and loading that period. Also fires once on
+    // init.
+    effect(() => this.loadNow(this.view()));
+  }
+
+  /** Jump back to the current period ("today"/this week/month) and reload.
+   *  Called when the already-active history tab is re-clicked: the view input
+   *  is unchanged then, so the constructor effect does not fire. */
+  reset(): void {
+    this.loadNow(this.view());
+  }
+
+  /** Reset refDate to now and load that period. */
+  private loadNow(view: View): void {
+    const d = new Date();
+    this.refDate.set(d);
+    this.data.loadPeriod(view, d);
   }
 
   prev(): void {
