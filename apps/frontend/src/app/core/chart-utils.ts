@@ -118,6 +118,12 @@ export function minuteBucketSlots(ref: Date, stepMin = 5): Slot[] {
  * matching minuteBucketSlots or the keys won't line up. Accumulates on key
  * collision: on the DST fall-back day two UTC buckets can map to the same local
  * bucket - a plain `new Map(...)` would silently drop one of them.
+ *
+ * Note: summing on collision is correct for an *additive* quantity (energy per
+ * bucket). For an *averaged* one (e.g. PV power in W) two colliding buckets are
+ * added rather than averaged, so the repeated local minute reads double. This
+ * is harmless in practice: the DST fall-back repeat is the 02:00-03:00 night
+ * hour, when PV power is 0, so 0 + 0 = 0.
  */
 export function sumByMinuteBucket<T extends { time: string }>(
   rows: T[],
@@ -278,7 +284,7 @@ export function signedPowerChart(
   };
 }
 
-export interface EnergyBarSeries {
+export interface CategorySeries {
   name: string;
   color: string;
   /** one value per slot, already signed (negative bars hang below 0);
@@ -292,13 +298,13 @@ export interface EnergyBarSeries {
 }
 
 /**
- * Stacked-capable kWh chart (bars and/or lines) over category slots (hours of
- * a day, days of a week/month). Shared by the energy, PV and wallbox charts -
- * only the series differ.
+ * Stacked-capable chart (bars and/or lines) over category slots (hours of a
+ * day, days of a week/month), in kWh (default) or W (opts.unit). Shared by the
+ * energy, PV and wallbox charts - only the series and unit differ.
  */
-export function energyBarChart(
+export function categorySeriesChart(
   labels: string[],
-  series: EnergyBarSeries[],
+  series: CategorySeries[],
   opts: {
     legend?: boolean;
     stacked?: boolean;
