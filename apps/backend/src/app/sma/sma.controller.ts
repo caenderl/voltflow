@@ -12,7 +12,7 @@ import type {
   HouseLoadPoint,
   SmaConfig,
   SmaDailySummary,
-  SmaMinuteSummary,
+  SmaMinutePower,
   SmaReading,
 } from '@org/shared-types';
 import { emptyToNull, parseIntInRange, parseRange } from '../common/query-params';
@@ -71,13 +71,13 @@ export class SmaController {
     return this.sma.dailyEnergy(from, to);
   }
 
-  @Get('energy/minute')
-  minuteEnergy(
+  @Get('power/minute')
+  minutePower(
     @Query('from') fromStr?: string,
     @Query('to') toStr?: string,
-  ): Promise<SmaMinuteSummary[]> {
+  ): Promise<SmaMinutePower[]> {
     const { from, to } = parseRange(fromStr, toStr);
-    return this.sma.minuteEnergy(from, to);
+    return this.sma.minutePower(from, to);
   }
 
   @Get('house-load')

@@ -5,7 +5,7 @@ import type {
   HouseLoadPoint,
   SmaConfig,
   SmaDailySummary,
-  SmaMinuteSummary,
+  SmaMinutePower,
   SmaReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
@@ -115,38 +115,25 @@ export class SmaService {
   }
 
   /**
-   * Per-minute PV yield (from the sma_1min continuous aggregate). Same delta
-   * logic as the daily/hourly aggregates: daily_yield_wh resets overnight
-   * while the inverter is asleep - not necessarily exactly at local midnight
-   * - so each minute's production is the delta to the chronologically
-   * previous minute (fetched via a 1-minute lookback so the first requested
-   * row also gets a real delta instead of the whole day's total). Deltas are
-   * computed per device and only across consecutive minute buckets: after a
-   * data gap the accumulated multi-minute yield would otherwise be dumped
-   * into the single resume minute as a spike, so those rows are skipped. The
-   * overnight counter reset shows up as a negative delta, clamped to 0.
+   * Per-minute average PV power (from the sma_1min continuous aggregate).
+   * A straight avg(grid_power) per 1-minute bucket - unlike the yield-based
+   * energy figures, 0 W at night is a real reading (the collector keeps
+   * writing asleep snapshots), not "no data", so no delta/gap logic is
+   * needed here; a missing bucket (collector down) is simply absent from
+   * the result and left for the caller to render as a gap.
    */
-  async minuteEnergy(from: Date, to: Date): Promise<SmaMinuteSummary[]> {
+  async minutePower(from: Date, to: Date): Promise<SmaMinutePower[]> {
     const { rows } = await this.db.query(
-      `SELECT bucket, sum(GREATEST(delta_wh, 0)) AS delta_wh FROM (
-         SELECT bucket,
-                daily_yield_wh - lag(daily_yield_wh) OVER w AS delta_wh,
-                bucket - lag(bucket) OVER w AS step
-           FROM sma_1min
-          WHERE bucket >= $1::timestamptz - INTERVAL '1 minute' AND bucket < $2
-         WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
-       ) s
-       WHERE bucket >= $1 AND step = INTERVAL '1 minute'
-       GROUP BY bucket
-       ORDER BY bucket`,
+      `SELECT bucket, grid_power_avg
+         FROM sma_1min
+        WHERE bucket >= $1 AND bucket < $2
+        ORDER BY bucket`,
       [from, to],
     );
-    return rows
-      .map((r) => ({
-        time: new Date(r['bucket'] as string).toISOString(),
-        yieldKwh: round2(Number(r['delta_wh'] ?? 0) / 1000),
-      }))
-      .filter((r) => r.yieldKwh > 0);
+    return rows.map((r) => ({
+      time: new Date(r['bucket'] as string).toISOString(),
+      powerW: Math.round(Number(r['grid_power_avg'] ?? 0)),
+    }));
   }
 
   /** Derived house-load series on the common 1-min grid (meter + SMA). */

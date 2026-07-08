@@ -219,19 +219,15 @@ export class Dashboard implements OnInit {
     const view = this.view();
     if (view === 'day') {
       // Rendered whenever the PV inverter is enabled - an enabled inverter with
-      // no yield yet (e.g. before sunrise) shows a flat zero line rather than the
-      // whole section vanishing. Hidden only when the inverter is not enabled.
+      // no data yet shows a flat zero line rather than the whole section
+      // vanishing. Hidden only when the inverter is not enabled.
       if (!this.smaConfig()?.enabled) return null;
-      const data = this.data.smaMinuteEnergy();
+      const data = this.data.smaMinutePower();
       // Full minute resolution (1440 slots), matching the Leistung chart.
       const slots = minuteBucketSlots(this.refDate(), 1);
-      const byKey = sumByMinuteBucket(data, (d) => d.yieldKwh, 1);
-      // Draw the line only across buckets that have data: null outside
-      // [first, last] so buckets without readings yet (e.g. the rest of
-      // today) render as a gap instead of a fake plunge to 0. With no data at
-      // all, first = -1 / last = length, so every slot is 0 -> a zero line.
-      const first = slots.findIndex((s) => byKey.has(s.key));
-      const last = slots.length - 1 - [...slots].reverse().findIndex((s) => byKey.has(s.key));
+      const byKey = sumByMinuteBucket(data, (d) => d.powerW, 1);
+      // 0 W is a real reading (night / no sun), not "no data" - only a slot with
+      // no bucket at all (collector was down) renders as a gap.
       return energyBarChart(
         slots.map((s) => s.label),
         [
@@ -239,15 +235,13 @@ export class Dashboard implements OnInit {
             name: 'PV-Erzeugung',
             color: CHART_COLORS.production,
             type: 'line',
-            data: slots.map((s, i) =>
-              i < first || i > last ? null : round2(byKey.get(s.key) ?? 0),
-            ),
+            data: slots.map((s) => byKey.get(s.key) ?? null),
           },
         ],
         // 1440 one-minute slots - force a label every 2h (120 slots) so it
         // lines up with the Leistung chart instead of 'auto' picking an
         // uneven spacing at this density.
-        { xAxisLabelInterval: 120 - 1 },
+        { xAxisLabelInterval: 120 - 1, unit: 'W' },
       );
     }
     if (view === 'month') {

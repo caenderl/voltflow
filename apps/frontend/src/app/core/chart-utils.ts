@@ -39,6 +39,12 @@ function kwhLabel(v: number | null): string {
   })} kWh`;
 }
 
+/** "1.234 W" tooltip label (absolute value, de-DE, no decimals); "–" for gaps. */
+function wLabel(v: number | null): string {
+  if (v == null) return '–';
+  return `${Math.round(Math.abs(Number(v))).toLocaleString('de-DE')} W`;
+}
+
 /** Append points to a time-series buffer, keeping it sorted, de-duped by
  *  timestamp and trimmed to `windowMs` (relative to the newest point). */
 export function appendWindowed<T extends { time: string }>(
@@ -293,10 +299,17 @@ export interface EnergyBarSeries {
 export function energyBarChart(
   labels: string[],
   series: EnergyBarSeries[],
-  opts: { legend?: boolean; stacked?: boolean; xAxisLabelInterval?: number | 'auto' } = {},
+  opts: {
+    legend?: boolean;
+    stacked?: boolean;
+    xAxisLabelInterval?: number | 'auto';
+    /** Y-axis unit: 'kWh' (default) or 'W' for a power line instead of energy bars. */
+    unit?: 'kWh' | 'W';
+  } = {},
 ): EChartsCoreOption {
+  const unit = opts.unit ?? 'kWh';
   return {
-    tooltip: { trigger: 'axis', valueFormatter: kwhLabel },
+    tooltip: { trigger: 'axis', valueFormatter: unit === 'W' ? wLabel : kwhLabel },
     ...(opts.legend
       ? {
           legend: {
@@ -321,7 +334,7 @@ export function energyBarChart(
     },
     yAxis: {
       type: 'value',
-      name: 'kWh',
+      name: unit,
       axisLabel: {
         color: CHART_COLORS.axisLabel,
         formatter: (v: number) => v.toLocaleString('de-DE'),
