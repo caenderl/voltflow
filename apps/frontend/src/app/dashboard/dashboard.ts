@@ -6,8 +6,8 @@ import {
   CHART_COLORS,
   ONE_DAY,
   TWO_HOURS,
-  type EnergyBarSeries,
-  energyBarChart,
+  type CategorySeries,
+  categorySeriesChart,
   energySlots,
   minuteBucketSlots,
   isoToSlotKey,
@@ -179,7 +179,7 @@ export class Dashboard implements OnInit {
       cur.exp += b.exportKwh;
       byKey.set(k, cur);
     }
-    const series: EnergyBarSeries[] = [
+    const series: CategorySeries[] = [
       {
         name: 'Bezug',
         color: CHART_COLORS.import,
@@ -205,7 +205,7 @@ export class Dashboard implements OnInit {
         });
       }
     }
-    return energyBarChart(
+    return categorySeriesChart(
       slots.map((s) => s.label),
       series,
       { legend: true, stacked: true },
@@ -228,7 +228,7 @@ export class Dashboard implements OnInit {
       const byKey = sumByMinuteBucket(data, (d) => d.powerW, 1);
       // 0 W is a real reading (night / no sun), not "no data" - only a slot with
       // no bucket at all (collector was down) renders as a gap.
-      return energyBarChart(
+      return categorySeriesChart(
         slots.map((s) => s.label),
         [
           {
@@ -249,7 +249,7 @@ export class Dashboard implements OnInit {
       if (data.length === 0) return null;
       const slots = energySlots('month', this.refDate());
       const byKey = new Map(data.map((d) => [isoToSlotKey(d.day), d.yieldKwh]));
-      return energyBarChart(
+      return categorySeriesChart(
         slots.map((s) => s.label),
         [
           {
@@ -279,7 +279,7 @@ export class Dashboard implements OnInit {
       // (status 2), over 30-second samples, / 120000 -> kWh. Unlike the PV
       // line, 0 is a real value here (not charging), so every slot is drawn.
       const byKey = sumByMinuteBucket(hist, (r) => (r.status === 2 ? (r.activePowerW ?? 0) : 0));
-      return energyBarChart(
+      return categorySeriesChart(
         slots.map((s) => s.label),
         [
           {
@@ -297,7 +297,7 @@ export class Dashboard implements OnInit {
       const data = this.data.wallboxDailyEnergy();
       const slots = energySlots(view, this.refDate());
       const byKey = new Map(data.map((d) => [isoToSlotKey(d.day), d.chargedKwh]));
-      return energyBarChart(
+      return categorySeriesChart(
         slots.map((s) => s.label),
         [
           {
