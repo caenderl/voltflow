@@ -70,16 +70,24 @@
 
 .big-watts {
   font-size: 6.5rem;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
-  letter-spacing: -0.02em;
-  color: var(--accent);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  // Glowing gradient reading from white into the state accent (green when
+  // exporting, red when importing, muted when idle - --accent is set on .hero).
+  background: linear-gradient(180deg, #ffffff 0%, var(--accent) 118%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 
   span {
     font-size: 2rem;
     font-weight: 500;
-    color: var(--muted);
     margin-left: 0.5rem;
+    // Opt the unit out of the clipped gradient so it stays a flat muted grey.
+    -webkit-text-fill-color: var(--muted);
+    color: var(--muted);
   }
 }
 
@@ -108,7 +116,6 @@
   font-size: 1.05rem;
   color: var(--on-surface-var);
 
-  .today-label { color: var(--muted); }
   .up { color: var(--import); }
   .down { color: var(--export); }
 }

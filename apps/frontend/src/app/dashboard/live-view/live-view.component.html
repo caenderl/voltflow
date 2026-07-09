@@ -28,7 +28,6 @@
   }
 
   <div class="today">
-    <span class="today-label">Heute</span>
     <span class="up">Bezug {{ (today()?.importKwh | number: '1.2-2') ?? '–' }} kWh</span>
     <span class="down">Einspeisung {{ (today()?.exportKwh | number: '1.2-2') ?? '–' }} kWh</span>
   </div>
