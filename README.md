@@ -1,5 +1,19 @@
 # Voltflow
 
+<!-- HUMAN-WRITTEN:START — Dieser Block wird ausschließlich vom Repo-Owner geschrieben
+     und gepflegt. KI-Assistenten/Agenten (inkl. Claude Code) dürfen Inhalte zwischen
+     diesen Markern nicht bearbeiten, umschreiben oder entfernen. -->
+
+## ✍️ Some notes *(human written)*
+
+This app is very specific to my home and wasn't planned to be more generic and support other devices, the abstraction is missing ... so far, who knows.
+I created this project mainly to try coding with Claude Code. Me, a Senior Software Develloper telling AI what to code, and sometimes how to do it better.
+Results are pretty good for the given requirements and complexity of the app. I also deployed it now on a Raspberry PI and let it track and visualize my homes energy flow. Of course no replacement for Home Assistant.
+
+<!-- HUMAN-WRITTEN:END -->
+
+## Funktion
+
 Erfasst die Live-Werte des **Anker Solix Smart Meters (A17X7)** über den MQTT-Cloud-Server,
 speichert sie in **TimescaleDB** und stellt sie in einer Web-App grafisch dar
 (Live, Tag, Woche, Monat). Bindet zusätzlich eine **Anker SOLIX V1 Wallbox (A5191)**
@@ -240,12 +254,3 @@ TimescaleDB-Version). Upgrades nur bewusst: Tag hochziehen → Backup → `docke
   Phasen) für PV-Überschussladen (Auslesen ist bereits umgesetzt)
 - Auth (aktuell für lokales Heimnetz ausgelegt)
 
-<!-- HUMAN-WRITTEN:START — Dieser Block wird ausschließlich vom Repo-Owner geschrieben
-     und gepflegt. KI-Assistenten/Agenten (inkl. Claude Code) dürfen Inhalte zwischen
-     diesen Markern nicht bearbeiten, umschreiben oder entfernen. -->
-
-## ✍️ Notiz vom Entwickler *(human written)*
-
-_Platz für ein paar persönliche Worte — hier direkt reinschreiben._
-
-<!-- HUMAN-WRITTEN:END -->
