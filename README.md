@@ -39,7 +39,7 @@ NX-Monorepo:
 | Pfad | Inhalt |
 |------|--------|
 | `apps/collector` | Python-Ingestion: Smart Meter (`anker-solix-api`/MQTT) **+ Wallbox (Modbus)** **+ SMA (Speedwire/`pysma-plus`)** |
-| `apps/backend`   | NestJS: REST (`/api/meter`, `/api/wallbox`, `/api/sma`, `/api/tariff`) + WebSocket (Live) |
+| `apps/backend`   | NestJS: REST (`/api/meter`, `/api/wallbox`, `/api/sma`, `/api/tariff`, `/api/system`) + WebSocket (Live) |
 | `apps/frontend`  | Angular-Dashboard (ngx-echarts) |
 | `libs/shared-types` | Geteilte TypeScript-Typen Backend ↔ Frontend |
 | `db/init.sql`    | Hypertables, Continuous Aggregates, NOTIFY-Trigger |
@@ -212,6 +212,7 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/sma/power/minute?from&to` | PV-Leistung pro Minute (W, Tagesansicht) |
 | `GET /api/sma/house-load?from&to` | Abgeleitete Hauslast-Zeitreihe (W) |
 | `GET /api/sma/balance?from&to` | Energiebilanz: Eigenverbrauch & Autarkie |
+| `GET /api/system/health` | Host-Health (Load/RAM/Disk) + Container-Liste (Admin-Tab „System", nicht persistiert) |
 | WS-Event `reading` | Live-Messwert Smart Meter (~alle 5 s) |
 | WS-Event `wallbox-reading` | Live-Wallbox-Wert (~alle 30 s) |
 | WS-Event `sma-reading` | Live-SMA-Wert (~alle 60 s) |

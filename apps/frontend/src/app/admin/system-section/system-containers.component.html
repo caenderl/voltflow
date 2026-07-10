@@ -1,0 +1,16 @@
+@if (containers().length === 0) {
+  <p class="empty">Keine Container-Daten. Der Docker-Socket ist nicht verfügbar (lokal ohne Docker) oder das Backend darf ihn nicht lesen.</p>
+} @else {
+  <ul class="container-list">
+    @for (c of containers(); track c.name) {
+      <li class="container-row">
+        <span class="dot" [class]="stateClass(c.state)" [attr.title]="c.state"></span>
+        <div class="container-text">
+          <span class="container-name">{{ c.name }}</span>
+          <span class="container-image">{{ c.image }}</span>
+        </div>
+        <span class="container-status">{{ c.status }}</span>
+      </li>
+    }
+  </ul>
+}

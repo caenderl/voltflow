@@ -1,0 +1,18 @@
+@if (error() && pending()) {
+  <div class="system-note error">Systemdaten konnten nicht geladen werden.</div>
+} @else if (pending()) {
+  <div class="system-note">Lade Systemdaten …</div>
+} @else {
+  <div class="system-stack">
+    <app-settings-card heading="Host" [subtitle]="'Laufzeit ' + uptime()">
+      <app-system-metrics [history]="history()" />
+    </app-settings-card>
+
+    <app-settings-card
+      heading="Container"
+      [subtitle]="containers().length + ' Container'"
+    >
+      <app-system-containers [containers]="containers()" />
+    </app-settings-card>
+  </div>
+}
