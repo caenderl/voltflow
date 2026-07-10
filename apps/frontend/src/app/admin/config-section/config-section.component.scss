@@ -1,0 +1,31 @@
+:host {
+  display: block;
+}
+
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.admin-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  border-top: 1px solid var(--outline);
+  padding-top: 1.5rem;
+  margin-top: 1.25rem;
+}
+
+.save-error {
+  margin-right: auto;
+  font-size: 0.85rem;
+  color: var(--import);
+}

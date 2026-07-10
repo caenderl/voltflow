@@ -70,6 +70,20 @@ branch in `run()`; then `Dockerfile.<device>`, `requirements-<device>.txt`, a
 → **Template: `apps/collector/wallbox_stream.py`** (config-gated: only polls when
 the device is enabled in the UI settings).
 
+## Frontend conventions
+
+- **Keep components small and focused.** Split a page/feature into per-section
+  components, each owning its own state, instead of one large component. When
+  building or reworking a view, prefer this decomposition over a monolith.
+- **Factor shared UI into reusable, presentational components** under
+  `apps/frontend/src/app/ui/` (e.g. `settings-card`, `toggle-switch`,
+  `text-field`, `number-field`). Reach for an existing one before writing new
+  markup; extract a new `ui/` component when the same pattern appears twice.
+- Standalone components, co-located `*.component.ts/.html/.scss`. Use signal
+  APIs (`input()` / `model()` / `linkedSignal`); two-way bind reusable controls
+  via `[value]`/`(valueChange)`. Generic utilities (buttons, `.hint-sm`) live in
+  the global `styles.scss`.
+
 ## Do not touch
 
 - `anker-solix-api/` — vendored upstream repo (editable install), don't edit

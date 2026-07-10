@@ -1,0 +1,38 @@
+:host {
+  display: block;
+}
+
+.settings-card {
+  background: var(--surface-3);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+
+  h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  p {
+    margin: 0.2rem 0 0;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+}
+
+// Header-projected controls (e.g. a toggle) never shrink. ::ng-deep is required
+// here (not just legacy habit): content passed via ng-content carries the
+// *projecting* component's encapsulation attribute, not this component's, so a
+// non-piercing selector can never match it.
+.card-head ::ng-deep [card-actions] {
+  flex: 0 0 auto;
+}
