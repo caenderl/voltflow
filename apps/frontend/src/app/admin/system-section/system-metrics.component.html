@@ -1,0 +1,35 @@
+<div class="metric-grid">
+  <!-- CPU load -->
+  <article class="metric-card">
+    <div class="metric-head">
+      <span class="metric-label">CPU-Last</span>
+      <span class="metric-value" [style.color]="loadColor()">{{ loadValue() }}</span>
+    </div>
+    <p class="metric-sub">{{ loadSub() }}</p>
+    <div echarts [options]="loadChart()" class="metric-spark"></div>
+  </article>
+
+  <!-- Memory -->
+  <article class="metric-card">
+    <div class="metric-head">
+      <span class="metric-label">Arbeitsspeicher</span>
+      <span class="metric-value" [style.color]="memColor()">{{ memValue() }}</span>
+    </div>
+    <p class="metric-sub">{{ memSub() }}</p>
+    <div echarts [options]="memChart()" class="metric-spark"></div>
+  </article>
+
+  <!-- Disk (near-static: a usage bar reads clearer than a sparkline) -->
+  <article class="metric-card">
+    <div class="metric-head">
+      <span class="metric-label">Festplatte</span>
+      <span class="metric-value" [style.color]="diskColor()">{{ diskValue() }}</span>
+    </div>
+    <p class="metric-sub">{{ diskSub() }}</p>
+    <div class="disk-bar" role="img" [attr.aria-label]="'Belegung ' + diskValue()">
+      @if (hasDisk()) {
+        <span class="disk-fill" [style.width.%]="diskPct()" [style.background]="diskColor()"></span>
+      }
+    </div>
+  </article>
+</div>

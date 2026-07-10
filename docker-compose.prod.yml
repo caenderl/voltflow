@@ -98,6 +98,16 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-voltflow}:${POSTGRES_PASSWORD:-voltflow}@db:5432/${POSTGRES_DB:-voltflow}
       PORT: 3000
+    # Admin "System" tab: read-only host monitoring. The container list is read
+    # from the Docker socket; load/memory/disk come from /proc + statfs on the
+    # overlay (which maps to the host disk). The socket is owned by root:docker,
+    # and the image runs as the non-root `node` user, so grant the container the
+    # host's docker group via DOCKER_GID in .env (find it with
+    # `getent group docker`). Without it the container list is simply empty.
+    group_add:
+      - "${DOCKER_GID:-999}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       db:
         condition: service_healthy

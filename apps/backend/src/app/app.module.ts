@@ -8,6 +8,7 @@ import { TariffModule } from './tariff/tariff.module';
 import { WallboxModule } from './wallbox/wallbox.module';
 import { SmaModule } from './sma/sma.module';
 import { LiveModule } from './live/live.module';
+import { SystemModule } from './system/system.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { LiveModule } from './live/live.module';
     WallboxModule,
     SmaModule,
     LiveModule,
+    SystemModule,
   ],
   controllers: [AppController],
   providers: [AppService],

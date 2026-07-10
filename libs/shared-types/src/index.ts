@@ -299,3 +299,59 @@ export interface HouseLoadPoint {
   /** PV production in W at this bucket. */
   pvPower: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// System health (host monitoring for the admin "System" tab)
+// ---------------------------------------------------------------------------
+
+/** Host load average over 1/5/15 min, with CPU core count for normalization. */
+export interface SystemLoad {
+  avg1: number;
+  avg5: number;
+  avg15: number;
+  /** Number of logical CPU cores (load == cores means ~100% utilization). */
+  cores: number;
+}
+
+/** Host memory usage in bytes (used = total − available). */
+export interface SystemMemory {
+  totalBytes: number;
+  usedBytes: number;
+  availableBytes: number;
+}
+
+/** Filesystem usage in bytes for the disk backing the app/data. */
+export interface SystemDisk {
+  totalBytes: number;
+  usedBytes: number;
+  availableBytes: number;
+}
+
+/** One running (or stopped) Docker container of the stack. */
+export interface ContainerStatus {
+  /** Container name (leading slash stripped). */
+  name: string;
+  /** Image reference. */
+  image: string;
+  /** Short state: running | exited | restarting | paused | … */
+  state: string;
+  /** Human status line, e.g. "Up 3 hours" or "Exited (0) 2 minutes ago". */
+  status: string;
+}
+
+/**
+ * Point-in-time host health snapshot, returned by GET /api/system/health.
+ * Not persisted — the frontend polls this and keeps a short rolling window.
+ */
+export interface SystemHealth {
+  /** ISO timestamp the snapshot was taken. */
+  time: string;
+  /** Host uptime in seconds. */
+  uptimeSec: number;
+  load: SystemLoad;
+  memory: SystemMemory;
+  /** Null when disk stats are unavailable (e.g. statfs failed). */
+  disk: SystemDisk | null;
+  /** Empty when the Docker socket is unavailable/unreadable. */
+  containers: ContainerStatus[];
+}
