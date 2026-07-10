@@ -11,6 +11,7 @@ import type {
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
 import { numOrNull, round3, toDataRange } from '../common/db-utils';
+import type { HasLatest, HasRange } from '../common/device-capabilities';
 import { DbService } from '../database/db.service';
 import { rowToReading } from './meter.mapper';
 
@@ -22,7 +23,7 @@ const VIEW_BY_RESOLUTION: Record<Exclude<SeriesResolution, 'raw'>, string> = {
 };
 
 @Injectable()
-export class MeterService {
+export class MeterService implements HasLatest<MeterReading>, HasRange {
   constructor(private readonly db: DbService) {}
 
   async range(): Promise<DataRange> {

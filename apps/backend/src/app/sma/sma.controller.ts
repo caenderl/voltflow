@@ -15,7 +15,7 @@ import type {
   SmaMinutePower,
   SmaReading,
 } from '@org/shared-types';
-import { emptyToNull, parseIntInRange, parseRange } from '../common/query-params';
+import { parseConfig, parseRange } from '../common/query-params';
 import { SmaService } from './sma.service';
 
 @Controller('sma')
@@ -29,14 +29,12 @@ export class SmaController {
 
   @Put('config')
   saveConfig(@Body() body: Partial<SmaConfig>): Promise<SmaConfig> {
-    const name = emptyToNull(body.name);
-    const host = emptyToNull(body.host);
-    const config: SmaConfig = {
-      enabled: Boolean(body.enabled),
-      name,
-      host,
-      pollIntervalS: parseIntInRange(body.pollIntervalS, 'pollIntervalS', 5, 3600, 60),
-    };
+    const config = parseConfig<SmaConfig>(body, {
+      enabled: { kind: 'bool' },
+      name: { kind: 'string' },
+      host: { kind: 'string' },
+      pollIntervalS: { kind: 'int', min: 5, max: 3600, fallback: 60 },
+    });
     if (config.enabled && !config.host) {
       throw new BadRequestException('host is required when enabled is true');
     }

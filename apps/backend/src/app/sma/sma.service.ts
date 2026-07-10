@@ -9,7 +9,13 @@ import type {
   SmaReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
-import { numOrNull, round2, toDataRange } from '../common/db-utils';
+import { numOrNull, toDataRange } from '../common/db-utils';
+import type {
+  Configurable,
+  HasHistory,
+  HasLatest,
+  HasRange,
+} from '../common/device-capabilities';
 import {
   SingletonConfigStore,
   asBool,
@@ -17,6 +23,7 @@ import {
   asStringOrNull,
 } from '../common/singleton-config';
 import { DbService } from '../database/db.service';
+import { computeEnergyBalance } from './energy-balance';
 import { rowToSmaReading } from './sma.mapper';
 
 const DEFAULT_CONFIG: SmaConfig = {
@@ -32,7 +39,13 @@ const READING_COLUMNS = `time, device_sn, asleep, grid_power, pv_power_a, pv_pow
   voltage_l1, voltage_l2, voltage_l3, frequency, temp_a, status`;
 
 @Injectable()
-export class SmaService {
+export class SmaService
+  implements
+    HasLatest<SmaReading>,
+    HasRange,
+    HasHistory<SmaReading>,
+    Configurable<SmaConfig>
+{
   private readonly config: SingletonConfigStore<SmaConfig>;
 
   constructor(private readonly db: DbService) {
@@ -172,22 +185,14 @@ export class SmaService {
       [from, to],
     );
 
-    const production = Math.max(0, Number(pv[0]?.['production_kwh'] ?? 0));
-    const importKwh = Math.max(0, Number(grid[0]?.['import_kwh'] ?? 0));
-    const exportKwh = Math.max(0, Number(grid[0]?.['export_kwh'] ?? 0));
-    const selfConsumed = Math.max(0, production - exportKwh);
-    const consumption = selfConsumed + importKwh;
-
-    return {
-      from: from.toISOString(),
-      to: to.toISOString(),
-      productionKwh: round2(production),
-      importKwh: round2(importKwh),
-      exportKwh: round2(exportKwh),
-      consumptionKwh: round2(consumption),
-      selfConsumedKwh: round2(selfConsumed),
-      selfConsumptionRate: production > 0 ? round2(selfConsumed / production) : null,
-      autarkyRate: consumption > 0 ? round2(selfConsumed / consumption) : null,
-    };
+    return computeEnergyBalance(
+      {
+        production: pv[0]?.['production_kwh'],
+        importKwh: grid[0]?.['import_kwh'],
+        exportKwh: grid[0]?.['export_kwh'],
+      },
+      from,
+      to,
+    );
   }
 }
