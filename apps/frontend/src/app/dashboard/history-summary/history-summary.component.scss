@@ -1,0 +1,168 @@
+:host {
+  display: block;
+}
+
+/* ---------- Desktop: each metric is its own card (2 rows of 3) ---------- */
+.group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+
+  // PV row sits a touch closer to the energy row above it.
+  &.pv {
+    margin-top: -0.5rem;
+  }
+}
+
+.metric {
+  background: var(--surface-1);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  box-shadow: var(--elev-1);
+
+  .label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    text-transform: uppercase;
+
+    // Small semantic dot, coloured per metric kind below.
+    &::before {
+      content: '';
+      flex: none;
+      width: 0.6rem;
+      height: 0.6rem;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+  }
+
+  .value {
+    font-size: 2.1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+
+    small {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--muted);
+    }
+  }
+
+  .sub {
+    margin-top: 0.15rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--on-surface-var);
+  }
+
+  // Value + dot coloured by semantic (unit stays muted via .value small above).
+  &.import {
+    .label::before { background: var(--import); }
+    .value { color: var(--import); }
+    .sub { color: var(--import); }
+  }
+  &.export {
+    .label::before { background: var(--export); }
+    .value { color: var(--export); }
+    .sub { color: var(--export); }
+  }
+  &.gen {
+    .label::before { background: var(--solar); }
+    .value { color: var(--solar); }
+  }
+  // Rates (Eigenverbrauch/Autarkie): neutral value, teal dot.
+  &.rate .label::before { background: var(--primary); }
+}
+
+// PV metrics are secondary - smaller values, tighter padding.
+.group.pv .metric {
+  padding: 1rem 1.25rem;
+
+  .value { font-size: 1.6rem; }
+}
+
+/* ---------- Phones: collapse each group into one card ---------- */
+@media (max-width: 540px) {
+  .group {
+    // The group itself becomes the card; metrics turn into cells.
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem 1rem;
+    padding: 1.1rem 1.25rem;
+    background: var(--surface-1);
+    border: 1px solid var(--outline);
+    border-radius: var(--radius);
+    box-shadow: var(--elev-1);
+
+    &.pv { margin-top: 0; }
+  }
+
+  .metric {
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+    gap: 0.2rem;
+
+    // Equalised headline size across both cards (Bezug/Einspeisung shrink to
+    // match PV-Erzeugung).
+    .value {
+      font-size: 1.6rem;
+
+      small { font-size: 0.85rem; }
+    }
+
+    .sub { font-size: 1rem; }
+
+    // "Gesamt" is redundant once the label sits inside a combined card.
+    .label .extra { display: none; }
+  }
+
+  // The desktop PV padding rule (.group.pv .metric) outranks the .metric reset
+  // above and media queries don't add specificity - so reset it at equal weight.
+  .group.pv .metric {
+    padding: 0;
+  }
+
+  // Energy card: Bezug | Einspeisung on top, Netto as a full-width total row.
+  .group.energy .metric.netto {
+    grid-column: 1 / -1;
+    margin-top: 0.55rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--outline);
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+
+    .value { font-size: 1.35rem; }
+  }
+
+  // PV card: PV-Erzeugung on top, Eigenverbrauch | Autarkie below.
+  .group.pv .metric.gen {
+    grid-column: 1 / -1;
+    padding-bottom: 0.7rem;
+    margin-bottom: 0.15rem;
+    border-bottom: 1px solid var(--outline);
+
+    // Explicit (rather than relying on the desktop `.group.pv .metric .value`
+    // rule, which happens to also say 1.6rem but would silently stop matching
+    // if that desktop size ever changed): headline stays equal to Bezug/Einspeisung.
+    .value { font-size: 1.6rem; }
+  }
+
+  // Rates read as secondary sub-metrics under the PV headline.
+  .group.pv .metric.rate .value {
+    font-size: 1.3rem;
+  }
+}

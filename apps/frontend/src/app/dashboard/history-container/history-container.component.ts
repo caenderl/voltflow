@@ -20,7 +20,8 @@ import {
 } from '../../core/chart-utils';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../../core/date-utils';
 import { DashboardDataService } from '../dashboard-data.service';
-import { HistoryViewComponent, type Costs } from '../history-view/history-view.component';
+import { HistoryViewComponent } from '../history-view/history-view.component';
+import { type Costs } from '../history-summary/history-summary.component';
 
 @Component({
   selector: 'app-history-container',
