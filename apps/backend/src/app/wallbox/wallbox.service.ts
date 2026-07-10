@@ -8,6 +8,12 @@ import type {
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
 import { toDataRange } from '../common/db-utils';
+import type {
+  Configurable,
+  HasHistory,
+  HasLatest,
+  HasRange,
+} from '../common/device-capabilities';
 import {
   SingletonConfigStore,
   asBool,
@@ -32,7 +38,13 @@ const READING_COLUMNS = `time, device_sn, status, cp_signal, active_power_w,
   l1_voltage_v, l2_voltage_v, l3_voltage_v`;
 
 @Injectable()
-export class WallboxService {
+export class WallboxService
+  implements
+    HasLatest<WallboxReading>,
+    HasRange,
+    HasHistory<WallboxReading>,
+    Configurable<WallboxConfig>
+{
   private readonly config: SingletonConfigStore<WallboxConfig>;
 
   constructor(private readonly db: DbService) {

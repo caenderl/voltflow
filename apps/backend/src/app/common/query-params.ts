@@ -48,3 +48,45 @@ export function emptyToNull(value: unknown): string | null {
     ? null
     : String(value).trim();
 }
+
+/** How to parse one field of a config request body. */
+export type ConfigFieldSpec =
+  | { kind: 'bool' }
+  | { kind: 'string' }
+  | { kind: 'int'; min: number; max: number; fallback: number };
+
+/**
+ * Parse & validate a config request body against a per-field schema, so each
+ * config endpoint declares its fields once instead of hand-writing the same
+ * Boolean/emptyToNull/parseIntInRange calls. The field key doubles as the error
+ * label. Device-specific cross-field rules (e.g. "host required when enabled")
+ * stay in the controller, applied to the returned object.
+ */
+export function parseConfig<T extends object>(
+  body: Partial<Record<keyof T, unknown>>,
+  schema: { [K in keyof T]: ConfigFieldSpec },
+): T {
+  const out = {} as T;
+  for (const key of Object.keys(schema) as (keyof T)[]) {
+    const spec = schema[key];
+    const raw = body[key];
+    let value: unknown;
+    switch (spec.kind) {
+      case 'bool':
+        value = Boolean(raw);
+        break;
+      case 'string':
+        value = emptyToNull(raw);
+        break;
+      case 'int':
+        value = parseIntInRange(raw, String(key), spec.min, spec.max, spec.fallback);
+        break;
+      default: {
+        const exhaustive: never = spec;
+        throw new Error(`Unhandled ConfigFieldSpec kind: ${JSON.stringify(exhaustive)}`);
+      }
+    }
+    out[key] = value as T[keyof T];
+  }
+  return out;
+}

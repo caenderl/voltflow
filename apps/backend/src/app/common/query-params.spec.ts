@@ -1,6 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
-import { emptyToNull, parseIntInRange, parseRange, startOfMonth } from './query-params';
+import {
+  emptyToNull,
+  parseConfig,
+  parseIntInRange,
+  parseRange,
+  startOfMonth,
+} from './query-params';
 
 describe('parseRange', () => {
   it('parses explicit from/to', () => {
@@ -59,5 +65,46 @@ describe('emptyToNull', () => {
     expect(emptyToNull('  host.local ')).toBe('host.local');
     // Whitespace-only input is not caught by the empty check -> trimmed to ''.
     expect(emptyToNull('   ')).toBe('');
+  });
+});
+
+describe('parseConfig', () => {
+  interface Cfg {
+    enabled: boolean;
+    host: string | null;
+    port: number;
+  }
+  const schema = {
+    enabled: { kind: 'bool' },
+    host: { kind: 'string' },
+    port: { kind: 'int', min: 1, max: 65535, fallback: 502 },
+  } as const;
+
+  it('coerces each field per its spec', () => {
+    const cfg = parseConfig<Cfg>(
+      { enabled: 1 as unknown, host: '  h.local ', port: '8080' },
+      schema,
+    );
+    expect(cfg).toEqual({ enabled: true, host: 'h.local', port: 8080 });
+  });
+
+  it('applies defaults for missing int / null-ish string / falsy bool', () => {
+    const cfg = parseConfig<Cfg>({}, schema);
+    expect(cfg).toEqual({ enabled: false, host: null, port: 502 });
+  });
+
+  it('throws with the field name as label for an out-of-range int', () => {
+    expect(() => parseConfig<Cfg>({ port: 70000 }, schema)).toThrow(
+      BadRequestException,
+    );
+    expect(() => parseConfig<Cfg>({ port: 70000 }, schema)).toThrow('port');
+  });
+
+  it('only emits keys present in the schema (ignores extra body fields)', () => {
+    const cfg = parseConfig<Cfg>(
+      { enabled: true, host: 'h', port: 10, extra: 'x' } as Record<string, unknown>,
+      schema,
+    );
+    expect(Object.keys(cfg).sort()).toEqual(['enabled', 'host', 'port']);
   });
 });
