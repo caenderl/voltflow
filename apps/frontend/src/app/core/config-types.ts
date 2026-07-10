@@ -15,4 +15,5 @@ export interface CheckpointSaveEvent {
   exportKwh: number;
 }
 
-export type ConfigTab = 'tariff' | 'wallbox' | 'sma' | 'checkpoints';
+/** Top-level sections of the admin page. */
+export type AdminSection = 'config' | 'checkpoints' | 'system';

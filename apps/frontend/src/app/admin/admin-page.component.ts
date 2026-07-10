@@ -3,7 +3,7 @@ import { Component, inject, linkedSignal, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import type { MeterCheckpoint } from '@org/shared-types';
-import type { ConfigTab } from '../core/config-types';
+import type { AdminSection } from '../core/config-types';
 import { toLocalDateString } from '../core/date-utils';
 import { DashboardDataService } from '../dashboard/dashboard-data.service';
 
@@ -20,7 +20,7 @@ export class AdminPageComponent {
 
   readonly checkpoints = this.data.checkpoints;
 
-  readonly activeTab = signal<ConfigTab>('tariff');
+  readonly activeTab = signal<AdminSection>('config');
   readonly saveError = signal(false);
 
   // The config signals load asynchronously (and may not be ready when this page
