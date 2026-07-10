@@ -1,20 +1,14 @@
 import { Component, input, output } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsCoreOption } from 'echarts/core';
 import type { EnergyBalance, EnergySummary } from '@org/shared-types';
 import type { View } from '../../core/date-utils';
-
-export interface Costs {
-  importCost: number;
-  exportRevenue: number;
-  net: number;
-}
+import { HistorySummaryComponent, type Costs } from '../history-summary/history-summary.component';
 
 @Component({
   selector: 'app-history-view',
   standalone: true,
-  imports: [CommonModule, NgxEchartsDirective],
+  imports: [NgxEchartsDirective, HistorySummaryComponent],
   templateUrl: './history-view.component.html',
   styleUrl: './history-view.component.scss',
 })

@@ -1,0 +1,41 @@
+<section class="group energy">
+  <div class="metric import">
+    <span class="label">Bezug <span class="extra">gesamt</span></span>
+    <span class="value">{{ (energy()?.importKwh | number: '1.2-2') ?? '–' }} <small>kWh</small></span>
+    @if (hasTariff() && costs(); as c) {
+      <span class="sub">{{ c.importCost | number: '1.2-2' }} €</span>
+    }
+  </div>
+  <div class="metric export">
+    <span class="label">Einspeisung <span class="extra">gesamt</span></span>
+    <span class="value">{{ (energy()?.exportKwh | number: '1.2-2') ?? '–' }} <small>kWh</small></span>
+    @if (hasTariff() && costs(); as c) {
+      <span class="sub">{{ c.exportRevenue | number: '1.2-2' }} €</span>
+    }
+  </div>
+  @if (hasTariff() && costs(); as c) {
+    <div class="metric netto" [class.import]="c.net >= 0" [class.export]="c.net < 0">
+      <span class="label">Netto</span>
+      <span class="value">{{ c.net | number: '1.2-2' }} <small>€</small></span>
+    </div>
+  }
+</section>
+
+@if (balance(); as b) {
+  @if (b.productionKwh > 0) {
+    <section class="group pv">
+      <div class="metric gen">
+        <span class="label">PV-Erzeugung</span>
+        <span class="value">{{ b.productionKwh | number: '1.2-2' }} <small>kWh</small></span>
+      </div>
+      <div class="metric rate">
+        <span class="label">Eigenverbrauch</span>
+        <span class="value">{{ (b.selfConsumptionRate !== null ? b.selfConsumptionRate * 100 : null) | number: '1.0-0' }} <small>%</small></span>
+      </div>
+      <div class="metric rate">
+        <span class="label">Autarkie</span>
+        <span class="value">{{ (b.autarkyRate !== null ? b.autarkyRate * 100 : null) | number: '1.0-0' }} <small>%</small></span>
+      </div>
+    </section>
+  }
+}
