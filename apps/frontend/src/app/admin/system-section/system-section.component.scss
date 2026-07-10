@@ -1,0 +1,34 @@
+:host {
+  display: block;
+}
+
+.system-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: 4rem 1.5rem;
+  background: var(--surface-3);
+  border-radius: var(--radius);
+
+  svg {
+    width: 3rem;
+    height: 3rem;
+    fill: var(--muted);
+    opacity: 0.6;
+  }
+
+  h2 {
+    margin: 0.5rem 0 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 0;
+    max-width: 32rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+}

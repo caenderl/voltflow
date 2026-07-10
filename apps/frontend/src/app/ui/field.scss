@@ -1,0 +1,33 @@
+// Shared styling for the labelled input controls (text-field, number-field).
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+
+  span {
+    font-size: 0.85rem;
+    color: var(--on-surface-var);
+  }
+
+  input {
+    width: 100%;
+    min-width: 0;
+    background: var(--surface-1);
+    color: var(--on-surface);
+    border: 1px solid var(--outline);
+    border-radius: var(--radius-sm);
+    padding: 0.65rem 0.8rem;
+    font: inherit;
+    color-scheme: dark;
+
+    &:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+  }
+}
