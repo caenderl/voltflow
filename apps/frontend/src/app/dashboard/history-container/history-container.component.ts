@@ -266,8 +266,12 @@ export class HistoryContainerComponent {
     // onSameUrlNavigation:'reload' the router still emits a NavigationEnd for the
     // unchanged URL; detect that (url identical to the previous navigation's) to
     // jump back to today. Guarded this way it never double-loads alongside the
-    // effect, which handles every genuine view change.
-    let lastUrl: string | null = null;
+    // effect, which handles every genuine view change. Seeded from the current
+    // URL (a synchronous snapshot, not an event) rather than null - the
+    // NavigationEnd for the navigation that activated this component can itself
+    // be missed (see above), which would otherwise leave the very first reclick
+    // after a fresh activation undetected.
+    let lastUrl: string | null = this.router.url;
     this.router.events
       .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),
