@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import type { EChartsCoreOption } from 'echarts/core';
@@ -252,18 +252,31 @@ export class HistoryContainerComponent {
   });
 
   constructor() {
-    // Load - and reset to "today" - on every navigation that lands here: the
-    // first activation, switching between history tabs (a fresh instance each
-    // time), and, thanks to onSameUrlNavigation:'reload', re-clicking the
-    // already-active tab (same instance, so the input is unchanged and only
-    // this fires). The component input is set before NavigationEnd, so view()
-    // is current here.
+    // Load - and reset to "today" - whenever the active view changes: the first
+    // activation (including a hard refresh / deep link) and switching between
+    // history tabs. Driven by the `view` input signal rather than router events
+    // so the initial load is reliable: on a fresh page load the router's initial
+    // NavigationEnd is emitted while this component is being activated, before
+    // this constructor's subscription exists, so a refresh on /day would never
+    // load if we depended on it (router.events has no replay).
+    effect(() => this.loadNow(this.view()));
+
+    // Re-clicking the already-active tab keeps the same instance and the same
+    // view input, so the effect above does not fire. With
+    // onSameUrlNavigation:'reload' the router still emits a NavigationEnd for the
+    // unchanged URL; detect that (url identical to the previous navigation's) to
+    // jump back to today. Guarded this way it never double-loads alongside the
+    // effect, which handles every genuine view change.
+    let lastUrl: string | null = null;
     this.router.events
       .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe(() => this.loadNow(this.view()));
+      .subscribe((e) => {
+        if (e.urlAfterRedirects === lastUrl) this.loadNow(this.view());
+        lastUrl = e.urlAfterRedirects;
+      });
   }
 
   /** Reset refDate to now and load that period. */
