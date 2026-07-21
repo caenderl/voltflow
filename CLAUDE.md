@@ -23,12 +23,17 @@ npm run dev         # backend :3000 + frontend :4200 (native hot-reload)
 npm run dev:all     # + collector in parallel
 npm run collector   # collector alone (venv/bin/python)
 npm test            # vitest (unit tests for pure TS functions, *.spec.ts)
+npm run typecheck   # tsc --build over the whole workspace
 ```
 
 - venv + `anker-solix-api` (editable install) setup: see @README.md.
 - **Tests:** `npm test` runs vitest (root `vitest.config.ts`, colocated
   `*.spec.ts` files). Covers pure functions only — no DB/HTTP/component tests.
   There is no lint runner and no pytest for the collector.
+- **Typecheck:** always via `npm run typecheck` (`tsc --build`). A bare
+  `tsc --noEmit -p <project>` does *not* rebuild the referenced `shared-types`
+  project and reports phantom "has no exported member" errors against its stale
+  `libs/shared-types/dist/*.d.ts`.
 
 ## Hard constraints
 

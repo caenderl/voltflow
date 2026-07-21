@@ -18,6 +18,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Typecheck (tsc --build)
+        run: npm run typecheck
+
       - name: Test (vitest)
         run: npm test
 

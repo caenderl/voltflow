@@ -40,6 +40,8 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
     text: string,
     params?: unknown[],
   ): Promise<{ rows: T[] }> {
-    return this.pool.query(text, params) as Promise<{ rows: T[] }>;
+    // pg types rows as QueryResultRow ({ [col: string]: any }); row shapes are
+    // plain interfaces, so the caller's T is not comparable to it directly.
+    return this.pool.query(text, params) as unknown as Promise<{ rows: T[] }>;
   }
 }
