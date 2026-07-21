@@ -37,6 +37,7 @@ export class LiveContainerComponent {
   readonly smaName = computed(() => this.data.smaConfig()?.name?.trim() || 'PV-Anlage');
 
   readonly smaState = computed<SmaState | null>(() => {
+    if (this.data.smaConfig()?.enabled === false) return null;
     const s = this.data.sma();
     if (!s) return null;
     return {
@@ -47,6 +48,7 @@ export class LiveContainerComponent {
   });
 
   readonly wallboxState = computed<WallboxState | null>(() => {
+    if (this.data.wallboxConfig()?.enabled === false) return null;
     const w = this.data.wallbox();
     if (!w) return null;
     const status = w.status ?? 0;
