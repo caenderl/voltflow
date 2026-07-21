@@ -102,8 +102,11 @@ services:
     # from the Docker socket; load/memory/disk come from /proc + statfs on the
     # overlay (which maps to the host disk). The socket is owned by root:docker,
     # and the image runs as the non-root `node` user, so grant the container the
-    # host's docker group via DOCKER_GID in .env (find it with
-    # `getent group docker`). Without it the container list is simply empty.
+    # host's docker group via DOCKER_GID in the SERVER's .env (find it with
+    # `getent group docker` — it is host-specific, 108 on ours; the 999 below is
+    # only a fallback and is wrong as often as not). A wrong gid fails silently:
+    # `docker query failed: EACCES /var/run/docker.sock` once in the log, then an
+    # empty container list. deploy.sh does not push .env, so set it on the server.
     group_add:
       - "${DOCKER_GID:-999}"
     volumes:
