@@ -136,13 +136,22 @@ export interface ReconciliationInterval {
   status: ReconciliationStatus;
 }
 
-/** All comparable intervals combined — the basis for the correction factors. */
+/**
+ * All comparable intervals combined — the basis for the correction factors.
+ *
+ * Deliberately carries no from/to date: the comparable intervals need not be
+ * contiguous (a single unreadable checkpoint knocks out the two intervals
+ * around it), so an outer date range would imply a continuous measurement that
+ * the kWh sums do not cover. `days` therefore counts only the measured days,
+ * and `skippedCount` says how much was left out.
+ */
 export interface ReconciliationTotals {
-  fromDate: string;
-  toDate: string;
+  /** Days actually covered by the comparable intervals, excluding gaps. */
   days: number;
   /** How many intervals went into these totals. */
   intervalCount: number;
+  /** Intervals left out because they were not comparable (no-data / reset). */
+  skippedCount: number;
   meterImportKwh: number;
   meterExportKwh: number;
   smartImportKwh: number;

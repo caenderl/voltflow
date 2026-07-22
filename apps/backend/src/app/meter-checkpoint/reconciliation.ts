@@ -123,18 +123,14 @@ function sumComparable(
   const smartImport = sum(ok.map((i) => i.smartImportKwh ?? 0));
   const smartExport = sum(ok.map((i) => i.smartExportKwh ?? 0));
 
-  const fromDate = ok[0].fromDate;
-  const toDate = ok[ok.length - 1].toDate;
-
   return {
-    fromDate,
-    toDate,
-    // The calendar span of [fromDate, toDate], not the sum of the ok intervals'
-    // own day counts: a reset/no-data interval can sit *between* two ok ones
-    // (not just at an edge), in which case those would disagree — the total
-    // would silently undercount the days shown right next to it.
-    days: daysBetween(fromDate, toDate),
+    // Only the measured days, so the figure stays consistent with the kWh sums
+    // it is shown next to. The comparable intervals need not be contiguous, so
+    // spanning the outer date range instead would claim evidence for days that
+    // never entered the sums.
+    days: sum(ok.map((i) => i.days)),
     intervalCount: ok.length,
+    skippedCount: intervals.length - ok.length,
     meterImportKwh: round2(meterImport),
     meterExportKwh: round2(meterExport),
     smartImportKwh: round2(smartImport),

@@ -40,7 +40,9 @@ export class CheckpointReconciliationComponent {
    * One-line verdict on the smart meter's accuracy, or null without totals.
    * Covers both directions, since a CT-clamp meter can plausibly measure
    * import and export with different accuracy — a headline about Bezug alone
-   * would hide a deviation on the Einspeisung side.
+   * would hide a deviation on the Einspeisung side. Names the days that were
+   * actually measured and how much was left out, so the sentence never claims
+   * more evidence than the sums behind it.
    */
   readonly verdict = computed(() => {
     const t = this.totals();
@@ -50,7 +52,11 @@ export class CheckpointReconciliationComponent {
       describeDeviation(t.exportDeviationPct, 'Einspeisung'),
     ].filter((c): c is string => c !== null);
     if (!clauses.length) return null;
-    return `Das SmartMeter misst über ${t.days} Tage: ${clauses.join(', ')}.`;
+
+    const verdict = `Über ${t.days} vergleichbare Tage misst das SmartMeter: ${clauses.join(', ')}.`;
+    if (t.skippedCount === 0) return verdict;
+    const total = t.intervalCount + t.skippedCount;
+    return `${verdict} ${t.skippedCount} von ${total} Zeiträumen fehlen Vergleichsdaten.`;
   });
 
   statusHint(status: ReconciliationStatus): string {

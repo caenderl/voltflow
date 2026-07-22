@@ -33,6 +33,8 @@ export class CheckpointsSectionComponent {
   private readonly data = inject(DashboardDataService);
 
   readonly checkpoints = this.data.checkpoints;
+  /** Save/delete failures — without this a rejected date fails silently here. */
+  readonly error = this.data.error;
 
   // Plain transient UI state, not derived from config.
   readonly formCpEditingId = signal<number | null>(null);
