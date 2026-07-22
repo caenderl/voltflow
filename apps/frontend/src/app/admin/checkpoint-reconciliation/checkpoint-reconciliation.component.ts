@@ -11,6 +11,14 @@ const STATUS_HINT: Record<ReconciliationStatus, string> = {
   reset: 'Der Zählerstand ist rückwärts gesprungen (Gerätetausch oder Tippfehler).',
 };
 
+/** One clause of the verdict, e.g. "Bezug stimmt praktisch exakt" or null without data. */
+function describeDeviation(pct: number | null, label: string): string | null {
+  if (pct === null) return null;
+  if (Math.abs(pct) < 0.05) return `${label} stimmt praktisch exakt`;
+  const direction = pct < 0 ? 'zu niedrig' : 'zu hoch';
+  return `${label} ${Math.abs(pct).toFixed(2).replace('.', ',')} % ${direction}`;
+}
+
 /**
  * "Abgleich mit dem SmartMeter": per interval between two checkpoints, what the
  * physical meter counted vs. what the smart meter counted over the same span.
@@ -28,18 +36,21 @@ export class CheckpointReconciliationComponent {
   readonly intervals = computed(() => this.data.reconciliation()?.intervals ?? []);
   readonly totals = computed(() => this.data.reconciliation()?.totals ?? null);
 
-  /** One-line verdict on the smart meter's accuracy, or null without totals. */
+  /**
+   * One-line verdict on the smart meter's accuracy, or null without totals.
+   * Covers both directions, since a CT-clamp meter can plausibly measure
+   * import and export with different accuracy — a headline about Bezug alone
+   * would hide a deviation on the Einspeisung side.
+   */
   readonly verdict = computed(() => {
     const t = this.totals();
-    if (t === null || t.importDeviationPct === null) return null;
-    const pct = t.importDeviationPct;
-    const direction = pct < 0 ? 'zu niedrig' : 'zu hoch';
-    if (Math.abs(pct) < 0.05) {
-      return `Das SmartMeter deckt sich über ${t.days} Tage praktisch exakt mit dem Zähler.`;
-    }
-    return `Das SmartMeter misst den Bezug über ${t.days} Tage um ${Math.abs(pct)
-      .toFixed(2)
-      .replace('.', ',')} % ${direction}.`;
+    if (t === null) return null;
+    const clauses = [
+      describeDeviation(t.importDeviationPct, 'Bezug'),
+      describeDeviation(t.exportDeviationPct, 'Einspeisung'),
+    ].filter((c): c is string => c !== null);
+    if (!clauses.length) return null;
+    return `Das SmartMeter misst über ${t.days} Tage: ${clauses.join(', ')}.`;
   });
 
   statusHint(status: ReconciliationStatus): string {

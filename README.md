@@ -199,6 +199,7 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/meter/energy?period=day\|week\|month&date=YYYY-MM-DD` | kWh-Bezug/Einspeisung |
 | `GET /api/meter/range` | Verfügbarer Datenzeitraum |
 | `GET` / `POST` / `PUT` / `DELETE /api/meter-checkpoints` | Manuelle Zählerstände (Abgleich mit dem physischen Zähler) |
+| `GET /api/meter-checkpoints/reconciliation` | Abgleich der Zählerstände mit dem SmartMeter + Hochrechnung |
 | `GET` / `PUT /api/tariff` | Stromtarif (Preise ct/kWh) |
 | `GET` / `PUT /api/wallbox/config` | Wallbox-Verbindung (Name, IP, Port, Unit-ID, Intervall, an/aus) |
 | `GET /api/wallbox/latest` | Letzter Wallbox-Messwert |
