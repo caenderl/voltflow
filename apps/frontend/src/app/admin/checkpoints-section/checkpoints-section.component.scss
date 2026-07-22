@@ -2,7 +2,10 @@
   display: block;
 }
 
-app-settings-card + app-settings-card {
+// Stack the cards and the derived sections (projection, reconciliation) evenly.
+app-settings-card + app-settings-card,
+app-checkpoint-projection,
+app-checkpoint-reconciliation {
   display: block;
   margin-top: 1.25rem;
 }

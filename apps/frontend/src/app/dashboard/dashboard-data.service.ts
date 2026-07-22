@@ -6,6 +6,7 @@ import type {
   EnergySummary,
   MeterCheckpoint,
   MeterReading,
+  MeterReconciliation,
   SeriesResponse,
   SmaConfig,
   SmaDailySummary,
@@ -69,6 +70,8 @@ export class DashboardDataService {
   readonly wallboxConfig = signal<WallboxConfig | null>(null);
   readonly smaConfig = signal<SmaConfig | null>(null);
   readonly checkpoints = signal<MeterCheckpoint[]>([]);
+  /** Checkpoints vs. smart meter, recomputed whenever a checkpoint changes. */
+  readonly reconciliation = signal<MeterReconciliation | null>(null);
 
   // Selected history period (day/week/month)
   readonly series = signal<SeriesResponse | null>(null);
@@ -238,7 +241,10 @@ export class DashboardDataService {
 
   deleteCheckpoint(id: number): void {
     this.settingsApi.deleteMeterCheckpoint(id).subscribe({
-      next: () => this.checkpoints.set(this.checkpoints().filter((c) => c.id !== id)),
+      next: () => {
+        this.checkpoints.set(this.checkpoints().filter((c) => c.id !== id));
+        this.loadCheckpoints();
+      },
       error: () => this.error.set('Zählerstand konnte nicht gelöscht werden.'),
     });
   }
@@ -248,8 +254,10 @@ export class DashboardDataService {
     obs.subscribe({ next: apply, error: () => undefined });
   }
 
+  /** Reload the checkpoint list and the derived smart meter comparison. */
   private loadCheckpoints(): void {
     this.loadInto(this.settingsApi.meterCheckpoints(), (c) => this.checkpoints.set(c));
+    this.loadInto(this.settingsApi.meterReconciliation(), (r) => this.reconciliation.set(r));
   }
 
   private loadToday(): void {

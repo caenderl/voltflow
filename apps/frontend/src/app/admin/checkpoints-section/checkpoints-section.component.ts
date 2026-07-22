@@ -6,6 +6,8 @@ import { DashboardDataService } from '../../dashboard/dashboard-data.service';
 import { NumberFieldComponent } from '../../ui/number-field/number-field.component';
 import { SettingsCardComponent } from '../../ui/settings-card/settings-card.component';
 import { TextFieldComponent } from '../../ui/text-field/text-field.component';
+import { CheckpointProjectionComponent } from '../checkpoint-projection/checkpoint-projection.component';
+import { CheckpointReconciliationComponent } from '../checkpoint-reconciliation/checkpoint-reconciliation.component';
 
 /**
  * "Zählerstände" section: add/edit form plus a table of recorded meter
@@ -15,7 +17,15 @@ import { TextFieldComponent } from '../../ui/text-field/text-field.component';
 @Component({
   selector: 'app-checkpoints-section',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, SettingsCardComponent, TextFieldComponent, NumberFieldComponent],
+  imports: [
+    DatePipe,
+    DecimalPipe,
+    SettingsCardComponent,
+    TextFieldComponent,
+    NumberFieldComponent,
+    CheckpointProjectionComponent,
+    CheckpointReconciliationComponent,
+  ],
   templateUrl: './checkpoints-section.component.html',
   styleUrl: './checkpoints-section.component.scss',
 })

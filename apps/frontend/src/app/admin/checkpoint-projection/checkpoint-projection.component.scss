@@ -1,0 +1,55 @@
+:host {
+  display: block;
+}
+
+.projection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+
+  .label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+
+  .value {
+    font-size: 1.5rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+
+    small {
+      font-size: 0.9rem;
+      font-weight: 400;
+      color: var(--muted);
+    }
+  }
+
+  .sub {
+    font-size: 0.78rem;
+    color: var(--on-surface-var);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sub.calibrated {
+    color: var(--muted);
+  }
+
+  &.import .value {
+    color: var(--import);
+  }
+
+  &.export .value {
+    color: var(--export);
+  }
+}

@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import type {
   MeterCheckpoint,
   MeterCheckpointInput,
+  MeterReconciliation,
   Tariff,
 } from '@org/shared-types';
 
@@ -22,6 +23,10 @@ export class SettingsApiService {
 
   meterCheckpoints(): Observable<MeterCheckpoint[]> {
     return this.http.get<MeterCheckpoint[]>('/api/meter-checkpoints');
+  }
+
+  meterReconciliation(): Observable<MeterReconciliation> {
+    return this.http.get<MeterReconciliation>('/api/meter-checkpoints/reconciliation');
   }
 
   createMeterCheckpoint(input: MeterCheckpointInput): Observable<MeterCheckpoint> {
