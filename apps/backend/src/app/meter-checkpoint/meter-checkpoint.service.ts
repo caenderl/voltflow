@@ -88,6 +88,7 @@ export class MeterCheckpointService {
             WHERE bucket <  ((c.date + $2::time) AT TIME ZONE $1)
               AND bucket >= ((c.date + $2::time) AT TIME ZONE $1) - $3::interval
               AND grid_import_energy IS NOT NULL
+              AND grid_export_energy IS NOT NULL
             ORDER BY bucket DESC
             LIMIT 1
          ) s ON TRUE

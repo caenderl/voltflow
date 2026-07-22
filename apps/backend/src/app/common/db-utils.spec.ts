@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { numOrNull, round2, round3, toDataRange } from './db-utils';
+import { numOrNull, round2, round3, round4, toDataRange } from './db-utils';
 
 describe('numOrNull', () => {
   it('converts pg numeric strings to numbers', () => {
@@ -13,12 +13,14 @@ describe('numOrNull', () => {
   });
 });
 
-describe('round2 / round3', () => {
+describe('round2 / round3 / round4', () => {
   it('rounds to the expected precision', () => {
     expect(round2(1.234)).toBe(1.23);
     expect(round2(1.235)).toBe(1.24);
     expect(round3(1.2344)).toBe(1.234);
     expect(round3(1.2345)).toBe(1.235);
+    expect(round4(1.23454)).toBe(1.2345);
+    expect(round4(1.23455)).toBe(1.2346);
   });
 });
 

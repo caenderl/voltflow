@@ -104,12 +104,36 @@ describe('computeReconciliation', () => {
     expect(t?.intervalCount).toBe(2);
     expect(t?.fromDate).toBe('2026-06-01');
     expect(t?.toDate).toBe('2026-08-01');
+    // 30 (Jun) + 31 (Jul) days, matching the fromDate..toDate span shown
+    // alongside it -- not 61 by coincidence, see the sandwiched-gap test below.
+    expect(t?.days).toBe(61);
     expect(t?.meterImportKwh).toBe(300);
     expect(t?.smartImportKwh).toBe(296);
     expect(t?.importDeviationKwh).toBe(-4);
     // 300 / 296 -> scale a smart meter delta up by ~1.35 %
     expect(t?.importFactor).toBe(1.0135);
     expect(t?.exportFactor).toBe(1);
+  });
+
+  it('totals.days matches the fromDate..toDate span even with a gap sandwiched in the middle', () => {
+    // A reset between two otherwise-ok checkpoints would, if totals.days were
+    // the sum of only the ok intervals' own day counts, silently omit the
+    // 20-day reset interval while fromDate/toDate still spans across it --
+    // showing e.g. "01.06-01.07 - 10 Tage" for a range that is really 30 days.
+    const r = computeReconciliation(
+      [
+        sample('2026-06-01', 42000, 51000, 2000, 1000),
+        sample('2026-06-05', 42020, 51010, 2020, 1010), // ok, 4 days
+        sample('2026-06-25', 42060, 51030, 100, 50), // reset (counter rolled back), 20 days
+        sample('2026-07-01', 42080, 51040, 120, 60), // ok, 6 days
+      ],
+      null,
+    );
+
+    const t = r.totals;
+    expect(t?.fromDate).toBe('2026-06-01');
+    expect(t?.toDate).toBe('2026-07-01');
+    expect(t?.days).toBe(30); // the full calendar span, not 4 + 6 = 10
   });
 
   it('projects the current reading from the newest usable checkpoint', () => {
