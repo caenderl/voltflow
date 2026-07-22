@@ -9,7 +9,11 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import type { MeterCheckpoint, MeterCheckpointInput } from '@org/shared-types';
+import type {
+  MeterCheckpoint,
+  MeterCheckpointInput,
+  MeterReconciliation,
+} from '@org/shared-types';
 import { MeterCheckpointService } from './meter-checkpoint.service';
 
 @Controller('meter-checkpoints')
@@ -19,6 +23,12 @@ export class MeterCheckpointController {
   @Get()
   list(): Promise<MeterCheckpoint[]> {
     return this.checkpoints.list();
+  }
+
+  /** Checkpoints vs. the smart meter's own counters + today's projection. */
+  @Get('reconciliation')
+  reconciliation(): Promise<MeterReconciliation> {
+    return this.checkpoints.reconciliation();
   }
 
   @Post()

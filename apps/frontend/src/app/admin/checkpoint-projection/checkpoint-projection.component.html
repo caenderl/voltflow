@@ -1,0 +1,39 @@
+<app-settings-card
+  heading="Geschätzter Zählerstand"
+  subtitle="Letzter abgelesener Stand plus alles, was das SmartMeter seitdem gezählt hat."
+>
+  @if (projection(); as p) {
+    <div class="projection-grid">
+      <div class="metric import">
+        <span class="label">Bezug</span>
+        <span class="value">{{ p.importKwh | number: '1.1-1' }} <small>kWh</small></span>
+        <span class="sub">+{{ p.sinceImportKwh | number: '1.1-1' }} kWh seit dem Ablesen</span>
+        @if (p.calibratedImportKwh !== null) {
+          <span class="sub calibrated">
+            kalibriert: {{ p.calibratedImportKwh | number: '1.1-1' }} kWh
+          </span>
+        }
+      </div>
+      <div class="metric export">
+        <span class="label">Einspeisung</span>
+        <span class="value">{{ p.exportKwh | number: '1.1-1' }} <small>kWh</small></span>
+        <span class="sub">+{{ p.sinceExportKwh | number: '1.1-1' }} kWh seit dem Ablesen</span>
+        @if (p.calibratedExportKwh !== null) {
+          <span class="sub calibrated">
+            kalibriert: {{ p.calibratedExportKwh | number: '1.1-1' }} kWh
+          </span>
+        }
+      </div>
+    </div>
+
+    <p class="hint-sm">
+      Basis: Zählerstand vom {{ p.baseDate | date: 'dd.MM.yyyy' }} · SmartMeter-Stand vom
+      {{ p.asOf | date: 'dd.MM.yyyy, HH:mm' }}.
+      @if (p.calibratedImportKwh !== null) {
+        Der kalibrierte Wert rechnet die im Abgleich gemessene Abweichung des SmartMeters heraus.
+      }
+    </p>
+  } @else {
+    <p class="hint-sm">{{ emptyReason() }}</p>
+  }
+</app-settings-card>

@@ -99,6 +99,90 @@ export interface MeterCheckpointInput {
   exportKwh: number;
 }
 
+/**
+ * Why an interval between two checkpoints could (not) be compared.
+ *
+ * `ok` — both ends have a smart meter reading and both counters advanced.
+ * `no-data` — the smart meter has no reading around the assumed reading time on
+ *   one of the two checkpoint days.
+ * `reset` — a counter jumped backwards (device swap, reset, typo in the entry).
+ */
+export type ReconciliationStatus = 'ok' | 'no-data' | 'reset';
+
+/**
+ * One interval between two consecutive checkpoints: what the physical meter
+ * counted vs. what the smart meter counted over the same span. Both sides are
+ * cumulative counters, so a collector outage inside the interval does not
+ * distort the comparison.
+ */
+export interface ReconciliationInterval {
+  /** Checkpoint dates bounding the interval (YYYY-MM-DD). */
+  fromDate: string;
+  toDate: string;
+  /** Length of the interval in days. */
+  days: number;
+  /** Physical meter deltas over the interval in kWh — the ground truth. */
+  meterImportKwh: number;
+  meterExportKwh: number;
+  /** Smart meter deltas over the same interval in kWh; null without data. */
+  smartImportKwh: number | null;
+  smartExportKwh: number | null;
+  /** Smart minus physical in kWh (negative = the smart meter undercounts). */
+  importDeviationKwh: number | null;
+  exportDeviationKwh: number | null;
+  /** Deviation relative to the physical delta, in percent (1.5 = 1.5 %). */
+  importDeviationPct: number | null;
+  exportDeviationPct: number | null;
+  status: ReconciliationStatus;
+}
+
+/** All comparable intervals combined — the basis for the correction factors. */
+export interface ReconciliationTotals {
+  fromDate: string;
+  toDate: string;
+  days: number;
+  /** How many intervals went into these totals. */
+  intervalCount: number;
+  meterImportKwh: number;
+  meterExportKwh: number;
+  smartImportKwh: number;
+  smartExportKwh: number;
+  importDeviationKwh: number;
+  exportDeviationKwh: number;
+  importDeviationPct: number | null;
+  exportDeviationPct: number | null;
+  /** physical / smart — multiply a smart meter delta by this to calibrate it. */
+  importFactor: number | null;
+  exportFactor: number | null;
+}
+
+/**
+ * The physical meter reading extrapolated to now: the latest usable checkpoint
+ * plus everything the smart meter has counted since.
+ */
+export interface MeterProjection {
+  /** Checkpoint the projection starts from (YYYY-MM-DD). */
+  baseDate: string;
+  /** Time of the smart meter reading the projection ends at. */
+  asOf: string;
+  /** Smart meter deltas since the base checkpoint in kWh. */
+  sinceImportKwh: number;
+  sinceExportKwh: number;
+  /** Projected current physical meter readings in kWh. */
+  importKwh: number;
+  exportKwh: number;
+  /** Same with the learned correction factor applied; null without a factor. */
+  calibratedImportKwh: number | null;
+  calibratedExportKwh: number | null;
+}
+
+/** Response of GET /api/meter-checkpoints/reconciliation. */
+export interface MeterReconciliation {
+  intervals: ReconciliationInterval[];
+  totals: ReconciliationTotals | null;
+  projection: MeterProjection | null;
+}
+
 /** Name of the WebSocket event used to push live readings. */
 export const METER_READING_EVENT = 'reading';
 

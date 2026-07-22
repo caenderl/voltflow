@@ -1,0 +1,89 @@
+:host {
+  display: block;
+}
+
+.verdict {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  font-size: 0.9rem;
+}
+
+.reconciliation-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+
+  th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    padding: 0 0.75rem 0.6rem;
+    border-bottom: 1px solid var(--outline);
+  }
+
+  th.group-head {
+    text-align: center;
+    padding-bottom: 0.35rem;
+    color: var(--on-surface-var);
+  }
+
+  td {
+    padding: 0.7rem 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--outline) 60%, transparent);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  tbody tr.skipped td {
+    color: var(--muted);
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .period-col {
+    white-space: nowrap;
+  }
+
+  .deviation .pct {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  tfoot td {
+    border-top: 1px solid var(--outline);
+    border-bottom: none;
+    font-weight: 500;
+  }
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--on-surface) 10%, transparent);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: help;
+}
+
+.foot-note {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted);
+}
