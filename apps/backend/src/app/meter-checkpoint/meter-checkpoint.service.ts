@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
   MeterCheckpoint,
   MeterCheckpointInput,
@@ -27,6 +27,9 @@ const READ_TIME = '18:00';
  */
 const READ_WINDOW = '3 hours';
 
+/** Postgres unique_violation, raised by the one-checkpoint-per-date index. */
+const UNIQUE_VIOLATION = '23505';
+
 @Injectable()
 export class MeterCheckpointService {
   constructor(private readonly db: DbService) {}
@@ -41,23 +44,32 @@ export class MeterCheckpointService {
   }
 
   async create(input: MeterCheckpointInput): Promise<MeterCheckpoint> {
-    const { rows } = await this.db.query(
-      `INSERT INTO meter_checkpoint (date, import_kwh, export_kwh)
-       VALUES ($1, $2, $3)
-       RETURNING id, date::text, import_kwh, export_kwh, created_at`,
-      [input.date, input.importKwh, input.exportKwh],
-    );
-    return rowToCheckpoint(rows[0]);
+    try {
+      const { rows } = await this.db.query(
+        `INSERT INTO meter_checkpoint (date, import_kwh, export_kwh)
+         VALUES ($1, $2, $3)
+         RETURNING id, date::text, import_kwh, export_kwh, created_at`,
+        [input.date, input.importKwh, input.exportKwh],
+      );
+      return rowToCheckpoint(rows[0]);
+    } catch (err) {
+      throw asDateConflict(err, input.date);
+    }
   }
 
   async update(id: number, input: MeterCheckpointInput): Promise<MeterCheckpoint> {
-    const { rows } = await this.db.query(
-      `UPDATE meter_checkpoint
-          SET date = $2, import_kwh = $3, export_kwh = $4
-        WHERE id = $1
-        RETURNING id, date::text, import_kwh, export_kwh, created_at`,
-      [id, input.date, input.importKwh, input.exportKwh],
-    );
+    let rows;
+    try {
+      ({ rows } = await this.db.query(
+        `UPDATE meter_checkpoint
+            SET date = $2, import_kwh = $3, export_kwh = $4
+          WHERE id = $1
+          RETURNING id, date::text, import_kwh, export_kwh, created_at`,
+        [id, input.date, input.importKwh, input.exportKwh],
+      ));
+    } catch (err) {
+      throw asDateConflict(err, input.date);
+    }
     if (!rows.length) throw new NotFoundException(`Checkpoint ${id} not found`);
     return rowToCheckpoint(rows[0]);
   }
@@ -132,6 +144,17 @@ export class MeterCheckpointService {
     );
     if (!rows.length) throw new NotFoundException(`Checkpoint ${id} not found`);
   }
+}
+
+/**
+ * Turn the unique-violation on the date index into a 409, so a second reading
+ * for the same day reads as "already recorded" instead of a generic 500. Any
+ * other error is passed through untouched.
+ */
+function asDateConflict(err: unknown, date: string): unknown {
+  return (err as { code?: string } | null)?.code === UNIQUE_VIOLATION
+    ? new ConflictException(`A checkpoint for ${date} already exists`)
+    : err;
 }
 
 function rowToCheckpoint(r: Record<string, unknown>): MeterCheckpoint {

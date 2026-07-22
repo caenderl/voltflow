@@ -17,6 +17,12 @@ app-checkpoint-reconciliation {
   gap: 1rem;
 }
 
+.checkpoint-error {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  color: var(--import);
+}
+
 .checkpoint-form-actions {
   display: flex;
   align-items: center;

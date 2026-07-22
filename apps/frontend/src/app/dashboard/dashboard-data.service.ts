@@ -233,13 +233,24 @@ export class DashboardDataService {
       event.id === undefined
         ? this.settingsApi.createMeterCheckpoint(input)
         : this.settingsApi.updateMeterCheckpoint(event.id, input);
+    // Drop a previous failure up front, so the message on screen always belongs
+    // to the attempt the user just made.
+    this.error.set(null);
     obs.subscribe({
       next: () => this.loadCheckpoints(),
-      error: () => this.error.set('Zählerstand konnte nicht gespeichert werden.'),
+      // 409 = there is already a checkpoint for that date; naming the cause
+      // beats a generic failure the user cannot act on.
+      error: (err: { status?: number }) =>
+        this.error.set(
+          err?.status === 409
+            ? 'Für dieses Datum gibt es bereits einen Zählerstand — bitte den vorhandenen bearbeiten.'
+            : 'Zählerstand konnte nicht gespeichert werden.',
+        ),
     });
   }
 
   deleteCheckpoint(id: number): void {
+    this.error.set(null);
     this.settingsApi.deleteMeterCheckpoint(id).subscribe({
       next: () => {
         this.checkpoints.set(this.checkpoints().filter((c) => c.id !== id));

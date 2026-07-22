@@ -25,7 +25,9 @@
         </tr>
       </thead>
       <tbody>
-        @for (i of intervals(); track i.fromDate + i.toDate) {
+        <!-- Tracked by position: the list is recomputed as a whole on every
+             load, and duplicate checkpoint dates would collide on a date key. -->
+        @for (i of intervals(); track $index) {
           <tr [class.skipped]="i.status !== 'ok'">
             <td class="period-col">
               {{ i.fromDate | date: 'dd.MM.yy' }} – {{ i.toDate | date: 'dd.MM.yy' }}
@@ -77,6 +79,9 @@
               Gesamt
               <span class="foot-note">
                 {{ t.intervalCount }} {{ t.intervalCount === 1 ? 'Zeitraum' : 'Zeiträume' }}
+                @if (t.skippedCount > 0) {
+                  · {{ t.skippedCount }} übersprungen
+                }
               </span>
             </td>
             <td class="num">{{ t.days }}</td>

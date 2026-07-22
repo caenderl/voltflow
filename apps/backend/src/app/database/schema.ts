@@ -357,6 +357,16 @@ const MIGRATIONS: { name: string; sql: string }[] = [
     sql: `CREATE INDEX IF NOT EXISTS meter_checkpoint_date_idx
             ON meter_checkpoint (date DESC)`,
   },
+  {
+    // One reading per day: two checkpoints on the same date describe the same
+    // physical counter twice, which yields 0-day intervals and a meaningless
+    // deviation in the reconciliation. Additive and idempotent; on a database
+    // that already holds duplicates this step fails and is logged, leaving the
+    // duplicates to be cleaned up by hand rather than dropping any row here.
+    name: '039-meter-checkpoint-date-unique',
+    sql: `CREATE UNIQUE INDEX IF NOT EXISTS meter_checkpoint_date_uniq
+            ON meter_checkpoint (date)`,
+  },
 ];
 
 export async function applyMigrations(

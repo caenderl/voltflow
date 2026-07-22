@@ -39,6 +39,10 @@
       </button>
     </div>
   </div>
+
+  @if (error(); as e) {
+    <p class="checkpoint-error">{{ e }}</p>
+  }
 </app-settings-card>
 
 <app-settings-card heading="Erfasste Stände">
