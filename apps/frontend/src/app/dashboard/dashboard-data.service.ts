@@ -1,6 +1,7 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, firstValueFrom, forkJoin, map, of } from 'rxjs';
 import type {
+  AppSettings,
   DataRange,
   EnergyBalance,
   EnergySummary,
@@ -18,6 +19,7 @@ import type {
   WallboxReading,
 } from '@org/shared-types';
 import { appendWindowed } from '../core/chart-utils';
+import type { CalibrationFactors } from '../core/calibration';
 import { type View, rangeFor, startOfDay } from '../core/date-utils';
 import { LiveService } from '../core/live.service';
 import { MeterApiService } from '../core/meter-api.service';
@@ -67,11 +69,24 @@ export class DashboardDataService {
   // Configuration
   readonly dataRange = signal<DataRange | null>(null);
   readonly tariff = signal<Tariff | null>(null);
+  readonly appSettings = signal<AppSettings | null>(null);
   readonly wallboxConfig = signal<WallboxConfig | null>(null);
   readonly smaConfig = signal<SmaConfig | null>(null);
   readonly checkpoints = signal<MeterCheckpoint[]>([]);
   /** Checkpoints vs. smart meter, recomputed whenever a checkpoint changes. */
   readonly reconciliation = signal<MeterReconciliation | null>(null);
+
+  /**
+   * Active calibration factors, or null when calibration is off or there is no
+   * comparable checkpoint pair to derive them from. Single source of truth so
+   * every view calibrates identically — pass it to `calibrateEnergy`.
+   */
+  readonly calibration = computed<CalibrationFactors | null>(() => {
+    if (!this.appSettings()?.calibrationEnabled) return null;
+    const t = this.reconciliation()?.totals;
+    if (!t || t.importFactor === null || t.exportFactor === null) return null;
+    return { importFactor: t.importFactor, exportFactor: t.exportFactor };
+  });
 
   // Selected history period (day/week/month)
   readonly series = signal<SeriesResponse | null>(null);
@@ -108,6 +123,7 @@ export class DashboardDataService {
 
     this.loadInto(this.meterApi.range(), (r) => this.dataRange.set(r));
     this.loadInto(this.settingsApi.tariff(), (t) => this.tariff.set(t));
+    this.loadInto(this.settingsApi.appSettings(), (s) => this.appSettings.set(s));
     this.loadInto(this.wallboxApi.config(), (c) => this.wallboxConfig.set(c));
     this.loadInto(this.smaApi.config(), (c) => this.smaConfig.set(c));
     this.loadCheckpoints();
@@ -222,6 +238,11 @@ export class DashboardDataService {
           this.settingsApi.saveTariff(event.tariff),
           (saved) => this.tariff.set(saved),
           'Tarif konnte nicht gespeichert werden.',
+        ),
+        attempt(
+          this.settingsApi.saveAppSettings(event.appSettings),
+          (saved) => this.appSettings.set(saved),
+          'Anzeige-Einstellungen konnten nicht gespeichert werden.',
         ),
       ]).pipe(map((results) => results.every(Boolean))),
     );

@@ -118,6 +118,15 @@
 
   .up { color: var(--import); }
   .down { color: var(--export); }
+
+  .cal {
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--on-surface) 10%, transparent);
+    font-size: 0.75rem;
+    color: var(--muted);
+    cursor: help;
+  }
 }
 
 .spark {

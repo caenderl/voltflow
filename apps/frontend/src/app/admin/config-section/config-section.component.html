@@ -26,6 +26,22 @@
     </div>
   </app-settings-card>
 
+  <app-settings-card heading="Anzeige" subtitle="Messwerte auf den abgelesenen Zählerstand kalibrieren.">
+    <app-toggle-switch
+      card-actions
+      [checked]="formCalibration()"
+      (checkedChange)="formCalibration.set($event)"
+    />
+    <p class="hint-sm">
+      Rechnet Bezug und Einspeisung — und die daraus abgeleiteten Kosten — in allen Ansichten mit dem
+      Korrekturfaktor aus dem SmartMeter-Abgleich auf den physischen Zähler hoch.
+      @if (!hasCalibrationData()) {
+        <strong>Aktuell ohne Wirkung:</strong> dafür werden mindestens zwei vergleichbare Zählerstände
+        benötigt.
+      }
+    </p>
+  </app-settings-card>
+
   <app-settings-card heading="Wallbox" subtitle="Anker V1 Wallbox per Modbus TCP.">
     <app-toggle-switch
       card-actions

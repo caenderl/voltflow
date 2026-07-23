@@ -62,6 +62,21 @@ export interface EnergySummary {
   buckets: EnergyBucket[];
 }
 
+/**
+ * App-wide display preferences (single row, id = 1). Separate from the tariff
+ * because calibration corrects the raw kWh shown everywhere, not just the
+ * tariff-derived costs — it applies even with no prices set.
+ */
+export interface AppSettings {
+  /**
+   * Show grid import/export (and the costs derived from them) corrected onto the
+   * physical meter, using the checkpoint reconciliation's factors. Off by
+   * default; has no visible effect until at least one comparable checkpoint pair
+   * exists to derive a factor from.
+   */
+  calibrationEnabled: boolean;
+}
+
 /** Electricity tariff (work prices). Costs are derived from kWh × price. */
 export interface Tariff {
   provider: string | null;

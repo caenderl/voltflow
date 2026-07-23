@@ -1,8 +1,9 @@
-import type { SmaConfig, Tariff, WallboxConfig } from '@org/shared-types';
+import type { AppSettings, SmaConfig, Tariff, WallboxConfig } from '@org/shared-types';
 
 /** Emitted by the admin page to persist the tariff + device configs together. */
 export interface ConfigSaveEvent {
   tariff: Tariff;
+  appSettings: AppSettings;
   wallbox: WallboxConfig;
   sma: SmaConfig;
 }

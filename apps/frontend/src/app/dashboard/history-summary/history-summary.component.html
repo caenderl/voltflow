@@ -21,6 +21,10 @@
   }
 </section>
 
+@if (calibrated()) {
+  <p class="calibrated-note">auf Zählerstand kalibriert</p>
+}
+
 @if (balance(); as b) {
   @if (b.productionKwh > 0) {
     <section class="group pv">

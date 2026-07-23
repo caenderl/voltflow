@@ -24,6 +24,8 @@ export interface FlowState {
 export class LiveViewComponent {
   readonly flow = input.required<FlowState>();
   readonly today = input<EnergySummary | null>(null);
+  /** Whether today's Bezug/Einspeisung are corrected onto the physical meter. */
+  readonly calibrated = input<boolean>(false);
   readonly liveSpark = input.required<EChartsCoreOption>();
   readonly wallboxState = input<WallboxState | null>(null);
   readonly wallboxName = input<string>('Wallbox');
