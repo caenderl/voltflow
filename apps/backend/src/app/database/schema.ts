@@ -367,6 +367,29 @@ const MIGRATIONS: { name: string; sql: string }[] = [
     sql: `CREATE UNIQUE INDEX IF NOT EXISTS meter_checkpoint_date_uniq
             ON meter_checkpoint (date)`,
   },
+  // ---------------------------------------------------------------------------
+  // Time of day a checkpoint was read. Before this the reconciliation assumed
+  // 18:00, which skews the projection whenever the meter is read at another
+  // hour. Split into three steps because NOT NULL cannot be added to a table
+  // with existing rows in one go; each step is individually idempotent.
+  // ---------------------------------------------------------------------------
+  {
+    name: '040-meter-checkpoint-read-at',
+    sql: `ALTER TABLE meter_checkpoint ADD COLUMN IF NOT EXISTS read_at TIME`,
+  },
+  {
+    // Backfill with the hour the reconciliation assumed until now, so existing
+    // rows keep the meaning they were compared under. Touches only NULLs, so
+    // re-running never overwrites a time somebody entered.
+    name: '041-meter-checkpoint-read-at-backfill',
+    sql: `UPDATE meter_checkpoint SET read_at = '18:00' WHERE read_at IS NULL`,
+  },
+  {
+    // Deliberately no DEFAULT: the reading time must be a stated fact, not a
+    // silent assumption filled in by the database.
+    name: '042-meter-checkpoint-read-at-not-null',
+    sql: `ALTER TABLE meter_checkpoint ALTER COLUMN read_at SET NOT NULL`,
+  },
 ];
 
 export async function applyMigrations(

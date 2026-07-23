@@ -12,7 +12,8 @@ app-checkpoint-reconciliation {
 
 .checkpoint-form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  // Date + time are narrower than the two kWh fields they precede.
+  grid-template-columns: 0.7fr 0.5fr repeat(2, minmax(0, 1fr)) auto;
   align-items: end;
   gap: 1rem;
 }

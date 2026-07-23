@@ -7,7 +7,7 @@ import { SettingsCardComponent } from '../../ui/settings-card/settings-card.comp
 /** Explains a row the comparison had to skip. */
 const STATUS_HINT: Record<ReconciliationStatus, string> = {
   ok: '',
-  'no-data': 'Kein SmartMeter-Wert um die Ablesezeit an einem der beiden Tage.',
+  'no-data': 'Kein SmartMeter-Wert zur Ablesezeit an einem der beiden Tage.',
   reset: 'Der Zählerstand ist rückwärts gesprungen (Gerätetausch oder Tippfehler).',
 };
 

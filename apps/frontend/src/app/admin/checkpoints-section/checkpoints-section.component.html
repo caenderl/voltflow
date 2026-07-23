@@ -9,6 +9,12 @@
       [value]="formCpDate()"
       (valueChange)="formCpDate.set($event)"
     />
+    <app-text-field
+      label="Uhrzeit"
+      type="time"
+      [value]="formCpReadAt()"
+      (valueChange)="formCpReadAt.set($event)"
+    />
     <app-number-field
       label="Stand Bezug (kWh)"
       [min]="0"
@@ -32,7 +38,9 @@
       <button
         type="button"
         class="btn-filled"
-        [disabled]="!formCpDate() || formCpImport() === null || formCpExport() === null"
+        [disabled]="
+          !formCpDate() || !formCpReadAt() || formCpImport() === null || formCpExport() === null
+        "
         (click)="saveCheckpoint()"
       >
         {{ formCpEditingId() !== null ? 'Speichern' : 'Hinzufügen' }}
@@ -51,6 +59,7 @@
       <thead>
         <tr>
           <th>Datum</th>
+          <th>Uhrzeit</th>
           <th class="num">Stand Bezug</th>
           <th class="num">Stand Einspeisung</th>
           <th class="actions-col"></th>
@@ -60,6 +69,7 @@
         @for (c of checkpoints(); track c.id) {
           <tr [class.editing]="formCpEditingId() === c.id">
             <td>{{ c.date | date: 'dd.MM.yyyy' }}</td>
+            <td>{{ c.readAt }}</td>
             <td class="num">{{ c.importKwh | number: '1.1-2' : 'de-DE' }} kWh</td>
             <td class="num">{{ c.exportKwh | number: '1.1-2' : 'de-DE' }} kWh</td>
             <td class="actions-col">

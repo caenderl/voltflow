@@ -57,9 +57,25 @@ function parseInput(body: Partial<MeterCheckpointInput>): MeterCheckpointInput {
   }
   return {
     date,
+    readAt: parseReadAt(body.readAt),
     importKwh: parseNonNegative(body.importKwh, 'importKwh'),
     exportKwh: parseNonNegative(body.exportKwh, 'exportKwh'),
   };
+}
+
+/**
+ * Time of day the meter was read (HH:MM). Required: the reconciliation looks up
+ * the smart meter at this exact moment, so a missing value cannot be guessed.
+ * Browsers send HH:MM:SS once seconds are involved — accept it, store HH:MM.
+ */
+export function parseReadAt(value: unknown): string {
+  const match = /^(\d{2}):(\d{2})(:\d{2})?$/.exec(String(value ?? ''));
+  const hours = match ? Number(match[1]) : NaN;
+  const minutes = match ? Number(match[2]) : NaN;
+  if (!match || hours > 23 || minutes > 59) {
+    throw new BadRequestException('readAt must be a HH:MM time of day');
+  }
+  return `${match[1]}:${match[2]}`;
 }
 
 function parseNonNegative(value: unknown, field: string): number {
