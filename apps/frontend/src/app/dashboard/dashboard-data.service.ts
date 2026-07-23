@@ -13,7 +13,7 @@ import type {
   SmaDailySummary,
   SmaMinutePower,
   SmaReading,
-  Tariff,
+  TariffPeriod,
   WallboxConfig,
   WallboxDailySummary,
   WallboxReading,
@@ -26,7 +26,11 @@ import { MeterApiService } from '../core/meter-api.service';
 import { SettingsApiService } from '../core/settings-api.service';
 import { SmaApiService } from '../core/sma-api.service';
 import { WallboxApiService } from '../core/wallbox-api.service';
-import type { CheckpointSaveEvent, ConfigSaveEvent } from '../core/config-types';
+import type {
+  CheckpointSaveEvent,
+  ConfigSaveEvent,
+  TariffPeriodSaveEvent,
+} from '../core/config-types';
 
 export interface LivePoint {
   time: string;
@@ -68,7 +72,7 @@ export class DashboardDataService {
 
   // Configuration
   readonly dataRange = signal<DataRange | null>(null);
-  readonly tariff = signal<Tariff | null>(null);
+  readonly tariffPeriods = signal<TariffPeriod[]>([]);
   readonly appSettings = signal<AppSettings | null>(null);
   readonly wallboxConfig = signal<WallboxConfig | null>(null);
   readonly smaConfig = signal<SmaConfig | null>(null);
@@ -122,7 +126,7 @@ export class DashboardDataService {
     this.live.smaReadings$().subscribe((s) => this.sma.set(s));
 
     this.loadInto(this.meterApi.range(), (r) => this.dataRange.set(r));
-    this.loadInto(this.settingsApi.tariff(), (t) => this.tariff.set(t));
+    this.loadTariffPeriods();
     this.loadInto(this.settingsApi.appSettings(), (s) => this.appSettings.set(s));
     this.loadInto(this.wallboxApi.config(), (c) => this.wallboxConfig.set(c));
     this.loadInto(this.smaApi.config(), (c) => this.smaConfig.set(c));
@@ -235,11 +239,6 @@ export class DashboardDataService {
           'SMA-Konfiguration konnte nicht gespeichert werden.',
         ),
         attempt(
-          this.settingsApi.saveTariff(event.tariff),
-          (saved) => this.tariff.set(saved),
-          'Tarif konnte nicht gespeichert werden.',
-        ),
-        attempt(
           this.settingsApi.saveAppSettings(event.appSettings),
           (saved) => this.appSettings.set(saved),
           'Anzeige-Einstellungen konnten nicht gespeichert werden.',
@@ -284,6 +283,47 @@ export class DashboardDataService {
       },
       error: () => this.error.set('Zählerstand konnte nicht gelöscht werden.'),
     });
+  }
+
+  saveTariffPeriod(event: TariffPeriodSaveEvent): void {
+    const input = {
+      validFrom: event.validFrom,
+      provider: event.provider,
+      importCtPerKwh: event.importCtPerKwh,
+      exportCtPerKwh: event.exportCtPerKwh,
+    };
+    const obs =
+      event.id === undefined
+        ? this.settingsApi.createTariffPeriod(input)
+        : this.settingsApi.updateTariffPeriod(event.id, input);
+    this.error.set(null);
+    obs.subscribe({
+      next: () => this.loadTariffPeriods(),
+      // 409 = there is already a tariff for that start date; naming the cause
+      // beats a generic failure the user cannot act on.
+      error: (err: { status?: number }) =>
+        this.error.set(
+          err?.status === 409
+            ? 'Für dieses Startdatum gibt es bereits einen Tarif — bitte den vorhandenen bearbeiten.'
+            : 'Tarif konnte nicht gespeichert werden.',
+        ),
+    });
+  }
+
+  deleteTariffPeriod(id: number): void {
+    this.error.set(null);
+    this.settingsApi.deleteTariffPeriod(id).subscribe({
+      next: () => {
+        this.tariffPeriods.set(this.tariffPeriods().filter((p) => p.id !== id));
+        this.loadTariffPeriods();
+      },
+      error: () => this.error.set('Tarif konnte nicht gelöscht werden.'),
+    });
+  }
+
+  /** Reload the tariff periods used for the cost calculation. */
+  private loadTariffPeriods(): void {
+    this.loadInto(this.settingsApi.tariffPeriods(), (p) => this.tariffPeriods.set(p));
   }
 
   /** Subscribe, write into a setter, silently ignore errors (optional data). */

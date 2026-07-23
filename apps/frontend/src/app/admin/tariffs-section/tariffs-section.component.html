@@ -1,0 +1,87 @@
+<app-settings-card
+  [heading]="formEditingId() !== null ? 'Tarif bearbeiten' : 'Neuer Tarif'"
+  subtitle="Arbeitspreise, gültig ab einem Datum. Der jeweils passende Tarif wird pro Tag für die Kostenrechnung herangezogen."
+>
+  <div class="tariff-form">
+    <app-text-field
+      label="Gültig ab"
+      type="date"
+      [value]="formValidFrom()"
+      (valueChange)="formValidFrom.set($event)"
+    />
+    <app-text-field
+      label="Anbieter"
+      placeholder="z. B. Stadtwerke"
+      [value]="formProvider()"
+      (valueChange)="formProvider.set($event)"
+    />
+    <app-number-field
+      label="Verbrauch (ct/kWh)"
+      [min]="0"
+      [step]="0.01"
+      placeholder="z. B. 30"
+      [value]="formImport()"
+      (valueChange)="formImport.set($event)"
+    />
+    <app-number-field
+      label="Einspeisung (ct/kWh)"
+      [min]="0"
+      [step]="0.01"
+      placeholder="z. B. 8"
+      [value]="formExport()"
+      (valueChange)="formExport.set($event)"
+    />
+    <div class="tariff-form-actions">
+      @if (formEditingId() !== null) {
+        <button type="button" class="btn-text" (click)="resetForm()">Abbrechen</button>
+      }
+      <button type="button" class="btn-filled" [disabled]="!formValidFrom()" (click)="save()">
+        {{ formEditingId() !== null ? 'Speichern' : 'Hinzufügen' }}
+      </button>
+    </div>
+  </div>
+
+  @if (error(); as e) {
+    <p class="tariff-error">{{ e }}</p>
+  }
+  <p class="hint-sm">
+    Ohne Preise bleibt ein Tarif ohne Wirkung auf die Kosten. Der älteste Tarif gilt auch rückwirkend
+    für alle Daten davor.
+  </p>
+</app-settings-card>
+
+<app-settings-card heading="Erfasste Tarife">
+  @if (tariffs().length) {
+    <table class="tariff-table">
+      <thead>
+        <tr>
+          <th>Gültig ab</th>
+          <th>Anbieter</th>
+          <th class="num">Verbrauch</th>
+          <th class="num">Einspeisung</th>
+          <th class="actions-col"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (t of tariffs(); track t.id) {
+          <tr [class.editing]="formEditingId() === t.id">
+            <td>{{ t.validFrom | date: 'dd.MM.yyyy' }}</td>
+            <td>{{ t.provider || '–' }}</td>
+            <td class="num">
+              {{ t.importCtPerKwh !== null ? (t.importCtPerKwh | number: '1.2-2' : 'de-DE') + ' ct' : '–' }}
+            </td>
+            <td class="num">
+              {{ t.exportCtPerKwh !== null ? (t.exportCtPerKwh | number: '1.2-2' : 'de-DE') + ' ct' : '–' }}
+            </td>
+            <td class="actions-col">
+              <button type="button" class="icon-btn" title="Bearbeiten" (click)="edit(t)">✎</button>
+              <button type="button" class="icon-btn" title="Löschen" (click)="remove(t)">🗑</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    <p class="hint-sm">Noch keine Tarife erfasst.</p>
+  }
+</app-settings-card>

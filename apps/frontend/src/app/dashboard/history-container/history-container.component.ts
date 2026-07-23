@@ -20,9 +20,9 @@ import {
 } from '../../core/chart-utils';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../../core/date-utils';
 import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
+import { type Costs, computeCosts } from '../../core/costs';
 import { DashboardDataService } from '../dashboard-data.service';
 import { HistoryViewComponent } from '../history-view/history-view.component';
-import { type Costs } from '../history-summary/history-summary.component';
 
 @Component({
   selector: 'app-history-container',
@@ -72,19 +72,13 @@ export class HistoryContainerComponent {
   readonly loading = this.data.loading;
   readonly error = this.data.error;
 
-  readonly hasTariff = computed(() => {
-    const t = this.data.tariff();
-    return t != null && t.importCtPerKwh != null && t.exportCtPerKwh != null;
-  });
-
-  readonly costs = computed<Costs | null>(() => {
-    const t = this.data.tariff();
-    const e = this.energy();
-    if (!t || !e || t.importCtPerKwh == null || t.exportCtPerKwh == null) return null;
-    const importCost = (e.importKwh * t.importCtPerKwh) / 100;
-    const exportRevenue = (e.exportKwh * t.exportCtPerKwh) / 100;
-    return { importCost, exportRevenue, net: importCost - exportRevenue };
-  });
+  // Bill the (calibrated) energy against the time-ranged tariffs — each bucket
+  // priced by the tariff in effect that day, so a period spanning a price change
+  // is split correctly. Null when no priced tariff applies.
+  readonly costs = computed<Costs | null>(() =>
+    computeCosts(this.energy(), this.data.tariffPeriods()),
+  );
+  readonly hasTariff = computed(() => this.costs() !== null);
 
   readonly periodLabel = computed(() => periodLabelFor(this.view(), this.refDate()));
 

@@ -77,12 +77,27 @@ export interface AppSettings {
   calibrationEnabled: boolean;
 }
 
-/** Electricity tariff (work prices). Costs are derived from kWh × price. */
-export interface Tariff {
+/**
+ * Electricity tariff (work prices) valid from a date. A period applies from its
+ * `validFrom` until the next period begins; the oldest period extends backward
+ * to cover all earlier data. Costs are derived from kWh × the applicable price.
+ */
+export interface TariffPeriod {
+  id: number;
+  /** Local date this tariff takes effect (YYYY-MM-DD). Unique across periods. */
+  validFrom: string;
   provider: string | null;
   /** Consumption price in ct/kWh. */
   importCtPerKwh: number | null;
   /** Feed-in price in ct/kWh. */
+  exportCtPerKwh: number | null;
+}
+
+/** Payload to create/update a tariff period. */
+export interface TariffPeriodInput {
+  validFrom: string;
+  provider: string | null;
+  importCtPerKwh: number | null;
   exportCtPerKwh: number | null;
 }
 

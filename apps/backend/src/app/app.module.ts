@@ -4,7 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MeterModule } from './meter/meter.module';
 import { MeterCheckpointModule } from './meter-checkpoint/meter-checkpoint.module';
-import { TariffModule } from './tariff/tariff.module';
+import { TariffPeriodModule } from './tariff-period/tariff-period.module';
 import { AppSettingsModule } from './app-settings/app-settings.module';
 import { WallboxModule } from './wallbox/wallbox.module';
 import { SmaModule } from './sma/sma.module';
@@ -16,7 +16,7 @@ import { SystemModule } from './system/system.module';
     ConfigModule.forRoot({ isGlobal: true }),
     MeterModule,
     MeterCheckpointModule,
-    TariffModule,
+    TariffPeriodModule,
     AppSettingsModule,
     WallboxModule,
     SmaModule,

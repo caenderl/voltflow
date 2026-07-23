@@ -39,7 +39,7 @@ NX-Monorepo:
 | Pfad | Inhalt |
 |------|--------|
 | `apps/collector` | Python-Ingestion: Smart Meter (`anker-solix-api`/MQTT) **+ Wallbox (Modbus)** **+ SMA (Speedwire/`pysma-plus`)** |
-| `apps/backend`   | NestJS: REST (`/api/meter`, `/api/wallbox`, `/api/sma`, `/api/tariff`, `/api/system`) + WebSocket (Live) |
+| `apps/backend`   | NestJS: REST (`/api/meter`, `/api/wallbox`, `/api/sma`, `/api/tariff-periods`, `/api/system`) + WebSocket (Live) |
 | `apps/frontend`  | Angular-Dashboard (ngx-echarts) |
 | `libs/shared-types` | Geteilte TypeScript-Typen Backend ↔ Frontend |
 | `db/init.sql`    | Hypertables, Continuous Aggregates, NOTIFY-Trigger |
@@ -200,7 +200,7 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/meter/range` | Verfügbarer Datenzeitraum |
 | `GET` / `POST` / `PUT` / `DELETE /api/meter-checkpoints` | Manuelle Zählerstände (Abgleich mit dem physischen Zähler) |
 | `GET /api/meter-checkpoints/reconciliation` | Abgleich der Zählerstände mit dem SmartMeter + Hochrechnung |
-| `GET` / `PUT /api/tariff` | Stromtarif (Preise ct/kWh) |
+| `GET` / `POST` / `PUT` / `DELETE /api/tariff-periods` | Zeitraum-Tarife (Preise ct/kWh, gültig ab Datum) |
 | `GET` / `PUT /api/app-settings` | Globale Anzeige-Einstellungen (z. B. Kalibrierung auf den Zählerstand) |
 | `GET` / `PUT /api/wallbox/config` | Wallbox-Verbindung (Name, IP, Port, Unit-ID, Intervall, an/aus) |
 | `GET /api/wallbox/latest` | Letzter Wallbox-Messwert |

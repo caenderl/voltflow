@@ -1,8 +1,7 @@
-import type { AppSettings, SmaConfig, Tariff, WallboxConfig } from '@org/shared-types';
+import type { AppSettings, SmaConfig, WallboxConfig } from '@org/shared-types';
 
-/** Emitted by the admin page to persist the tariff + device configs together. */
+/** Emitted by the admin page to persist the display + device configs together. */
 export interface ConfigSaveEvent {
-  tariff: Tariff;
   appSettings: AppSettings;
   wallbox: WallboxConfig;
   sma: SmaConfig;
@@ -18,5 +17,14 @@ export interface CheckpointSaveEvent {
   exportKwh: number;
 }
 
+/** Emitted to create (id undefined) or update (id set) a tariff period. */
+export interface TariffPeriodSaveEvent {
+  id?: number;
+  validFrom: string;
+  provider: string | null;
+  importCtPerKwh: number | null;
+  exportCtPerKwh: number | null;
+}
+
 /** Top-level sections of the admin page. */
-export type AdminSection = 'config' | 'checkpoints' | 'system';
+export type AdminSection = 'config' | 'tariffs' | 'checkpoints' | 'system';
