@@ -1,31 +1,4 @@
 <div class="settings-stack">
-  <app-settings-card heading="Stromtarif" subtitle="Preise für die Kostenberechnung in der Verlaufsansicht.">
-    <div class="field-grid">
-      <app-text-field
-        label="Anbieter"
-        placeholder="z. B. Stadtwerke"
-        [value]="formProvider()"
-        (valueChange)="formProvider.set($event)"
-      />
-      <app-number-field
-        label="Verbrauch (ct/kWh)"
-        [min]="0"
-        [step]="0.01"
-        placeholder="z. B. 30"
-        [value]="formImport()"
-        (valueChange)="formImport.set($event)"
-      />
-      <app-number-field
-        label="Einspeisung (ct/kWh)"
-        [min]="0"
-        [step]="0.01"
-        placeholder="z. B. 8"
-        [value]="formExport()"
-        (valueChange)="formExport.set($event)"
-      />
-    </div>
-  </app-settings-card>
-
   <app-settings-card heading="Anzeige" subtitle="Messwerte auf den abgelesenen Zählerstand kalibrieren.">
     <app-toggle-switch
       card-actions

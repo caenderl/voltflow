@@ -402,6 +402,36 @@ const MIGRATIONS: { name: string; sql: string }[] = [
             updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
           )`,
   },
+  {
+    // Time-ranged tariffs supersede the single-row `tariff`: each row is valid
+    // from its date until the next one starts (one price per start date).
+    name: '044-tariff-period-table',
+    sql: `CREATE TABLE IF NOT EXISTS tariff_period (
+            id            SERIAL PRIMARY KEY,
+            valid_from    DATE NOT NULL UNIQUE,
+            provider      TEXT,
+            import_ct_kwh DOUBLE PRECISION,
+            export_ct_kwh DOUBLE PRECISION,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+  },
+  {
+    // One-time seed: carry the old singleton tariff over as the first period so
+    // existing costs are unchanged. Guarded by NOT EXISTS so a later restart
+    // never resurrects a period the user has since edited or deleted; the
+    // oldest period extends backward in the cost logic, so its exact date is
+    // immaterial (updated_at, else today).
+    name: '045-tariff-period-seed',
+    sql: `INSERT INTO tariff_period (valid_from, provider, import_ct_kwh, export_ct_kwh)
+          SELECT COALESCE(t.updated_at::date, CURRENT_DATE),
+                 t.provider, t.import_ct_kwh, t.export_ct_kwh
+            FROM tariff t
+           WHERE t.id = 1
+             AND (t.provider IS NOT NULL
+                  OR t.import_ct_kwh IS NOT NULL
+                  OR t.export_ct_kwh IS NOT NULL)
+             AND NOT EXISTS (SELECT 1 FROM tariff_period)`,
+  },
 ];
 
 export async function applyMigrations(

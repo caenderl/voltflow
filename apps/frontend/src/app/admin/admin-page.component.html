@@ -20,6 +20,18 @@
       </button>
       <button
         type="button"
+        id="tab-tariffs"
+        class="nav-item"
+        role="tab"
+        [attr.aria-selected]="activeTab() === 'tariffs'"
+        aria-controls="panel-admin"
+        [class.active]="activeTab() === 'tariffs'"
+        (click)="activeTab.set('tariffs')"
+      >
+        Tarife
+      </button>
+      <button
+        type="button"
         id="tab-checkpoints"
         class="nav-item"
         role="tab"
@@ -58,6 +70,9 @@
     @switch (activeTab()) {
       @case ('config') {
         <app-config-section />
+      }
+      @case ('tariffs') {
+        <app-tariffs-section />
       }
       @case ('checkpoints') {
         <app-checkpoints-section />

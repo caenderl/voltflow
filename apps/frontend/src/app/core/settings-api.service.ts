@@ -6,20 +6,29 @@ import type {
   MeterCheckpoint,
   MeterCheckpointInput,
   MeterReconciliation,
-  Tariff,
+  TariffPeriod,
+  TariffPeriodInput,
 } from '@org/shared-types';
 
-/** REST access to user settings: tariff and manual meter checkpoints. */
+/** REST access to user settings: tariff periods and manual meter checkpoints. */
 @Injectable({ providedIn: 'root' })
 export class SettingsApiService {
   private readonly http = inject(HttpClient);
 
-  tariff(): Observable<Tariff> {
-    return this.http.get<Tariff>('/api/tariff');
+  tariffPeriods(): Observable<TariffPeriod[]> {
+    return this.http.get<TariffPeriod[]>('/api/tariff-periods');
   }
 
-  saveTariff(t: Tariff): Observable<Tariff> {
-    return this.http.put<Tariff>('/api/tariff', t);
+  createTariffPeriod(input: TariffPeriodInput): Observable<TariffPeriod> {
+    return this.http.post<TariffPeriod>('/api/tariff-periods', input);
+  }
+
+  updateTariffPeriod(id: number, input: TariffPeriodInput): Observable<TariffPeriod> {
+    return this.http.put<TariffPeriod>(`/api/tariff-periods/${id}`, input);
+  }
+
+  deleteTariffPeriod(id: number): Observable<void> {
+    return this.http.delete<void>(`/api/tariff-periods/${id}`);
   }
 
   appSettings(): Observable<AppSettings> {

@@ -1,12 +1,7 @@
 import { Component, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { EnergyBalance, EnergySummary } from '@org/shared-types';
-
-export interface Costs {
-  importCost: number;
-  exportRevenue: number;
-  net: number;
-}
+import type { Costs } from '../../core/costs';
 
 /**
  * The KPI summary of a history period (energy totals + PV balance), split from

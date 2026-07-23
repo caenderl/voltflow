@@ -1,0 +1,84 @@
+:host {
+  display: block;
+}
+
+app-settings-card + app-settings-card {
+  display: block;
+  margin-top: 1.25rem;
+}
+
+.tariff-form {
+  display: grid;
+  // Date + provider are narrower than the two price fields; actions auto-size.
+  grid-template-columns: 0.7fr 1fr repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 1rem;
+}
+
+.tariff-error {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  color: var(--import);
+}
+
+.tariff-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tariff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+
+  th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    padding: 0 0.75rem 0.6rem;
+    border-bottom: 1px solid var(--outline);
+  }
+
+  td {
+    padding: 0.7rem 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--outline) 60%, transparent);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  tbody tr.editing {
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .actions-col {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+  }
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: var(--on-surface-var);
+
+  &:hover {
+    background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+    color: var(--on-surface);
+  }
+}

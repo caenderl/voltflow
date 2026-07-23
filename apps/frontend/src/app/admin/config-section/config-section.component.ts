@@ -7,8 +7,10 @@ import { TextFieldComponent } from '../../ui/text-field/text-field.component';
 import { ToggleSwitchComponent } from '../../ui/toggle-switch/toggle-switch.component';
 
 /**
- * "Konfiguration" section: tariff + wallbox + PV-inverter settings stacked as
+ * "Konfiguration" section: display + wallbox + PV-inverter settings stacked as
  * cards with a shared Abbrechen/Speichern footer. Owns the config form state.
+ * (Tariffs live in their own section — they are a time-ranged list, not a
+ * single form.)
  */
 @Component({
   selector: 'app-config-section',
@@ -35,9 +37,6 @@ export class ConfigSectionComponent {
   // no manual "synced" flags and no post-render writes (which would trip
   // NG0100). The config only changes again on our own save, after which we
   // navigate away, so in-progress edits are never clobbered.
-  readonly formProvider = linkedSignal(() => this.data.tariff()?.provider ?? '');
-  readonly formImport = linkedSignal(() => this.data.tariff()?.importCtPerKwh ?? null);
-  readonly formExport = linkedSignal(() => this.data.tariff()?.exportCtPerKwh ?? null);
   readonly formCalibration = linkedSignal(
     () => this.data.appSettings()?.calibrationEnabled ?? false,
   );
@@ -68,11 +67,6 @@ export class ConfigSectionComponent {
     this.saveError.set(false);
     void this.data
       .saveConfig({
-        tariff: {
-          provider: this.formProvider().trim() || null,
-          importCtPerKwh: this.formImport() ?? null,
-          exportCtPerKwh: this.formExport() ?? null,
-        },
         appSettings: {
           calibrationEnabled: this.formCalibration(),
         },

@@ -3,7 +3,8 @@ import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsCoreOption } from 'echarts/core';
 import type { EnergyBalance, EnergySummary } from '@org/shared-types';
 import type { View } from '../../core/date-utils';
-import { HistorySummaryComponent, type Costs } from '../history-summary/history-summary.component';
+import { HistorySummaryComponent } from '../history-summary/history-summary.component';
+import type { Costs } from '../../core/costs';
 
 @Component({
   selector: 'app-history-view',
