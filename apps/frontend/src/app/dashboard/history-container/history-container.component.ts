@@ -19,7 +19,7 @@ import {
   sumByMinuteBucket,
 } from '../../core/chart-utils';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../../core/date-utils';
-import { calibrateEnergy } from '../../core/calibration';
+import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
 import { DashboardDataService } from '../dashboard-data.service';
 import { HistoryViewComponent } from '../history-view/history-view.component';
 import { type Costs } from '../history-summary/history-summary.component';
@@ -64,7 +64,11 @@ export class HistoryContainerComponent {
   // disagree about whether the figures are corrected.
   readonly energy = computed(() => calibrateEnergy(this.data.energy(), this.data.calibration()));
   readonly calibrated = computed(() => this.data.calibration() !== null);
-  readonly periodBalance = this.data.periodBalance;
+  // Calibrated in lockstep with `energy` above, so Autarkie/Eigenverbrauch/
+  // Hauslast never disagree with the calibrated Bezug/Einspeisung shown next to them.
+  readonly periodBalance = computed(() =>
+    calibrateBalance(this.data.periodBalance(), this.data.calibration()),
+  );
   readonly loading = this.data.loading;
   readonly error = this.data.error;
 
