@@ -1,7 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { WALLBOX_STATUS_LABELS } from '@org/shared-types';
 import { liveSparkChart, netWatts } from '../../core/chart-utils';
-import { calibrateEnergy } from '../../core/calibration';
+import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
 import { DashboardDataService, LIVE_WINDOW_MS } from '../dashboard-data.service';
 import { LiveViewComponent, type FlowState } from '../live-view/live-view.component';
 import type { SmaState } from '../sma-card/sma-card.component';
@@ -35,7 +35,9 @@ export class LiveContainerComponent {
   // calibration is on — the same factor the history and admin views use.
   readonly today = computed(() => calibrateEnergy(this.data.today(), this.data.calibration()));
   readonly calibrated = computed(() => this.data.calibration() !== null);
-  readonly balance = this.data.balance;
+  // Calibrated in lockstep with `today` above, so the SMA card's Autarkie/
+  // Eigenverbrauch/Hauslast never disagree with the calibrated Bezug/Einspeisung.
+  readonly balance = computed(() => calibrateBalance(this.data.balance(), this.data.calibration()));
 
   readonly wallboxName = computed(() => this.data.wallboxConfig()?.name?.trim() || 'Wallbox');
 

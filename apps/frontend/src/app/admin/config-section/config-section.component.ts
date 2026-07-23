@@ -42,10 +42,11 @@ export class ConfigSectionComponent {
     () => this.data.appSettings()?.calibrationEnabled ?? false,
   );
 
-  /** Whether a correction factor exists at all — the toggle is inert without one. */
-  readonly hasCalibrationData = computed(
-    () => this.data.reconciliation()?.totals?.importFactor != null,
-  );
+  /** Whether both correction factors exist — the toggle is inert without either. */
+  readonly hasCalibrationData = computed(() => {
+    const t = this.data.reconciliation()?.totals;
+    return t?.importFactor != null && t?.exportFactor != null;
+  });
   readonly formWbEnabled = linkedSignal(() => this.data.wallboxConfig()?.enabled ?? false);
   readonly formWbName = linkedSignal(() => this.data.wallboxConfig()?.name ?? '');
   readonly formWbHost = linkedSignal(() => this.data.wallboxConfig()?.host ?? '');
