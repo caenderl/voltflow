@@ -11,6 +11,8 @@ export interface ConfigSaveEvent {
 export interface CheckpointSaveEvent {
   id?: number;
   date: string;
+  /** Local time of day the meter was read (HH:MM). */
+  readAt: string;
   importKwh: number;
   exportKwh: number;
 }

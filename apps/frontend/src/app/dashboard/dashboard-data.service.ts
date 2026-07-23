@@ -228,7 +228,12 @@ export class DashboardDataService {
   }
 
   saveCheckpoint(event: CheckpointSaveEvent): void {
-    const input = { date: event.date, importKwh: event.importKwh, exportKwh: event.exportKwh };
+    const input = {
+      date: event.date,
+      readAt: event.readAt,
+      importKwh: event.importKwh,
+      exportKwh: event.exportKwh,
+    };
     const obs =
       event.id === undefined
         ? this.settingsApi.createMeterCheckpoint(input)

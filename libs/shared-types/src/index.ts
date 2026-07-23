@@ -85,6 +85,12 @@ export interface MeterCheckpoint {
   id: number;
   /** Local date the reading was taken (YYYY-MM-DD). */
   date: string;
+  /**
+   * Local time of day the reading was taken (HH:MM). Required — the smart
+   * meter counterpart is looked up at exactly this moment, so there is no
+   * assumed reading time to fall back on.
+   */
+  readAt: string;
   /** Cumulative import (Bezug) meter reading in kWh. */
   importKwh: number;
   /** Cumulative export (Einspeisung) meter reading in kWh. */
@@ -95,6 +101,8 @@ export interface MeterCheckpoint {
 /** Payload to create/update a meter checkpoint. */
 export interface MeterCheckpointInput {
   date: string;
+  /** Local time of day the reading was taken (HH:MM). */
+  readAt: string;
   importKwh: number;
   exportKwh: number;
 }
@@ -103,8 +111,8 @@ export interface MeterCheckpointInput {
  * Why an interval between two checkpoints could (not) be compared.
  *
  * `ok` — both ends have a smart meter reading and both counters advanced.
- * `no-data` — the smart meter has no reading around the assumed reading time on
- *   one of the two checkpoint days.
+ * `no-data` — the smart meter has no reading close enough to the recorded
+ *   reading time on one of the two checkpoints.
  * `reset` — a counter jumped backwards (device swap, reset, typo in the entry).
  */
 export type ReconciliationStatus = 'ok' | 'no-data' | 'reset';

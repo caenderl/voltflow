@@ -14,21 +14,18 @@ import {
 } from './reconciliation';
 
 /**
- * Local time of day a checkpoint is assumed to have been read at. Readings
- * happen in the late afternoon, so anchoring here keeps the gap between the
- * hand-read value and its smart meter counterpart to a couple of hours.
- */
-const READ_TIME = '18:00';
-
-/**
- * How far before {@link READ_TIME} a smart meter sample may lie. Wide enough to
- * survive a short collector gap, narrow enough that a longer outage surfaces as
- * "no-data" instead of silently passing off a morning value as the reading.
+ * How stale the smart meter value may be relative to the recorded reading time.
+ * Wide enough to survive a short collector gap, narrow enough that a longer
+ * outage surfaces as "no-data" instead of silently passing off a much older
+ * counter as the reading.
  */
 const READ_WINDOW = '3 hours';
 
 /** Postgres unique_violation, raised by the one-checkpoint-per-date index. */
 const UNIQUE_VIOLATION = '23505';
+
+/** TIME renders as HH:MM:SS; the API contract is HH:MM. */
+const READ_AT_TEXT = `to_char(read_at, 'HH24:MI') AS read_at`;
 
 @Injectable()
 export class MeterCheckpointService {
@@ -36,7 +33,7 @@ export class MeterCheckpointService {
 
   async list(): Promise<MeterCheckpoint[]> {
     const { rows } = await this.db.query(
-      `SELECT id, date::text, import_kwh, export_kwh, created_at
+      `SELECT id, date::text, ${READ_AT_TEXT}, import_kwh, export_kwh, created_at
          FROM meter_checkpoint
         ORDER BY date DESC, id DESC`,
     );
@@ -46,10 +43,10 @@ export class MeterCheckpointService {
   async create(input: MeterCheckpointInput): Promise<MeterCheckpoint> {
     try {
       const { rows } = await this.db.query(
-        `INSERT INTO meter_checkpoint (date, import_kwh, export_kwh)
-         VALUES ($1, $2, $3)
-         RETURNING id, date::text, import_kwh, export_kwh, created_at`,
-        [input.date, input.importKwh, input.exportKwh],
+        `INSERT INTO meter_checkpoint (date, read_at, import_kwh, export_kwh)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, date::text, ${READ_AT_TEXT}, import_kwh, export_kwh, created_at`,
+        [input.date, input.readAt, input.importKwh, input.exportKwh],
       );
       return rowToCheckpoint(rows[0]);
     } catch (err) {
@@ -62,10 +59,10 @@ export class MeterCheckpointService {
     try {
       ({ rows } = await this.db.query(
         `UPDATE meter_checkpoint
-            SET date = $2, import_kwh = $3, export_kwh = $4
+            SET date = $2, read_at = $3, import_kwh = $4, export_kwh = $5
           WHERE id = $1
-          RETURNING id, date::text, import_kwh, export_kwh, created_at`,
-        [id, input.date, input.importKwh, input.exportKwh],
+          RETURNING id, date::text, ${READ_AT_TEXT}, import_kwh, export_kwh, created_at`,
+        [id, input.date, input.readAt, input.importKwh, input.exportKwh],
       ));
     } catch (err) {
       throw asDateConflict(err, input.date);
@@ -78,38 +75,39 @@ export class MeterCheckpointService {
    * Compare the hand-read checkpoints against the smart meter's own cumulative
    * counters, and extrapolate today's physical reading from the newest one.
    *
-   * A checkpoint carries a date but no time, so its smart meter counterpart is
-   * the counter as of {@link READ_TIME} on that local day. For the interval
-   * comparison the exact anchor barely matters — a constant offset cancels
-   * between the two ends — but the projection has no second end to cancel
-   * against, so anchoring near the actual reading time keeps it honest.
+   * Each checkpoint records when it was read, so its smart meter counterpart is
+   * the last counter before that exact moment — nothing is assumed about the
+   * time of day. A value older than {@link READ_WINDOW} is refused rather than
+   * used, which surfaces a collector outage as "no-data".
    *
    * `meter_1hour` is the source because the raw readings are dropped after 30
    * days while the aggregates are kept long-term. Its buckets are whole hours,
-   * which line up with the local hour (Europe/Berlin offsets are whole hours).
+   * which line up with the local hour (Europe/Berlin offsets are whole hours),
+   * so the value is at most one hour older than the reading itself.
    */
   async reconciliation(): Promise<MeterReconciliation> {
     const { rows } = await this.db.query(
-      `SELECT c.date::text AS date, c.import_kwh, c.export_kwh,
+      `SELECT c.date::text AS date, ${READ_AT_TEXT}, c.import_kwh, c.export_kwh,
               s.grid_import_energy AS counter_import,
               s.grid_export_energy AS counter_export
          FROM meter_checkpoint c
          LEFT JOIN LATERAL (
            SELECT grid_import_energy, grid_export_energy
              FROM meter_1hour
-            WHERE bucket <  ((c.date + $2::time) AT TIME ZONE $1)
-              AND bucket >= ((c.date + $2::time) AT TIME ZONE $1) - $3::interval
+            WHERE bucket <  ((c.date + c.read_at) AT TIME ZONE $1)
+              AND bucket >= ((c.date + c.read_at) AT TIME ZONE $1) - $2::interval
               AND grid_import_energy IS NOT NULL
               AND grid_export_energy IS NOT NULL
             ORDER BY bucket DESC
             LIMIT 1
          ) s ON TRUE
-        ORDER BY c.date, c.id`,
-      [TIMEZONE, READ_TIME, READ_WINDOW],
+        ORDER BY c.date, c.read_at`,
+      [TIMEZONE, READ_WINDOW],
     );
 
     const samples: CheckpointSample[] = rows.map((r) => ({
       date: String(r['date']),
+      readAt: String(r['read_at']),
       importKwh: Number(r['import_kwh']),
       exportKwh: Number(r['export_kwh']),
       counterImportKwh: numOrNull(r['counter_import']),
@@ -161,6 +159,7 @@ function rowToCheckpoint(r: Record<string, unknown>): MeterCheckpoint {
   return {
     id: Number(r['id']),
     date: String(r['date']),
+    readAt: String(r['read_at']),
     importKwh: Number(r['import_kwh']),
     exportKwh: Number(r['export_kwh']),
     createdAt: new Date(r['created_at'] as string).toISOString(),

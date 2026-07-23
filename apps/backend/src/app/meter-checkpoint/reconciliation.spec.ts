@@ -10,6 +10,9 @@ const sample = (
   counterExportKwh: number | null = exportKwh - 50000,
 ): CheckpointSample => ({
   date,
+  // Irrelevant to the arithmetic — the reading time is resolved in SQL, which
+  // hands this function the counters that already belong to that moment.
+  readAt: '18:00',
   importKwh,
   exportKwh,
   counterImportKwh,

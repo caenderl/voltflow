@@ -2,9 +2,9 @@ import { Component, input, model } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 /**
- * Labelled text (or date) input. Reusable form control: two-way bind the value
- * with `[value]`/`(valueChange)` (a `model()` output). Styling is shared with
- * NumberFieldComponent via ../field.scss.
+ * Labelled text (or date / time) input. Reusable form control: two-way bind the
+ * value with `[value]`/`(valueChange)` (a `model()` output). Styling is shared
+ * with NumberFieldComponent via ../field.scss.
  */
 @Component({
   selector: 'app-text-field',
@@ -25,7 +25,7 @@ import { FormsModule } from '@angular/forms';
 })
 export class TextFieldComponent {
   readonly label = input.required<string>();
-  readonly type = input<'text' | 'date'>('text');
+  readonly type = input<'text' | 'date' | 'time'>('text');
   readonly placeholder = input('');
   readonly value = model('');
 }

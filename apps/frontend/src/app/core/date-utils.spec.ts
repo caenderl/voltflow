@@ -7,6 +7,7 @@ import {
   startOfDay,
   startOfWeek,
   toLocalDateString,
+  toLocalTimeString,
 } from './date-utils';
 
 // Wed 2026-05-20 14:30 local time
@@ -16,6 +17,14 @@ describe('toLocalDateString', () => {
   it('formats as YYYY-MM-DD with zero padding', () => {
     expect(toLocalDateString(new Date(2026, 0, 5))).toBe('2026-01-05');
     expect(toLocalDateString(new Date(2026, 11, 31))).toBe('2026-12-31');
+  });
+});
+
+describe('toLocalTimeString', () => {
+  it('formats as HH:MM with zero padding', () => {
+    expect(toLocalTimeString(wednesday)).toBe('14:30');
+    expect(toLocalTimeString(new Date(2026, 0, 5, 9, 5))).toBe('09:05');
+    expect(toLocalTimeString(new Date(2026, 0, 5, 0, 0))).toBe('00:00');
   });
 });
 

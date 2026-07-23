@@ -31,6 +31,13 @@ export function toLocalDateString(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Format a date as HH:MM in local time (for <input type="time">). */
+export function toLocalTimeString(d: Date): string {
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${min}`;
+}
+
 export function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);

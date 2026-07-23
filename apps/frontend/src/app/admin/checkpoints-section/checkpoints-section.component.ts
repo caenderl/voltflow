@@ -1,7 +1,7 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import type { MeterCheckpoint } from '@org/shared-types';
-import { toLocalDateString } from '../../core/date-utils';
+import { toLocalDateString, toLocalTimeString } from '../../core/date-utils';
 import { DashboardDataService } from '../../dashboard/dashboard-data.service';
 import { NumberFieldComponent } from '../../ui/number-field/number-field.component';
 import { SettingsCardComponent } from '../../ui/settings-card/settings-card.component';
@@ -39,12 +39,15 @@ export class CheckpointsSectionComponent {
   // Plain transient UI state, not derived from config.
   readonly formCpEditingId = signal<number | null>(null);
   readonly formCpDate = signal(toLocalDateString(new Date()));
+  // Defaults to now: the common case is entering a reading as it is taken.
+  readonly formCpReadAt = signal(toLocalTimeString(new Date()));
   readonly formCpImport = signal<number | null>(null);
   readonly formCpExport = signal<number | null>(null);
 
   resetForm(): void {
     this.formCpEditingId.set(null);
     this.formCpDate.set(toLocalDateString(new Date()));
+    this.formCpReadAt.set(toLocalTimeString(new Date()));
     this.formCpImport.set(null);
     this.formCpExport.set(null);
   }
@@ -52,18 +55,21 @@ export class CheckpointsSectionComponent {
   edit(c: MeterCheckpoint): void {
     this.formCpEditingId.set(c.id);
     this.formCpDate.set(c.date);
+    this.formCpReadAt.set(c.readAt);
     this.formCpImport.set(c.importKwh);
     this.formCpExport.set(c.exportKwh);
   }
 
   saveCheckpoint(): void {
     const date = this.formCpDate();
+    const readAt = this.formCpReadAt();
     const importKwh = this.formCpImport();
     const exportKwh = this.formCpExport();
-    if (!date || importKwh == null || exportKwh == null) return;
+    if (!date || !readAt || importKwh == null || exportKwh == null) return;
     this.data.saveCheckpoint({
       id: this.formCpEditingId() ?? undefined,
       date,
+      readAt,
       importKwh,
       exportKwh,
     });

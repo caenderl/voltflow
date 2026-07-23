@@ -7,16 +7,18 @@ import type {
 } from '@org/shared-types';
 import { round2, round4 } from '../common/db-utils';
 
-/** A checkpoint plus the smart meter counters read on that same day. */
+/** A checkpoint plus the smart meter counters at the moment it was read. */
 export interface CheckpointSample {
   /** Local date of the checkpoint (YYYY-MM-DD). */
   date: string;
+  /** Local time of day the meter was read (HH:MM). */
+  readAt: string;
   /** Physical meter readings as entered by hand. */
   importKwh: number;
   exportKwh: number;
   /**
-   * Smart meter counters at the end of that checkpoint's local day; null when
-   * the smart meter has no reading on that day.
+   * Smart meter counters as of the reading time; null when the smart meter has
+   * no value close enough to it.
    */
   counterImportKwh: number | null;
   counterExportKwh: number | null;
