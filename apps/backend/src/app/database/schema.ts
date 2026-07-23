@@ -7,7 +7,11 @@ import type { Pool } from 'pg';
  * Rules to keep data safe across updates:
  *  - `db/init.sql` bootstraps a FRESH database (runs only on an empty volume).
  *  - This list "catches up" EXISTING databases with additive changes and is
- *    safe to re-run, so use IF NOT EXISTS / ADD COLUMN IF NOT EXISTS only.
+ *    safe to re-run, so every statement must be a no-op the second time:
+ *    IF NOT EXISTS / ADD COLUMN IF NOT EXISTS, or a statement that is already
+ *    satisfied (a backfill scoped by `WHERE col IS NULL`, a SET NOT NULL on a
+ *    column that has no nulls left). Tightening a constraint that way needs
+ *    its backfill as a separate, earlier entry — see 040-042.
  *  - Never DROP / rewrite data here. For destructive or data-moving changes
  *    use a real versioned migration tool + a backup first.
  */

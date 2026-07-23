@@ -36,6 +36,9 @@
                   {{ i.status === 'no-data' ? 'keine Daten' : 'Zählersprung' }}
                 </span>
               }
+              <!-- The anchor the SmartMeter was read at, not decoration: it is
+                   what a surprising deviation has to be judged against. -->
+              <span class="read-at">{{ i.fromReadAt }} – {{ i.toReadAt }} Uhr</span>
             </td>
             <td class="num">{{ i.days }}</td>
 
