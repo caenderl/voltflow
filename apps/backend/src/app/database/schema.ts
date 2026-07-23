@@ -394,6 +394,14 @@ const MIGRATIONS: { name: string; sql: string }[] = [
     name: '042-meter-checkpoint-read-at-not-null',
     sql: `ALTER TABLE meter_checkpoint ALTER COLUMN read_at SET NOT NULL`,
   },
+  {
+    name: '043-app-settings-table',
+    sql: `CREATE TABLE IF NOT EXISTS app_settings (
+            id                  INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+            calibration_enabled BOOLEAN NOT NULL DEFAULT false,
+            updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+  },
 ];
 
 export async function applyMigrations(

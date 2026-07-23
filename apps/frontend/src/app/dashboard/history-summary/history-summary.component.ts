@@ -25,6 +25,8 @@ export interface Costs {
 })
 export class HistorySummaryComponent {
   readonly energy = input<EnergySummary | null>(null);
+  /** Whether the energy/cost figures are corrected onto the physical meter. */
+  readonly calibrated = input<boolean>(false);
   readonly hasTariff = input<boolean>(false);
   readonly costs = input<Costs | null>(null);
   readonly balance = input<EnergyBalance | null>(null);

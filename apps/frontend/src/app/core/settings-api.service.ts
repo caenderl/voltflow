@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import type {
+  AppSettings,
   MeterCheckpoint,
   MeterCheckpointInput,
   MeterReconciliation,
@@ -19,6 +20,14 @@ export class SettingsApiService {
 
   saveTariff(t: Tariff): Observable<Tariff> {
     return this.http.put<Tariff>('/api/tariff', t);
+  }
+
+  appSettings(): Observable<AppSettings> {
+    return this.http.get<AppSettings>('/api/app-settings');
+  }
+
+  saveAppSettings(s: AppSettings): Observable<AppSettings> {
+    return this.http.put<AppSettings>('/api/app-settings', s);
   }
 
   meterCheckpoints(): Observable<MeterCheckpoint[]> {

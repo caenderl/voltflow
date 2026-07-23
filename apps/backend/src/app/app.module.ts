@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { MeterModule } from './meter/meter.module';
 import { MeterCheckpointModule } from './meter-checkpoint/meter-checkpoint.module';
 import { TariffModule } from './tariff/tariff.module';
+import { AppSettingsModule } from './app-settings/app-settings.module';
 import { WallboxModule } from './wallbox/wallbox.module';
 import { SmaModule } from './sma/sma.module';
 import { LiveModule } from './live/live.module';
@@ -16,6 +17,7 @@ import { SystemModule } from './system/system.module';
     MeterModule,
     MeterCheckpointModule,
     TariffModule,
+    AppSettingsModule,
     WallboxModule,
     SmaModule,
     LiveModule,

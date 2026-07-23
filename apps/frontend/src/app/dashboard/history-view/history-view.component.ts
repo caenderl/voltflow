@@ -18,6 +18,7 @@ export class HistoryViewComponent {
   readonly canPrev = input<boolean>(false);
   readonly canNext = input<boolean>(false);
   readonly energy = input<EnergySummary | null>(null);
+  readonly calibrated = input<boolean>(false);
   readonly hasTariff = input<boolean>(false);
   readonly costs = input<Costs | null>(null);
   readonly balance = input<EnergyBalance | null>(null);

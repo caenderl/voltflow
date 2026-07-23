@@ -1,4 +1,4 @@
-import { Component, inject, linkedSignal, signal } from '@angular/core';
+import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { DashboardDataService } from '../../dashboard/dashboard-data.service';
 import { NumberFieldComponent } from '../../ui/number-field/number-field.component';
@@ -38,6 +38,14 @@ export class ConfigSectionComponent {
   readonly formProvider = linkedSignal(() => this.data.tariff()?.provider ?? '');
   readonly formImport = linkedSignal(() => this.data.tariff()?.importCtPerKwh ?? null);
   readonly formExport = linkedSignal(() => this.data.tariff()?.exportCtPerKwh ?? null);
+  readonly formCalibration = linkedSignal(
+    () => this.data.appSettings()?.calibrationEnabled ?? false,
+  );
+
+  /** Whether a correction factor exists at all — the toggle is inert without one. */
+  readonly hasCalibrationData = computed(
+    () => this.data.reconciliation()?.totals?.importFactor != null,
+  );
   readonly formWbEnabled = linkedSignal(() => this.data.wallboxConfig()?.enabled ?? false);
   readonly formWbName = linkedSignal(() => this.data.wallboxConfig()?.name ?? '');
   readonly formWbHost = linkedSignal(() => this.data.wallboxConfig()?.host ?? '');
@@ -63,6 +71,9 @@ export class ConfigSectionComponent {
           provider: this.formProvider().trim() || null,
           importCtPerKwh: this.formImport() ?? null,
           exportCtPerKwh: this.formExport() ?? null,
+        },
+        appSettings: {
+          calibrationEnabled: this.formCalibration(),
         },
         wallbox: {
           enabled: this.formWbEnabled(),

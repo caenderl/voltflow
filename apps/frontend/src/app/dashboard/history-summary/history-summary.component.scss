@@ -15,6 +15,16 @@
   }
 }
 
+// Sits just under the energy group when calibration is active — the group's
+// own margin-bottom leaves the room, so pull the note up into it.
+.calibrated-note {
+  margin: -1rem 0 1.5rem;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--muted);
+  text-align: right;
+}
+
 .metric {
   background: var(--surface-1);
   border: 1px solid var(--outline);

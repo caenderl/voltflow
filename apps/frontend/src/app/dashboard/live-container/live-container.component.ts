@@ -1,6 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { WALLBOX_STATUS_LABELS } from '@org/shared-types';
 import { liveSparkChart, netWatts } from '../../core/chart-utils';
+import { calibrateEnergy } from '../../core/calibration';
 import { DashboardDataService, LIVE_WINDOW_MS } from '../dashboard-data.service';
 import { LiveViewComponent, type FlowState } from '../live-view/live-view.component';
 import type { SmaState } from '../sma-card/sma-card.component';
@@ -17,6 +18,7 @@ const CHARGE_THRESHOLD_W = 1400;
     <app-live-view
       [flow]="flow()"
       [today]="today()"
+      [calibrated]="calibrated()"
       [liveSpark]="liveSpark()"
       [wallboxState]="wallboxState()"
       [wallboxName]="wallboxName()"
@@ -29,7 +31,10 @@ const CHARGE_THRESHOLD_W = 1400;
 export class LiveContainerComponent {
   private readonly data = inject(DashboardDataService);
 
-  readonly today = this.data.today;
+  // Today's Bezug/Einspeisung, corrected onto the physical meter when
+  // calibration is on — the same factor the history and admin views use.
+  readonly today = computed(() => calibrateEnergy(this.data.today(), this.data.calibration()));
+  readonly calibrated = computed(() => this.data.calibration() !== null);
   readonly balance = this.data.balance;
 
   readonly wallboxName = computed(() => this.data.wallboxConfig()?.name?.trim() || 'Wallbox');

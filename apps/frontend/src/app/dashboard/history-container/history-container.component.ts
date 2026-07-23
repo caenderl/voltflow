@@ -19,6 +19,7 @@ import {
   sumByMinuteBucket,
 } from '../../core/chart-utils';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../../core/date-utils';
+import { calibrateEnergy } from '../../core/calibration';
 import { DashboardDataService } from '../dashboard-data.service';
 import { HistoryViewComponent } from '../history-view/history-view.component';
 import { type Costs } from '../history-summary/history-summary.component';
@@ -34,6 +35,7 @@ import { type Costs } from '../history-summary/history-summary.component';
       [canPrev]="canPrev()"
       [canNext]="canNext()"
       [energy]="energy()"
+      [calibrated]="calibrated()"
       [hasTariff]="hasTariff()"
       [costs]="costs()"
       [balance]="periodBalance()"
@@ -57,7 +59,11 @@ export class HistoryContainerComponent {
 
   readonly refDate = signal<Date>(new Date());
 
-  readonly energy = this.data.energy;
+  // Calibrated (or raw, when calibration is off/unavailable) energy — the single
+  // source the summary, costs and energy chart all derive from, so they never
+  // disagree about whether the figures are corrected.
+  readonly energy = computed(() => calibrateEnergy(this.data.energy(), this.data.calibration()));
+  readonly calibrated = computed(() => this.data.calibration() !== null);
   readonly periodBalance = this.data.periodBalance;
   readonly loading = this.data.loading;
   readonly error = this.data.error;
@@ -69,7 +75,7 @@ export class HistoryContainerComponent {
 
   readonly costs = computed<Costs | null>(() => {
     const t = this.data.tariff();
-    const e = this.data.energy();
+    const e = this.energy();
     if (!t || !e || t.importCtPerKwh == null || t.exportCtPerKwh == null) return null;
     const importCost = (e.importKwh * t.importCtPerKwh) / 100;
     const exportRevenue = (e.exportKwh * t.exportCtPerKwh) / 100;
@@ -109,7 +115,7 @@ export class HistoryContainerComponent {
 
   readonly energyChart = computed(() => {
     const view = this.view();
-    const buckets = this.data.energy()?.buckets ?? [];
+    const buckets = this.energy()?.buckets ?? [];
     const slots = energySlots(view, this.refDate());
     const byKey = new Map<string, { imp: number; exp: number }>();
     for (const b of buckets) {

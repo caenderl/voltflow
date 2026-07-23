@@ -30,6 +30,9 @@
   <div class="today">
     <span class="up">Bezug {{ (today()?.importKwh | number: '1.2-2') ?? '–' }} kWh</span>
     <span class="down">Einspeisung {{ (today()?.exportKwh | number: '1.2-2') ?? '–' }} kWh</span>
+    @if (calibrated()) {
+      <span class="cal" title="Auf den abgelesenen Zählerstand kalibriert">kalibriert</span>
+    }
   </div>
 
   <div echarts [options]="liveSpark()" class="spark"></div>
