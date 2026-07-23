@@ -127,7 +127,14 @@ export interface ReconciliationInterval {
   /** Checkpoint dates bounding the interval (YYYY-MM-DD). */
   fromDate: string;
   toDate: string;
-  /** Length of the interval in days. */
+  /**
+   * Reading times of the two bounding checkpoints (HH:MM) — the exact moments
+   * the smart meter was sampled at. Shown alongside the dates so a deviation
+   * can be judged against the span it was actually measured over.
+   */
+  fromReadAt: string;
+  toReadAt: string;
+  /** Length of the interval in whole days; the reading times are not counted. */
   days: number;
   /** Physical meter deltas over the interval in kWh — the ground truth. */
   meterImportKwh: number;

@@ -8,11 +8,13 @@ const sample = (
   exportKwh: number,
   counterImportKwh: number | null = importKwh - 40000,
   counterExportKwh: number | null = exportKwh - 50000,
+  // Does not enter the arithmetic — the reading time is resolved in SQL, which
+  // hands this function the counters that already belong to that moment. It is
+  // only carried through to the interval so the UI can show the anchor.
+  readAt = '18:00',
 ): CheckpointSample => ({
   date,
-  // Irrelevant to the arithmetic — the reading time is resolved in SQL, which
-  // hands this function the counters that already belong to that moment.
-  readAt: '18:00',
+  readAt,
   importKwh,
   exportKwh,
   counterImportKwh,
@@ -37,6 +39,22 @@ describe('computeReconciliation', () => {
     expect(i.importDeviationPct).toBe(0);
     expect(i.meterExportKwh).toBe(200);
     expect(i.exportDeviationKwh).toBe(0);
+  });
+
+  it('carries both reading times into the interval', () => {
+    // The dates alone do not say what was compared: each end was sampled at its
+    // own time of day, and the UI has to be able to show which.
+    const r = computeReconciliation(
+      [
+        sample('2026-06-01', 42000, 51000, undefined, undefined, '18:00'),
+        sample('2026-07-01', 42100, 51200, undefined, undefined, '13:00'),
+      ],
+      null,
+    );
+
+    const [i] = r.intervals;
+    expect(i.fromReadAt).toBe('18:00');
+    expect(i.toReadAt).toBe('13:00');
   });
 
   it('reports a smart meter that undercounts as a negative deviation', () => {

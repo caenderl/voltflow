@@ -78,6 +78,8 @@ function compareInterval(
   const base: ReconciliationInterval = {
     fromDate: prev.date,
     toDate: cur.date,
+    fromReadAt: prev.readAt,
+    toReadAt: cur.readAt,
     days: daysBetween(prev.date, cur.date),
     meterImportKwh: round2(meterImport),
     meterExportKwh: round2(meterExport),
