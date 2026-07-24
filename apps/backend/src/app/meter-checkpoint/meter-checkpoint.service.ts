@@ -91,7 +91,9 @@ export class MeterCheckpointService {
    * `meter_1hour` is the source because the raw readings are dropped after 30
    * days while the aggregates are kept long-term. Its buckets are whole hours,
    * which line up with the local hour (Europe/Berlin offsets are whole hours),
-   * so the value is at most one hour older than the reading itself.
+   * so the value is normally at most one hour older than the reading itself —
+   * on a data gap it can fall back to an older bucket within {@link READ_WINDOW},
+   * which is flagged via `counterStale`/`approximate` rather than assumed away.
    */
   async reconciliation(): Promise<MeterReconciliation> {
     const { rows } = await this.db.query(
