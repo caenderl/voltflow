@@ -22,6 +22,12 @@ export interface CheckpointSample {
    */
   counterImportKwh: number | null;
   counterExportKwh: number | null;
+  /**
+   * The counters came from a bucket more than an hour before the reading time —
+   * the exact hour was missing and a fallback within the lookup window was used,
+   * so they are only approximate.
+   */
+  counterStale: boolean;
 }
 
 /** The smart meter's current cumulative counters. */
@@ -89,6 +95,7 @@ function compareInterval(
     exportDeviationKwh: null,
     importDeviationPct: null,
     exportDeviationPct: null,
+    approximate: false,
     status: 'no-data',
   };
 
@@ -111,6 +118,9 @@ function compareInterval(
     exportDeviationKwh: reset ? null : round2(smartExport - meterExport),
     importDeviationPct: reset ? null : percentDeviation(smartImport, meterImport),
     exportDeviationPct: reset ? null : percentDeviation(smartExport, meterExport),
+    // Either endpoint's counter falling back to an older bucket makes the whole
+    // delta approximate.
+    approximate: prev.counterStale || cur.counterStale,
     status,
   };
 }

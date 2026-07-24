@@ -11,6 +11,11 @@ const STATUS_HINT: Record<ReconciliationStatus, string> = {
   reset: 'Der Zählerstand ist rückwärts gesprungen (Gerätetausch oder Tippfehler).',
 };
 
+/** Tooltip for the ≈ marker on rows whose SmartMeter value is only approximate. */
+const APPROX_HINT =
+  'SmartMeter-Wert aus einem bis zu 3 h entfernten Zeitpunkt — zur Ablesezeit fehlte der ' +
+  'Stundenwert (Datenlücke). Die Abweichung ist daher nur ungefähr.';
+
 /** One clause of the verdict, e.g. "Bezug stimmt praktisch exakt" or null without data. */
 function describeDeviation(pct: number | null, label: string): string | null {
   if (pct === null) return null;
@@ -58,6 +63,8 @@ export class CheckpointReconciliationComponent {
     const total = t.intervalCount + t.skippedCount;
     return `${verdict} ${t.skippedCount} von ${total} Zeiträumen fehlen Vergleichsdaten.`;
   });
+
+  readonly approxHint = APPROX_HINT;
 
   statusHint(status: ReconciliationStatus): string {
     return STATUS_HINT[status];

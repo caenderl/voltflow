@@ -36,6 +36,11 @@
                   {{ i.status === 'no-data' ? 'keine Daten' : 'Zählersprung' }}
                 </span>
               }
+              <!-- The SmartMeter value rests on a bucket up to 3 h off the
+                   reading time (a data gap) — the deviation is only approximate. -->
+              @if (i.approximate) {
+                <span class="badge" [title]="approxHint">≈ ungefähr</span>
+              }
               <!-- The anchor the SmartMeter was read at, not decoration: it is
                    what a surprising deviation has to be judged against. -->
               <span class="read-at">{{ i.fromReadAt }} – {{ i.toReadAt }} Uhr</span>
@@ -116,6 +121,8 @@
       ein Ausfall des Collectors innerhalb eines Zeitraums verfälscht den Abgleich daher nicht.
       Als SmartMeter-Stand gilt der Zählwerkswert zur erfassten Ablesezeit (auf die Stunde genau);
       kurze Zeiträume bleiben wenig aussagekräftig, weil sich diese Stunde dort stärker auswirkt.
+      <b>≈ ungefähr</b> markiert Zeiträume, in denen zur Ablesezeit ein Stundenwert fehlte und ein
+      bis zu 3 h entfernter herangezogen wurde.
     </p>
   } @else {
     <p class="hint-sm">
