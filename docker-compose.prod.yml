@@ -18,12 +18,24 @@
 # the server needs a certs/ dir alongside this file, containing voltflow.crt +
 # voltflow.key (see apps/frontend/nginx.conf).
 
+# Cap container log growth. Docker's json-file driver has NO default rotation,
+# so without this each container's log grows unbounded until the container is
+# recreated (the db container almost never is). 10 MB x 3 files = 30 MB ceiling
+# per container. Applied to every service below; a fresh `up -d` picks it up on
+# the next container (re)creation.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 # Shared config for the three collector containers (one per device/protocol).
 # Each collector image sets its own COLLECTOR env; only meter carries the
 # Anker MQTT single-session constraint.
 x-collector: &collector
   pull_policy: never
   restart: unless-stopped
+  logging: *default-logging
   env_file: .env
   environment:
     DATABASE_URL: postgresql://${POSTGRES_USER:-voltflow}:${POSTGRES_PASSWORD:-voltflow}@db:5432/${POSTGRES_DB:-voltflow}
@@ -35,6 +47,7 @@ services:
   db:
     image: timescale/timescaledb:2.28.1-pg16
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 1g          # enough for TimescaleDB at this data volume
     env_file: .env
     environment:
@@ -93,6 +106,7 @@ services:
       context: .
       dockerfile: apps/backend/Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 256m
     env_file: .env
     environment:
@@ -122,6 +136,7 @@ services:
       context: .
       dockerfile: apps/frontend/Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 128m
     ports:
       - "8080:8080"

@@ -247,6 +247,57 @@ Geplant z. B. per crontab auf dem Server (täglich 3 Uhr):
   ./scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
+**Off-Site-Backup (restic) — das eigentliche Sicherheitsnetz.** Die lokalen Dumps
+liegen auf **derselben** Maschine wie die DB; ein Disk-/Host-Verlust nimmt beide mit.
+`scripts/backup-offsite.sh` schiebt den DB-Dump (plus `.env` + `certs/` für einen
+Bare-Metal-Rebuild) verschlüsselt in ein restic-Repo — mit Deduplizierung,
+Integritäts-Check und GFS-Retention (14 täglich / 8 wöchentlich / 12 monatlich).
+Ziel ist **Google Drive** über rclone (Alternativen wie Backblaze B2 / S3 / SSH
+stehen auskommentiert in `backup.env.example`). Einrichtung einmalig auf dem Server:
+
+```bash
+# 1) restic + rclone installieren, Google-Drive-Remote einrichten
+sudo apt install restic rclone
+rclone config          # neues Remote "gdrive" (Typ "drive"), OAuth durchklicken
+#   Empfohlen: eigene Google-OAuth-Client-ID (Drive-API aktivieren), sonst
+#   drosselt Google rclones geteilte Default-ID. Headless-Server:
+#   `rclone authorize "drive"` auf dem Desktop, Token in `rclone config` einfügen.
+# 2) Config + Repo
+cp scripts/backup.env.example scripts/backup.env    # RESTIC_PASSWORD sicher verwahren!
+set -a; . scripts/backup.env; set +a; restic init   # Repo erstellen (einmalig)
+```
+
+Danach per crontab, direkt nach dem lokalen Dump (das Off-Site-Skript dedupliziert,
+kostet also kaum Extra-Speicher):
+
+```
+5 3 * * * cd ~/voltflow && COMPOSE_FILE=docker-compose.prod.yml \
+  ./scripts/backup-offsite.sh >> backups/backup-offsite.log 2>&1
+```
+
+Restore aus dem Off-Site-Repo → in eine **frische** DB (siehe oben):
+
+```bash
+./scripts/restore-offsite.sh snapshots     # verfügbare Snapshots auflisten
+./scripts/restore-offsite.sh               # neuesten DB-Snapshot als .sql.gz ziehen
+```
+
+> **restic-Passwort sicher & separat aufbewahren** (Passwortmanager) — ohne das
+> Passwort ist das gesamte Repo unwiederherstellbar. Restore regelmäßig testen
+> (`restore-offsite.sh` in eine Wegwerf-DB), sonst weiß man erst im Ernstfall, ob
+> das Backup taugt. Optional `HEALTHCHECK_URL` in `backup.env` setzen, damit ein
+> ausbleibender/fehlgeschlagener Lauf alarmiert.
+
+**Aufräumen auf dem Server** (sonst läuft die Disk langsam voll):
+
+- **Container-Logs:** `docker-compose.prod.yml` deckelt jeden Container per
+  `json-file`-Rotation auf 3 × 10 MB. Greift beim nächsten (Neu-)Erzeugen des
+  Containers; für den selten neu erzeugten `db`-Container einmalig
+  `docker compose -f docker-compose.prod.yml up -d db` (kurzer Blip, Volume bleibt).
+- **Alte Images:** jeder Deploy verwaist die vorherigen `:latest`-Images. `deploy.sh`
+  räumt mit `--prune`; unabhängig davon ein wöchentlicher Cron:
+  `0 4 * * 1 docker image prune -f`.
+
 DB-Image ist exakt auf `timescale/timescaledb:2.28.1-pg16` gepinnt (PostgreSQL-Major **und**
 TimescaleDB-Version). Upgrades nur bewusst: Tag hochziehen → Backup → `docker compose pull` →
 `ALTER EXTENSION timescaledb UPDATE`. Ein PG-Major-Upgrade nur per Dump + Restore.

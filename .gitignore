@@ -1,5 +1,6 @@
 # --- Projekt-spezifisch (Python / Secrets) ---
 .env
+scripts/backup.env
 venv/
 anker-solix-api/
 __pycache__/

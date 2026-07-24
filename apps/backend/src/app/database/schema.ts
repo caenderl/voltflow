@@ -432,6 +432,51 @@ const MIGRATIONS: { name: string; sql: string }[] = [
                   OR t.export_ct_kwh IS NOT NULL)
              AND NOT EXISTS (SELECT 1 FROM tariff_period)`,
   },
+  {
+    // -----------------------------------------------------------------------
+    // Tiered retention for the continuous aggregates. The raw hypertables are
+    // already pruned (meter_reading 30 d, sma/wallbox_readings 90 d); the
+    // aggregates used to be kept for "10 years" (and meter_* had no retention
+    // policy at all, growing unbounded). Minute/hour resolution does not need
+    // to sit around for a decade: keep 1min for 90 days, 1hour for 2 years,
+    // and only the tiny 1day rollups long-term.
+    //
+    // add_retention_policy(if_not_exists => TRUE) can only ADD a policy, never
+    // change an existing interval, so this reconciles idempotently: read the
+    // current drop_after and re-create the policy only when it differs from the
+    // target (a genuine no-op on every later boot). Non-destructive as long as
+    // it is applied while the data is younger than the new window.
+    name: '046-aggregate-retention-tiers',
+    sql: `DO $$
+          DECLARE
+            r   record;
+            cur interval;
+          BEGIN
+            FOR r IN
+              SELECT * FROM (VALUES
+                ('meter_1min',    INTERVAL '90 days'),
+                ('meter_1hour',   INTERVAL '2 years'),
+                ('meter_1day',    INTERVAL '10 years'),
+                ('sma_1min',      INTERVAL '90 days'),
+                ('sma_1hour',     INTERVAL '2 years'),
+                ('sma_1day',      INTERVAL '10 years'),
+                ('wallbox_1min',  INTERVAL '90 days'),
+                ('wallbox_1hour', INTERVAL '2 years'),
+                ('wallbox_1day',  INTERVAL '10 years')
+              ) AS t(view_name, keep)
+            LOOP
+              cur := NULL;
+              SELECT (config->>'drop_after')::interval INTO cur
+                FROM timescaledb_information.jobs
+               WHERE proc_name = 'policy_retention'
+                 AND hypertable_name = r.view_name;
+              IF cur IS DISTINCT FROM r.keep THEN
+                PERFORM remove_retention_policy(r.view_name::regclass, if_exists => TRUE);
+                PERFORM add_retention_policy(r.view_name::regclass, r.keep, if_not_exists => TRUE);
+              END IF;
+            END LOOP;
+          END $$`,
+  },
 ];
 
 export async function applyMigrations(

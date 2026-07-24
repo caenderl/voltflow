@@ -128,8 +128,12 @@ SELECT add_continuous_aggregate_policy('meter_1day',
     start_offset => INTERVAL '1 year',  end_offset => INTERVAL '1 day',
     schedule_interval => INTERVAL '1 hour');
 
--- Drop raw data after 30 days (aggregates are kept long-term)
+-- Drop raw data after 30 days. Aggregates use tiered retention: minute/hour
+-- resolution is not kept forever, only the tiny 1day rollups are long-term.
 SELECT add_retention_policy('meter_reading', INTERVAL '30 days');
+SELECT add_retention_policy('meter_1min',  INTERVAL '90 days',  if_not_exists => TRUE);
+SELECT add_retention_policy('meter_1hour', INTERVAL '2 years',  if_not_exists => TRUE);
+SELECT add_retention_policy('meter_1day',  INTERVAL '10 years', if_not_exists => TRUE);
 
 -- ---------------------------------------------------------------------------
 -- NOTIFY trigger for the live push: every insert sends the row as JSON on the
@@ -237,8 +241,8 @@ SELECT add_continuous_aggregate_policy('wallbox_1day',
     schedule_interval => INTERVAL '1 hour');
 
 -- Retain aggregated data for 10 years (raw wallbox_reading stays at 90 days)
-SELECT add_retention_policy('wallbox_1min',  INTERVAL '10 years', if_not_exists => TRUE);
-SELECT add_retention_policy('wallbox_1hour', INTERVAL '10 years', if_not_exists => TRUE);
+SELECT add_retention_policy('wallbox_1min',  INTERVAL '90 days',  if_not_exists => TRUE);
+SELECT add_retention_policy('wallbox_1hour', INTERVAL '2 years',  if_not_exists => TRUE);
 SELECT add_retention_policy('wallbox_1day',  INTERVAL '10 years', if_not_exists => TRUE);
 
 -- NOTIFY trigger for the live wallbox push (backend LISTENs 'wallbox_reading').
@@ -359,8 +363,8 @@ SELECT add_continuous_aggregate_policy('sma_1day',
     start_offset => INTERVAL '90 days', end_offset => INTERVAL '1 day',
     schedule_interval => INTERVAL '1 hour');
 
-SELECT add_retention_policy('sma_1min',  INTERVAL '10 years', if_not_exists => TRUE);
-SELECT add_retention_policy('sma_1hour', INTERVAL '10 years', if_not_exists => TRUE);
+SELECT add_retention_policy('sma_1min',  INTERVAL '90 days',  if_not_exists => TRUE);
+SELECT add_retention_policy('sma_1hour', INTERVAL '2 years',  if_not_exists => TRUE);
 SELECT add_retention_policy('sma_1day',  INTERVAL '10 years', if_not_exists => TRUE);
 
 -- NOTIFY trigger for the live SMA push (backend LISTENs 'sma_reading').
