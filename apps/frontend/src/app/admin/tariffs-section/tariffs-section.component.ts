@@ -51,14 +51,19 @@ export class TariffsSectionComponent {
   save(): void {
     const validFrom = this.formValidFrom();
     if (!validFrom) return;
-    this.data.saveTariffPeriod({
-      id: this.formEditingId() ?? undefined,
-      validFrom,
-      provider: this.formProvider().trim() || null,
-      importCtPerKwh: this.formImport(),
-      exportCtPerKwh: this.formExport(),
-    });
-    this.resetForm();
+    // Reset only once the save actually lands — on a 409 the form must keep the
+    // user's input so they can see what conflicted instead of losing it.
+    void this.data
+      .saveTariffPeriod({
+        id: this.formEditingId() ?? undefined,
+        validFrom,
+        provider: this.formProvider().trim() || null,
+        importCtPerKwh: this.formImport(),
+        exportCtPerKwh: this.formExport(),
+      })
+      .then((ok) => {
+        if (ok) this.resetForm();
+      });
   }
 
   remove(t: TariffPeriod): void {

@@ -247,7 +247,12 @@ export class DashboardDataService {
     );
   }
 
-  saveCheckpoint(event: CheckpointSaveEvent): void {
+  /**
+   * Resolves true only once the save has actually landed, so callers can defer
+   * resetting their form until success instead of clearing it out from under a
+   * rejected (e.g. 409) attempt.
+   */
+  saveCheckpoint(event: CheckpointSaveEvent): Promise<boolean> {
     const input = {
       date: event.date,
       readAt: event.readAt,
@@ -261,17 +266,24 @@ export class DashboardDataService {
     // Drop a previous failure up front, so the message on screen always belongs
     // to the attempt the user just made.
     this.error.set(null);
-    obs.subscribe({
-      next: () => this.loadCheckpoints(),
-      // 409 = there is already a checkpoint for that date; naming the cause
-      // beats a generic failure the user cannot act on.
-      error: (err: { status?: number }) =>
-        this.error.set(
-          err?.status === 409
-            ? 'Für dieses Datum gibt es bereits einen Zählerstand — bitte den vorhandenen bearbeiten.'
-            : 'Zählerstand konnte nicht gespeichert werden.',
-        ),
-    });
+    return firstValueFrom(
+      obs.pipe(
+        map(() => {
+          this.loadCheckpoints();
+          return true;
+        }),
+        // 409 = there is already a checkpoint for that date; naming the cause
+        // beats a generic failure the user cannot act on.
+        catchError((err: { status?: number }) => {
+          this.error.set(
+            err?.status === 409
+              ? 'Für dieses Datum gibt es bereits einen Zählerstand — bitte den vorhandenen bearbeiten.'
+              : 'Zählerstand konnte nicht gespeichert werden.',
+          );
+          return of(false);
+        }),
+      ),
+    );
   }
 
   deleteCheckpoint(id: number): void {
@@ -285,7 +297,12 @@ export class DashboardDataService {
     });
   }
 
-  saveTariffPeriod(event: TariffPeriodSaveEvent): void {
+  /**
+   * Resolves true only once the save has actually landed, so callers can defer
+   * resetting their form until success instead of clearing it out from under a
+   * rejected (e.g. 409) attempt.
+   */
+  saveTariffPeriod(event: TariffPeriodSaveEvent): Promise<boolean> {
     const input = {
       validFrom: event.validFrom,
       provider: event.provider,
@@ -297,17 +314,24 @@ export class DashboardDataService {
         ? this.settingsApi.createTariffPeriod(input)
         : this.settingsApi.updateTariffPeriod(event.id, input);
     this.error.set(null);
-    obs.subscribe({
-      next: () => this.loadTariffPeriods(),
-      // 409 = there is already a tariff for that start date; naming the cause
-      // beats a generic failure the user cannot act on.
-      error: (err: { status?: number }) =>
-        this.error.set(
-          err?.status === 409
-            ? 'Für dieses Startdatum gibt es bereits einen Tarif — bitte den vorhandenen bearbeiten.'
-            : 'Tarif konnte nicht gespeichert werden.',
-        ),
-    });
+    return firstValueFrom(
+      obs.pipe(
+        map(() => {
+          this.loadTariffPeriods();
+          return true;
+        }),
+        // 409 = there is already a tariff for that start date; naming the cause
+        // beats a generic failure the user cannot act on.
+        catchError((err: { status?: number }) => {
+          this.error.set(
+            err?.status === 409
+              ? 'Für dieses Startdatum gibt es bereits einen Tarif — bitte den vorhandenen bearbeiten.'
+              : 'Tarif konnte nicht gespeichert werden.',
+          );
+          return of(false);
+        }),
+      ),
+    );
   }
 
   deleteTariffPeriod(id: number): void {
