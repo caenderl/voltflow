@@ -21,6 +21,14 @@ import {
  */
 const READ_WINDOW = '3 hours';
 
+/**
+ * How far before the reading time the immediate hourly bucket can sit (buckets
+ * are whole hours, so the one just before the reading is ≤ 1 h old). A counter
+ * from further back means that immediate bucket was missing — the value is only
+ * approximate, and the comparison says so.
+ */
+const EXACT_WINDOW = '1 hour';
+
 /** Postgres unique_violation, raised by the one-checkpoint-per-date index. */
 const UNIQUE_VIOLATION = '23505';
 
@@ -89,10 +97,12 @@ export class MeterCheckpointService {
     const { rows } = await this.db.query(
       `SELECT c.date::text AS date, ${READ_AT_TEXT}, c.import_kwh, c.export_kwh,
               s.grid_import_energy AS counter_import,
-              s.grid_export_energy AS counter_export
+              s.grid_export_energy AS counter_export,
+              s.bucket < ((c.date + c.read_at) AT TIME ZONE $1) - $3::interval
+                AS counter_stale
          FROM meter_checkpoint c
          LEFT JOIN LATERAL (
-           SELECT grid_import_energy, grid_export_energy
+           SELECT grid_import_energy, grid_export_energy, bucket
              FROM meter_1hour
             WHERE bucket <  ((c.date + c.read_at) AT TIME ZONE $1)
               AND bucket >= ((c.date + c.read_at) AT TIME ZONE $1) - $2::interval
@@ -102,7 +112,7 @@ export class MeterCheckpointService {
             LIMIT 1
          ) s ON TRUE
         ORDER BY c.date, c.read_at`,
-      [TIMEZONE, READ_WINDOW],
+      [TIMEZONE, READ_WINDOW, EXACT_WINDOW],
     );
 
     const samples: CheckpointSample[] = rows.map((r) => ({
@@ -112,6 +122,8 @@ export class MeterCheckpointService {
       exportKwh: Number(r['export_kwh']),
       counterImportKwh: numOrNull(r['counter_import']),
       counterExportKwh: numOrNull(r['counter_export']),
+      // null (no bucket at all -> no-data) coerces to false, which is moot there.
+      counterStale: Boolean(r['counter_stale']),
     }));
 
     return computeReconciliation(samples, await this.currentCounters());

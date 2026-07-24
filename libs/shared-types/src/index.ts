@@ -178,6 +178,12 @@ export interface ReconciliationInterval {
   /** Deviation relative to the physical delta, in percent (1.5 = 1.5 %). */
   importDeviationPct: number | null;
   exportDeviationPct: number | null;
+  /**
+   * The smart meter delta rests on a counter more than an hour off one of the
+   * two reading times (a data gap forced a fallback within the lookup window),
+   * so it is only approximate. Only meaningful when `status` is `ok`/`reset`.
+   */
+  approximate: boolean;
   status: ReconciliationStatus;
 }
 

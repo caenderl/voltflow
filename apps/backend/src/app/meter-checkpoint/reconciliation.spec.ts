@@ -12,6 +12,8 @@ const sample = (
   // hands this function the counters that already belong to that moment. It is
   // only carried through to the interval so the UI can show the anchor.
   readAt = '18:00',
+  // Whether SQL had to fall back to an older bucket for this checkpoint.
+  counterStale = false,
 ): CheckpointSample => ({
   date,
   readAt,
@@ -19,6 +21,7 @@ const sample = (
   exportKwh,
   counterImportKwh,
   counterExportKwh,
+  counterStale,
 });
 
 describe('computeReconciliation', () => {
@@ -55,6 +58,27 @@ describe('computeReconciliation', () => {
     const [i] = r.intervals;
     expect(i.fromReadAt).toBe('18:00');
     expect(i.toReadAt).toBe('13:00');
+  });
+
+  it('flags an interval as approximate when either endpoint used a stale counter', () => {
+    const fresh = () =>
+      computeReconciliation(
+        [sample('2026-06-01', 42000, 51000), sample('2026-07-01', 42100, 51200)],
+        null,
+      ).intervals[0];
+    expect(fresh().approximate).toBe(false);
+
+    // Second checkpoint's counter fell back to an older bucket -> the whole
+    // delta is approximate, even though the comparison itself still succeeds.
+    const staleEnd = computeReconciliation(
+      [
+        sample('2026-06-01', 42000, 51000),
+        sample('2026-07-01', 42100, 51200, undefined, undefined, '18:00', true),
+      ],
+      null,
+    ).intervals[0];
+    expect(staleEnd.status).toBe('ok');
+    expect(staleEnd.approximate).toBe(true);
   });
 
   it('reports a smart meter that undercounts as a negative deviation', () => {
