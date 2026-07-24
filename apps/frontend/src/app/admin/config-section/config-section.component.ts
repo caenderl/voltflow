@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { DashboardDataService } from '../../dashboard/dashboard-data.service';
@@ -21,6 +22,7 @@ import { ToggleSwitchComponent } from '../../ui/toggle-switch/toggle-switch.comp
     ToggleSwitchComponent,
     TextFieldComponent,
     NumberFieldComponent,
+    DecimalPipe,
   ],
   templateUrl: './config-section.component.html',
   styleUrl: './config-section.component.scss',
@@ -41,11 +43,20 @@ export class ConfigSectionComponent {
     () => this.data.appSettings()?.calibrationEnabled ?? false,
   );
 
-  /** Whether both correction factors exist — the toggle is inert without either. */
-  readonly hasCalibrationData = computed(() => {
+  /**
+   * The active correction factors (physical / smart) from the checkpoint
+   * reconciliation, or null when there is no comparable checkpoint pair to
+   * derive them from. Shown in the card so the user sees what the toggle
+   * actually applies; also gates the toggle, which is inert without them.
+   */
+  readonly calibrationFactors = computed(() => {
     const t = this.data.reconciliation()?.totals;
-    return t?.importFactor != null && t?.exportFactor != null;
+    if (t?.importFactor == null || t?.exportFactor == null) return null;
+    return { importFactor: t.importFactor, exportFactor: t.exportFactor };
   });
+
+  /** Whether both correction factors exist — the toggle is inert without either. */
+  readonly hasCalibrationData = computed(() => this.calibrationFactors() !== null);
   readonly formWbEnabled = linkedSignal(() => this.data.wallboxConfig()?.enabled ?? false);
   readonly formWbName = linkedSignal(() => this.data.wallboxConfig()?.name ?? '');
   readonly formWbHost = linkedSignal(() => this.data.wallboxConfig()?.host ?? '');

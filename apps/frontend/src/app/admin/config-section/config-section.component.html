@@ -1,10 +1,25 @@
 <div class="settings-stack">
-  <app-settings-card heading="Anzeige" subtitle="Messwerte auf den abgelesenen Zählerstand kalibrieren.">
+  <app-settings-card
+    heading="Anzeige kalibrieren"
+    subtitle="Messwerte auf den abgelesenen Zählerstand kalibrieren."
+  >
     <app-toggle-switch
       card-actions
       [checked]="formCalibration()"
       (checkedChange)="formCalibration.set($event)"
     />
+    @if (calibrationFactors(); as f) {
+      <dl class="factor-readout">
+        <div class="factor import">
+          <dt>Bezug</dt>
+          <dd>× {{ f.importFactor | number: '1.3-3' }}</dd>
+        </div>
+        <div class="factor export">
+          <dt>Einspeisung</dt>
+          <dd>× {{ f.exportFactor | number: '1.3-3' }}</dd>
+        </div>
+      </dl>
+    }
     <p class="hint-sm">
       Rechnet Bezug und Einspeisung — und die daraus abgeleiteten Kosten — in allen Ansichten mit dem
       Korrekturfaktor aus dem SmartMeter-Abgleich auf den physischen Zähler hoch.
