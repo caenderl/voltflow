@@ -81,6 +81,23 @@ describe('computeReconciliation', () => {
     expect(staleEnd.approximate).toBe(true);
   });
 
+  it('counts approximate intervals in the totals, separately from skipped ones', () => {
+    const r = computeReconciliation(
+      [
+        sample('2026-05-01', 41800, 50600, null, null), // no data -> skipped
+        sample('2026-06-01', 42000, 51000, 2000, 1000),
+        // fallback to an older bucket -> ok but approximate
+        sample('2026-07-01', 42100, 51200, 2098, 1200, undefined, true),
+      ],
+      null,
+    );
+
+    const t = r.totals;
+    expect(t?.intervalCount).toBe(1);
+    expect(t?.skippedCount).toBe(1);
+    expect(t?.approximateCount).toBe(1);
+  });
+
   it('reports a smart meter that undercounts as a negative deviation', () => {
     // physical +100, smart meter only counted 98 -> -2 kWh / -2 %
     const r = computeReconciliation(

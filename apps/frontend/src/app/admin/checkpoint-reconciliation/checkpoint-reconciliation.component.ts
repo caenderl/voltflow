@@ -58,7 +58,10 @@ export class CheckpointReconciliationComponent {
     ].filter((c): c is string => c !== null);
     if (!clauses.length) return null;
 
-    const verdict = `Über ${t.days} vergleichbare Tage misst das SmartMeter: ${clauses.join(', ')}.`;
+    let verdict = `Über ${t.days} vergleichbare Tage misst das SmartMeter: ${clauses.join(', ')}.`;
+    if (t.approximateCount > 0) {
+      verdict += ` ${t.approximateCount} von ${t.intervalCount} Zeiträumen davon nur ungefähr (Datenlücke).`;
+    }
     if (t.skippedCount === 0) return verdict;
     const total = t.intervalCount + t.skippedCount;
     return `${verdict} ${t.skippedCount} von ${total} Zeiträumen fehlen Vergleichsdaten.`;

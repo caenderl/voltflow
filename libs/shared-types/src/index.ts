@@ -203,6 +203,8 @@ export interface ReconciliationTotals {
   intervalCount: number;
   /** Intervals left out because they were not comparable (no-data / reset). */
   skippedCount: number;
+  /** Of `intervalCount`, how many rest on a stale (fallback) SmartMeter counter. */
+  approximateCount: number;
   meterImportKwh: number;
   meterExportKwh: number;
   smartImportKwh: number;

@@ -145,6 +145,7 @@ function sumComparable(
     days: sum(ok.map((i) => i.days)),
     intervalCount: ok.length,
     skippedCount: intervals.length - ok.length,
+    approximateCount: ok.filter((i) => i.approximate).length,
     meterImportKwh: round2(meterImport),
     meterExportKwh: round2(meterExport),
     smartImportKwh: round2(smartImport),
