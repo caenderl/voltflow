@@ -66,14 +66,19 @@ export class CheckpointsSectionComponent {
     const importKwh = this.formCpImport();
     const exportKwh = this.formCpExport();
     if (!date || !readAt || importKwh == null || exportKwh == null) return;
-    this.data.saveCheckpoint({
-      id: this.formCpEditingId() ?? undefined,
-      date,
-      readAt,
-      importKwh,
-      exportKwh,
-    });
-    this.resetForm();
+    // Reset only once the save actually lands — on a 409 the form must keep the
+    // user's input so they can see what conflicted instead of losing it.
+    void this.data
+      .saveCheckpoint({
+        id: this.formCpEditingId() ?? undefined,
+        date,
+        readAt,
+        importKwh,
+        exportKwh,
+      })
+      .then((ok) => {
+        if (ok) this.resetForm();
+      });
   }
 
   deleteCheckpoint(c: MeterCheckpoint): void {
