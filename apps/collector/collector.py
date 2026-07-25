@@ -54,6 +54,11 @@ COLLECTOR = os.getenv("COLLECTOR", "all").lower()
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 LOG = logging.getLogger("voltflow.collector")
 LOG.setLevel(logging.INFO)
+# The stream modules log their own operational breadcrumbs (session established,
+# inverter idle rather than half-dead) at INFO. Without this they stay invisible
+# under the WARNING root level, which is how "SMA connected" never showed up in
+# prod - and an explanation nobody can read is no explanation.
+logging.getLogger("voltflow.sma").setLevel(logging.INFO)
 LOG.info("Voltflow collector %s starting (COLLECTOR=%s)", __version__, COLLECTOR)
 
 # Seconds before reconnecting if a stream breaks

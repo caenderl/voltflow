@@ -8,8 +8,10 @@ values every `interval` seconds. Used by the collector (collector.py).
 Lifecycle: one persistent aiohttp.ClientSession + device session (new_session /
 close_session) is held for the whole stream, NOT rebuilt per poll.
 
-Night behaviour: after sunset the inverter sleeps and reads fail. A failed read
-is first retried a few times; only after several consecutive failed cycles is an
+Night behaviour: after sunset the inverter sleeps. That shows up in two shapes -
+reads that fail outright, and reads that still succeed but carry only the energy
+counters (no production fields). Both are handled the same way: a failed read is
+first retried a few times, and only after several consecutive failed cycles is an
 `asleep` snapshot (0 W) yielded, so the caller neither reconnect-spams nor
 records a real daytime read glitch as 0 W. Isolated failures while producing are
 skipped (no row yielded) instead. Only a failure to establish the session at all
@@ -76,12 +78,26 @@ RETRY_DELAY = 2.0        # seconds between immediate retries
 ASLEEP_AFTER = 3
 
 # A run of reads that SUCCEED (ok=True) but carry no production data - only e.g.
-# total_yield - is NOT a sleeping inverter (which times out); it is a stale,
-# long-held Speedwire session that has gone half-dead (observed after the
-# inverter's overnight sleep: total_yield keeps updating while grid_power/pv/
-# daily_yield stop arriving). Rebuild the session after this many so daytime
-# reads recover on their own instead of the whole day reading as "asleep".
+# total_yield - has two very different causes, and they are told apart by whether
+# total_yield still MOVES (see `_yield_advanced`):
+#
+#   moving  -> a stale, long-held Speedwire session gone half-dead (observed
+#              after the inverter's overnight sleep: total_yield keeps updating
+#              while grid_power/pv/daily_yield stop arriving). Rebuild the
+#              session after this many reads so daytime reads recover on their
+#              own instead of the whole day reading as "asleep".
+#   steady  -> the inverter is simply idle: it answers, but generates nothing, so
+#              its lifetime counter cannot advance. This is dusk/night on this
+#              device (it does NOT always time out). Recycling here would loop
+#              all night - ~490 reconnects - and, since the caller records
+#              nothing on a recycle, suppress the asleep rows entirely. So fall
+#              through to the normal ASLEEP_AFTER path instead.
 PARTIAL_RECONNECT = 3
+
+# total_yield is a lifetime kWh counter reported to 3 decimals, so 1 Wh is its
+# resolution: anything above that is real generation, anything at or below it is
+# the counter standing still.
+YIELD_STEADY_EPSILON_KWH = 0.001
 
 # Above this the inverter is unmistakably generating, so it cannot be about to
 # fall asleep: it ramps down to single-digit watts first. Losing contact from
@@ -99,9 +115,14 @@ ASLEEP_GRACE_CYCLES = 30
 class SmaSessionStale(RuntimeError):
     """Deliberate session recycle - the inverter is reachable, not asleep.
 
-    Raised when reads keep succeeding without production fields (see
-    PARTIAL_RECONNECT). The caller must reconnect *without* recording an asleep
-    row: this is a healthy recovery, not an outage.
+    Raised when reads keep succeeding without production fields *while
+    total_yield still rises* (see PARTIAL_RECONNECT) - the inverter is plainly
+    generating, so the session is losing those fields. The caller must reconnect
+    *without* recording an asleep row: this is a healthy recovery, not an outage.
+
+    An idle inverter produces the same production-less reads but a steady
+    total_yield, and is deliberately NOT raised for: it settles into asleep rows
+    via the normal ASLEEP_AFTER path.
     """
 
 
@@ -173,6 +194,23 @@ def _has_production(values: dict | None) -> bool:
     return any(values.get(f) is not None for f in _PRODUCTION_FIELDS)
 
 
+def _yield_advanced(base: float | None, current: float | None) -> bool:
+    """True if total_yield has climbed since a production-less run began.
+
+    The discriminator between a half-dead session and an idle inverter: only a
+    generating inverter can raise its lifetime counter, so a counter that keeps
+    moving while the production fields stay missing means the session is dropping
+    those fields (recycle it), whereas a counter standing still means there is
+    genuinely nothing to report (let it settle into asleep rows).
+
+    Unknown on either side -> False: without evidence of movement, prefer the
+    quiet path over recycling the session.
+    """
+    if base is None or current is None:
+        return False
+    return current - base > YIELD_STEADY_EPSILON_KWH
+
+
 def _finalize_awake(values: dict) -> dict:
     """Mark a good read as an awake snapshot (status float -> int)."""
     values["asleep"] = False
@@ -190,7 +228,8 @@ async def stream_sma(
 
     Raises on failure to establish the session (caller reconnects), and
     SmaSessionStale when the session must be recycled while the inverter is
-    still reachable. Failed reads during an established session are retried,
+    still reachable *and demonstrably generating* (total_yield rising without
+    production fields). Failed reads during an established session are retried,
     then skipped, and only yield an asleep snapshot (0 W) after ASLEEP_AFTER
     consecutive failed cycles - and never at all while contact was lost out of
     real production (see `sleep_implausible`).
@@ -220,8 +259,10 @@ async def stream_sma(
         sensors = await device.get_sensors()
         consecutive_fail = 0
         partial_streak = 0
+        partial_base_yield: float | None = None  # total_yield when the run began
         last_power: float | None = None   # grid_power of the last good read
         gapping = False                   # logged once per gap run
+        idling = False                    # logged once per idle run
         while True:
             # Retry a failed read a few times before believing it: a single
             # dropped Speedwire read while the inverter is producing must not be
@@ -239,7 +280,9 @@ async def stream_sma(
             if _has_production(values):
                 consecutive_fail = 0
                 partial_streak = 0
+                partial_base_yield = None
                 gapping = False
+                idling = False
                 # Only overwrite when grid_power itself came through: a read
                 # carrying pv_power but no grid_power is still production, so
                 # the previous level is a better guess than "unknown".
@@ -248,20 +291,34 @@ async def stream_sma(
                 snap = _finalize_awake(values)  # type: ignore[arg-type]
             else:
                 consecutive_fail += 1
-                # A successful read that carries data but no production fields is
-                # a stale session, not a sleeping inverter (which returns None) ->
-                # rebuild the session so daytime reads recover.
+                # A successful read carrying data but no production fields is
+                # either a half-dead session or an idle inverter - recycle only
+                # the former, or the idle case loops all night and its asleep
+                # rows are never written (see PARTIAL_RECONNECT).
                 if values is not None:
                     partial_streak += 1
+                    total_yield = values.get("total_yield_kwh")
+                    if partial_base_yield is None:
+                        partial_base_yield = total_yield
                     if partial_streak >= PARTIAL_RECONNECT:
-                        LOG.warning(
-                            "SMA session stale: %d reads with data but no "
-                            "production fields (total_yield=%s) - reconnecting",
-                            partial_streak, values.get("total_yield_kwh"))
-                        raise SmaSessionStale(
-                            f"stale session after {partial_streak} partial reads")
+                        if _yield_advanced(partial_base_yield, total_yield):
+                            LOG.warning(
+                                "SMA session stale: %d reads with data but no "
+                                "production fields while total_yield rose "
+                                "%.3f -> %.3f kWh - reconnecting",
+                                partial_streak, partial_base_yield, total_yield)
+                            raise SmaSessionStale(
+                                f"stale session after {partial_streak} partial reads")
+                        if not idling:
+                            LOG.info(
+                                "SMA idle: answering but reporting no production, "
+                                "total_yield steady at %s kWh - recording asleep "
+                                "rows instead of recycling the session",
+                                total_yield)
+                            idling = True
                 else:
                     partial_streak = 0
+                    partial_base_yield = None
                 if consecutive_fail < ASLEEP_AFTER:
                     # Transient blip while (probably) awake: skip this cycle
                     # rather than writing a false 0 W row.
