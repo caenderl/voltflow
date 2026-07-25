@@ -66,6 +66,19 @@ def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _recv_exact(s: socket.socket, n: int) -> bytes:
+    """Read exactly n bytes. TCP may split a response across segments — a short
+    recv() is normal, not a broken connection, and must not be reported as one.
+    """
+    buf = b""
+    while len(buf) < n:
+        chunk = s.recv(n - len(buf))
+        if not chunk:
+            raise ModbusError(f"Verbindung geschlossen nach {len(buf)} von {n} Bytes")
+        buf += chunk
+    return buf
+
+
 def read_regs(fc: int, addr: int, count: int, timeout: float = 5.0) -> list[int]:
     """One request per connection — mirrors how a fresh collector connect behaves.
 
@@ -77,18 +90,10 @@ def read_regs(fc: int, addr: int, count: int, timeout: float = 5.0) -> list[int]
         s.connect((HOST, PORT))
         pdu = struct.pack(">BHH", fc, addr, count)
         s.sendall(struct.pack(">HHHB", 1, 0, len(pdu) + 1, UNIT) + pdu)
-        head = s.recv(9)
-        if len(head) < 9:
-            raise ModbusError("kurze/leere Antwort (Verbindung abgebrochen)")
+        head = _recv_exact(s, 9)  # MBAP(7) + function code + byte count / exception code
         if head[7] & 0x80:
             raise ModbusError(f"Modbus exception code {head[8]} (fc={head[7] & 0x7f})")
-        want = head[8]
-        body = b""
-        while len(body) < want:
-            chunk = s.recv(want - len(body))
-            if not chunk:
-                raise ModbusError("Antwort unvollständig")
-            body += chunk
+        body = _recv_exact(s, head[8])
         return list(struct.unpack(">" + "H" * (len(body) // 2), body))
     finally:
         s.close()
@@ -106,7 +111,7 @@ def u32(regs: list[int], off: int) -> int:
 def classify(err: Exception) -> tuple[str, str]:
     """Map an exception to (short_state, human explanation)."""
     if isinstance(err, ConnectionRefusedError):
-        return "PORT-ZU", ("TCP RST auf :502 — Gerät lebt, aber Modbus ist AUS. "
+        return "PORT-ZU", (f"TCP RST auf :{PORT} — Gerät lebt, aber Modbus ist AUS. "
                            "Typisch nach Watchdog-Timeout; in der Anker-App wieder einschalten.")
     if isinstance(err, socket.timeout):
         return "TIMEOUT", ("Keine TCP-Antwort — Gerät nicht im Netz, anderes IP, "
@@ -127,11 +132,17 @@ def arp_state() -> str:
 
 
 def icmp_state() -> str:
-    """Ping for reference only — this device never answers, healthy or not."""
+    """Ping for reference only — this device never answers, healthy or not.
+
+    No -W flag on purpose: it means milliseconds on macOS but seconds on Linux,
+    so a portable value does not exist. The subprocess timeout bounds it instead.
+    """
     try:
-        r = subprocess.run(["ping", "-c", "2", "-W", "1000", HOST],
-                           capture_output=True, text=True, timeout=10)
+        r = subprocess.run(["ping", "-c", "2", HOST],
+                           capture_output=True, text=True, timeout=8)
         return "antwortet" if r.returncode == 0 else "keine Antwort (bei der A5191 NORMAL)"
+    except subprocess.TimeoutExpired:
+        return "keine Antwort (bei der A5191 NORMAL)"
     except Exception as err:  # noqa: BLE001
         return f"nicht ausführbar ({err})"
 
@@ -143,30 +154,32 @@ def diagnose() -> int:
     try:
         model = decode_string(read_regs(4, *REG_MODEL))
         serial = decode_string(read_regs(4, *REG_SERIAL))
+        print(f"erreichbar in {time.time() - t0:.2f}s")
+        print(f"  Modell {model}   Seriennummer {serial}\n")
+
+        # Every read stays inside the try: the watchdog can fire mid-diagnosis,
+        # and that deserves the same classified report as a dead device.
+        regs = read_regs(4, BLOCK_BASE, BLOCK_COUNT)
+        status = regs[44]
+        cp = regs[39]
+        print("--- Messwerte (FC4 20053+) ---")
+        print(f"  Spannung L1/L2/L3 : {regs[0]/10:.1f} / {regs[1]/10:.1f} / {regs[2]/10:.1f} V")
+        print(f"  Strom    L1/L2/L3 : {regs[6]/100:.2f} / {regs[7]/100:.2f} / {regs[8]/100:.2f} A")
+        print(f"  Ladeleistung      : {u32(regs, 15)} W")
+        print(f"  Session           : {u32(regs, 29)} s / {u32(regs, 31)} Wh")
+        print(f"  Ladestatus  (20097): {status} = {CHARGING_STATUS.get(status, '?')}")
+        print(f"  CP-Signal   (20092): {cp} = {CP_SIGNAL.get(cp, '?')}\n")
+
+        print("--- Steuerregister (FC3 21000+) ---")
+        ctrl = read_regs(3, 21000, 6)
     except Exception as err:  # noqa: BLE001
         state, why = classify(err)
-        print(f"NICHT ERREICHBAR  [{state}]  nach {time.time() - t0:.2f}s")
+        print(f"\nNICHT ERREICHBAR  [{state}]  nach {time.time() - t0:.2f}s")
         print(f"  {why}\n")
         print(f"  ARP : {arp_state()}")
         print(f"  Ping: {icmp_state()}")
         return 1
 
-    print(f"erreichbar in {time.time() - t0:.2f}s")
-    print(f"  Modell {model}   Seriennummer {serial}\n")
-
-    regs = read_regs(4, BLOCK_BASE, BLOCK_COUNT)
-    status = regs[44]
-    cp = regs[39]
-    print("--- Messwerte (FC4 20053+) ---")
-    print(f"  Spannung L1/L2/L3 : {regs[0]/10:.1f} / {regs[1]/10:.1f} / {regs[2]/10:.1f} V")
-    print(f"  Strom    L1/L2/L3 : {regs[6]/100:.2f} / {regs[7]/100:.2f} / {regs[8]/100:.2f} A")
-    print(f"  Ladeleistung      : {u32(regs, 15)} W")
-    print(f"  Session           : {u32(regs, 29)} s / {u32(regs, 31)} Wh")
-    print(f"  Ladestatus  (20097): {status} = {CHARGING_STATUS.get(status, '?')}")
-    print(f"  CP-Signal   (20092): {cp} = {CP_SIGNAL.get(cp, '?')}\n")
-
-    print("--- Steuerregister (FC3 21000+) ---")
-    ctrl = read_regs(3, 21000, 6)
     for i, val in enumerate(ctrl):
         addr = 21000 + i
         name, mapping, gain = CONTROL.get(addr, (f"reg {addr}", None, 1))
@@ -175,10 +188,10 @@ def diagnose() -> int:
         print(f"  {addr}  {name:<32} {shown}{extra}")
 
     timeout_s = ctrl[3]
-    print(f"\n--- Watchdog ---")
+    print("\n--- Watchdog ---")
     print(f"  Register 21003 = {timeout_s}s: kommt {timeout_s}s lang kein Modbus-Request,")
-    print(f"  schaltet die Wallbox Modbus ab (Port 502 zu, manuelles Einschalten nötig).")
-    print(f"  Collector-Poll-Intervall muss deutlich darunter liegen.")
+    print("  schaltet die Wallbox Modbus ab (Port 502 zu, manuelles Einschalten nötig).")
+    print("  Collector-Poll-Intervall muss deutlich darunter liegen.")
     print(f"\n  ARP : {arp_state()}")
     print(f"  Ping: {icmp_state()}")
     return 0
