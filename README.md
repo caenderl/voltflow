@@ -282,6 +282,15 @@ Restore aus dem Off-Site-Repo → in eine **frische** DB (siehe oben):
 ./scripts/restore-offsite.sh               # neuesten DB-Snapshot als .sql.gz ziehen
 ```
 
+**Restore verifizieren.** Ein nie zurückgespieltes Backup ist eine Hoffnung, kein
+Backup. `scripts/verify-restore.sh` holt den neuesten Snapshot, spielt ihn in einen
+**Wegwerf-Container** ein (die Prod-DB wird nie angefasst), prüft Hypertables,
+Aggregate und Zeilenzahlen und räumt danach alles ab — Exit-Code 0 = verifiziert:
+
+```bash
+COMPOSE_FILE=docker-compose.prod.yml ./scripts/verify-restore.sh
+```
+
 > **restic-Passwort sicher & separat aufbewahren** (Passwortmanager) — ohne das
 > Passwort ist das gesamte Repo unwiederherstellbar. Restore regelmäßig testen
 > (`restore-offsite.sh` in eine Wegwerf-DB), sonst weiß man erst im Ernstfall, ob
@@ -295,8 +304,10 @@ Restore aus dem Off-Site-Repo → in eine **frische** DB (siehe oben):
   Containers; für den selten neu erzeugten `db`-Container einmalig
   `docker compose -f docker-compose.prod.yml up -d db` (kurzer Blip, Volume bleibt).
 - **Alte Images:** jeder Deploy verwaist die vorherigen `:latest`-Images. `deploy.sh`
-  räumt mit `--prune`; unabhängig davon ein wöchentlicher Cron:
-  `0 4 * * 1 docker image prune -f`.
+  räumt mit `--prune`; unabhängig davon läuft wöchentlich ein Cron
+  (`30 4 * * 1 docker image prune -f`).
+- **Cron-Logs:** `scripts/backup-logrotate.conf` rotiert `backup.log`,
+  `backup-offsite.log` und `prune.log` wöchentlich (6 Generationen, gzip).
 
 DB-Image ist exakt auf `timescale/timescaledb:2.28.1-pg16` gepinnt (PostgreSQL-Major **und**
 TimescaleDB-Version). Upgrades nur bewusst: Tag hochziehen → Backup → `docker compose pull` →
