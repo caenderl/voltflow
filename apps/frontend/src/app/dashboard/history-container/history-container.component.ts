@@ -12,6 +12,7 @@ import {
   energySlots,
   minuteBucketSlots,
   isoToSlotKey,
+  lastCompleteSlot,
   netWatts,
   round2,
   signedPowerChart,
@@ -221,8 +222,11 @@ export class HistoryContainerComponent {
       // Charged energy per 5-min bucket from raw readings, replicating the
       // wallbox_1hour aggregate's formula: sum of active power while charging
       // (status 2), over 30-second samples, / 120000 -> kWh. Unlike the PV
-      // line, 0 is a real value here (not charging), so every slot is drawn.
+      // line, 0 is a real value here (not charging), so every *elapsed* slot is
+      // drawn; the rest of today is still in the future and stays a gap rather
+      // than a zero line running to midnight.
       const byKey = sumByMinuteBucket(hist, (r) => (r.status === 2 ? (r.activePowerW ?? 0) : 0));
+      const lastSlot = lastCompleteSlot(this.refDate());
       return categorySeriesChart(
         slots.map((s) => s.label),
         [
@@ -230,7 +234,9 @@ export class HistoryContainerComponent {
             name: 'Geladen',
             color: CHART_COLORS.charge,
             type: 'line',
-            data: slots.map((s) => round2((byKey.get(s.key) ?? 0) / 120000)),
+            data: slots.map((s, i) =>
+              i > lastSlot ? null : round2((byKey.get(s.key) ?? 0) / 120000),
+            ),
           },
         ],
         // 288 five-minute slots - label every 2h (24 slots), matching the PV line.
