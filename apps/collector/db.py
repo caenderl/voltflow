@@ -160,10 +160,14 @@ async def read_sma_config(pool: asyncpg.Pool) -> dict | None:
 
 async def last_sma_reading(pool: asyncpg.Pool) -> dict | None:
     """Most recent SMA reading (for seeding the daily_yield carry after a
-    restart and for writing asleep rows when the inverter is unreachable)."""
+    restart and for writing asleep rows when the inverter is unreachable).
+
+    grid_power seeds the "was it producing?" check that decides whether an
+    unreachable inverter may be recorded as 0 W (sma_stream.sleep_implausible).
+    """
     try:
         row = await pool.fetchrow(
-            "SELECT r.time, r.device_sn, d.device_pn, "
+            "SELECT r.time, r.device_sn, d.device_pn, r.grid_power, "
             "       r.daily_yield_wh, r.total_yield_kwh "
             "FROM sma_readings r "
             "LEFT JOIN device d ON d.device_sn = r.device_sn "
