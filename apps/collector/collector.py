@@ -163,15 +163,23 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
     Night-safe: a sleeping/unreachable inverter is written as an `asleep` row
     (0 W) with the daily_yield carried over within the same local day, instead
     of crashing or spamming the log. Logs only on wake<->sleep transitions.
+
+    Reconnects do NOT record 0 W by themselves. A broken session is routine
+    (pysma-plus drops its Speedwire socket several times a day) and used to be
+    written as an asleep row on the spot, which is what put zero spikes into the
+    middle of a sunny afternoon. The same `sleep_implausible` rule the stream
+    applies internally is applied here, so a reconnect out of real production
+    leaves a gap until the inverter answers again.
     """
-    from sma_stream import stream_sma
+    from sma_stream import SmaSessionStale, sleep_implausible, stream_sma
 
     host = cfg["host"]
     interval = cfg.get("poll_interval_s") or 60
 
     # Carry state (seeded from the DB so a night restart keeps today's yield).
     carry = {"date": None, "daily_wh": None, "total_kwh": None,
-             "produced": False, "serial": None, "model": None}
+             "produced": False, "serial": None, "model": None,
+             "last_power": None}
     try:
         seed = await last_sma_reading(pool)
     except Exception as err:  # noqa: BLE001 - seed must never crash the collector
@@ -181,6 +189,8 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
     if seed:
         carry["serial"] = seed.get("device_sn")
         carry["model"] = seed.get("device_pn")
+        if seed.get("grid_power") is not None:
+            carry["last_power"] = float(seed["grid_power"])
         if seed.get("total_yield_kwh") is not None:
             carry["total_kwh"] = float(seed["total_yield_kwh"])
         if seed.get("time") is not None and seed.get("daily_yield_wh") is not None:
@@ -205,22 +215,50 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
                          snap.get("daily_yield_wh"))
             awake = now_awake
 
+    fail_cycles = 0   # consecutive failed reconnects, for sleep_implausible
+    gapping = False   # logged once per gap run
+
     while True:
         try:
             async for snap in stream_sma(host, password, interval=interval):
                 carry["serial"] = snap.get("device_sn") or carry["serial"]
                 carry["model"] = snap.get("device_pn") or carry["model"]
+                # Keep the last known level when a read omits grid_power alone -
+                # that is still production, not "unknown" (see sleep_implausible).
+                if snap.get("asleep"):
+                    carry["last_power"] = 0.0
+                elif snap.get("grid_power") is not None:
+                    carry["last_power"] = snap["grid_power"]
+                fail_cycles, gapping = 0, False
                 _apply_daily_carry(carry, snap, datetime.now(_TZ).date())
                 if not registered:
                     await register_device(pool, snap, "inverter")
                     registered = True
                 await insert_sma_reading(pool, snap)
                 log_transition(snap)
+        except SmaSessionStale as err:
+            # The stream asked for a fresh session while the inverter is still
+            # reachable. Nothing is wrong with the device, so record nothing and
+            # reconnect at once - the next session normally reads fine.
+            LOG.info("SMA session recycled (%s) - reconnecting", err)
+            continue
         except Exception as err:  # noqa: BLE001
-            # Session could not be (re)established -> usually night/unreachable.
-            # Persist an asleep row (carried yield) if we know the device; retry
-            # at the poll interval and log only on the wake->sleep transition.
-            if carry["serial"]:
+            # Session could not be (re)established -> night/unreachable, or a
+            # dropped Speedwire socket. Persist an asleep row (carried yield)
+            # only if 0 W is plausible: after a reconnect out of real production
+            # it is not, and a gap is recorded instead. Retry at the poll
+            # interval and log only on the wake->sleep transition.
+            fail_cycles += 1
+            if carry["serial"] and sleep_implausible(carry["last_power"], fail_cycles):
+                if not gapping:
+                    LOG.warning(
+                        "SMA reconnect failed while producing (last %.0f W, "
+                        "%s: %s) - recording a gap, not 0 W",
+                        carry["last_power"], type(err).__name__, err)
+                    gapping = True
+            elif carry["serial"]:
+                gapping = False
+                carry["last_power"] = 0.0
                 snap = {f: 0.0 for f in _SMA_POWER_FIELDS}
                 snap.update(asleep=True, device_sn=carry["serial"], device_pn=carry["model"])
                 _apply_daily_carry(carry, snap, datetime.now(_TZ).date())

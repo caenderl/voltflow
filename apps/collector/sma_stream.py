@@ -15,6 +15,11 @@ records a real daytime read glitch as 0 W. Isolated failures while producing are
 skipped (no row yielded) instead. Only a failure to establish the session at all
 raises (caller reconnects). The daily_yield carry-over is handled by the caller
 (collector._run_sma).
+
+A total loss of contact that starts out of *real production* is never written as
+0 W at all (see `sleep_implausible`): the inverter ramps down to near-0 W before
+it sleeps, so that is a Speedwire/pysma fault, and such cycles yield no row - a
+gap in the chart rather than a false zero spike.
 """
 
 import asyncio
@@ -77,6 +82,44 @@ ASLEEP_AFTER = 3
 # daily_yield stop arriving). Rebuild the session after this many so daytime
 # reads recover on their own instead of the whole day reading as "asleep".
 PARTIAL_RECONNECT = 3
+
+# Above this the inverter is unmistakably generating, so it cannot be about to
+# fall asleep: it ramps down to single-digit watts first. Losing contact from
+# above this level is a comms fault, and 0 W would be a lie.
+PRODUCING_ABOVE_W = 100.0
+
+# ...but only for so long. After this many consecutive failed cycles a run that
+# began mid-production is accepted as a genuine outage/sleep and asleep rows
+# resume, so a failure that starts in daylight and lasts into the night settles
+# into 0 W instead of gapping forever. ~10 min at the default 20 s interval;
+# observed pysma dropouts recover well inside it.
+ASLEEP_GRACE_CYCLES = 30
+
+
+class SmaSessionStale(RuntimeError):
+    """Deliberate session recycle - the inverter is reachable, not asleep.
+
+    Raised when reads keep succeeding without production fields (see
+    PARTIAL_RECONNECT). The caller must reconnect *without* recording an asleep
+    row: this is a healthy recovery, not an outage.
+    """
+
+
+def sleep_implausible(last_power: float | None, failed_cycles: int) -> bool:
+    """True while a run of failed reads is more likely a comms fault than sleep.
+
+    `last_power` is grid_power from the last successful read. The inverter ramps
+    down to near-0 W before it sleeps at dusk, so a total loss of contact
+    straight out of real production is a Speedwire/pysma failure - writing 0 W
+    there is what puts false zero spikes into an otherwise sunny chart. Such a
+    cycle records nothing (a gap) instead. Bounded by ASLEEP_GRACE_CYCLES so a
+    real outage starting mid-production still settles into asleep rows.
+
+    Shared with collector._run_sma so the reconnect path applies the same rule.
+    """
+    if last_power is None or last_power <= PRODUCING_ABOVE_W:
+        return False
+    return failed_cycles <= ASLEEP_GRACE_CYCLES
 
 
 def _num(value) -> float | None:
@@ -145,13 +188,16 @@ async def stream_sma(
 ) -> AsyncIterator[dict]:
     """Async generator yielding SMA snapshots every `interval` seconds.
 
-    Raises on failure to establish the session (caller reconnects). Failed reads
-    during an established session are retried, then skipped, and only yield an
-    asleep snapshot (0 W) after ASLEEP_AFTER consecutive failed cycles.
+    Raises on failure to establish the session (caller reconnects), and
+    SmaSessionStale when the session must be recycled while the inverter is
+    still reachable. Failed reads during an established session are retried,
+    then skipped, and only yield an asleep snapshot (0 W) after ASLEEP_AFTER
+    consecutive failed cycles - and never at all while contact was lost out of
+    real production (see `sleep_implausible`).
 
     Yields:
         dict with device_sn, device_pn and the live measurement fields. A cycle
-        yields nothing when a transient read failure is skipped.
+        yields nothing when a read failure is skipped or gapped.
     """
     session = ClientSession()
     device = None
@@ -174,6 +220,8 @@ async def stream_sma(
         sensors = await device.get_sensors()
         consecutive_fail = 0
         partial_streak = 0
+        last_power: float | None = None   # grid_power of the last good read
+        gapping = False                   # logged once per gap run
         while True:
             # Retry a failed read a few times before believing it: a single
             # dropped Speedwire read while the inverter is producing must not be
@@ -191,6 +239,12 @@ async def stream_sma(
             if _has_production(values):
                 consecutive_fail = 0
                 partial_streak = 0
+                gapping = False
+                # Only overwrite when grid_power itself came through: a read
+                # carrying pv_power but no grid_power is still production, so
+                # the previous level is a better guess than "unknown".
+                if values.get("grid_power") is not None:  # type: ignore[union-attr]
+                    last_power = values["grid_power"]     # type: ignore[index]
                 snap = _finalize_awake(values)  # type: ignore[arg-type]
             else:
                 consecutive_fail += 1
@@ -204,7 +258,8 @@ async def stream_sma(
                             "SMA session stale: %d reads with data but no "
                             "production fields (total_yield=%s) - reconnecting",
                             partial_streak, values.get("total_yield_kwh"))
-                        raise RuntimeError("SMA session stale - reconnecting")
+                        raise SmaSessionStale(
+                            f"stale session after {partial_streak} partial reads")
                 else:
                     partial_streak = 0
                 if consecutive_fail < ASLEEP_AFTER:
@@ -214,8 +269,20 @@ async def stream_sma(
                               consecutive_fail, ASLEEP_AFTER)
                     await asyncio.sleep(interval)
                     continue
+                if sleep_implausible(last_power, consecutive_fail):
+                    # Contact lost straight out of real production - a comms
+                    # fault, not dusk. Record nothing (gap) instead of 0 W.
+                    if not gapping:
+                        LOG.warning(
+                            "SMA unreachable while producing (last %.0f W) - "
+                            "recording a gap, not 0 W", last_power)
+                        gapping = True
+                    await asyncio.sleep(interval)
+                    continue
                 # Sustained failure -> genuine sleep/outage: yield 0 W, keeping
                 # any energy counter that did come through on the last attempt.
+                gapping = False
+                last_power = 0.0
                 snap = _asleep_snapshot()
                 if values is not None:
                     for k in ("daily_yield_wh", "total_yield_kwh"):
