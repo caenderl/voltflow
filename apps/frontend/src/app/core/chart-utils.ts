@@ -113,6 +113,25 @@ export function minuteBucketSlots(ref: Date, stepMin = 5): Slot[] {
 }
 
 /**
+ * Index of the last minuteBucketSlots slot on `ref`'s day whose interval is
+ * fully in the past. For a past day that is every slot; for today the one
+ * before the bucket holding `now`; for a future day none (-1). Lets a day-view
+ * series render the rest of today as a gap (null) instead of a flat line of
+ * fake zeros - "nothing happened" and "hasn't happened yet" must not look the
+ * same. The still-filling current bucket is excluded too: it sums only the
+ * samples so far, so drawing it would put a permanent downward hook on the end
+ * of the line. MUST be called with the same `stepMin` as the matching
+ * minuteBucketSlots.
+ */
+export function lastCompleteSlot(ref: Date, stepMin = 5, now = new Date()): number {
+  const refDay = startOfDay(ref).getTime();
+  const today = startOfDay(now).getTime();
+  if (refDay < today) return (24 * 60) / stepMin - 1;
+  if (refDay > today) return -1;
+  return Math.floor((now.getHours() * 60 + now.getMinutes()) / stepMin) - 1;
+}
+
+/**
  * Sum sub-`stepMin` API rows (or raw readings) into minuteBucketSlots keys
  * (local minute bucket of day). MUST be called with the same `stepMin` as the
  * matching minuteBucketSlots or the keys won't line up. Accumulates on key

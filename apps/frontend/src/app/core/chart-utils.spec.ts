@@ -4,6 +4,7 @@ import {
   energySlots,
   minuteBucketSlots,
   isoToSlotKey,
+  lastCompleteSlot,
   liveSparkChart,
   netWatts,
   round2,
@@ -92,6 +93,37 @@ describe('minuteBucketSlots', () => {
     expect(slots[0].key).toBe('0');
     expect(slots[1439].key).toBe('1439');
     expect(slots[90].label).toBe('01:30'); // 90 * 1 min
+  });
+});
+
+describe('lastCompleteSlot', () => {
+  const now = new Date(2026, 4, 20, 14, 37); // Wed 2026-05-20, 14:37
+
+  it('today: the slot before the one still filling', () => {
+    // 14:37 -> 877 min -> 5-min bucket 175 is in progress, 174 is the last done
+    expect(lastCompleteSlot(now, 5, now)).toBe(174);
+    expect(lastCompleteSlot(now, 1, now)).toBe(876);
+  });
+
+  it('today: a slot only counts once its whole interval has passed', () => {
+    const justBefore = new Date(2026, 4, 20, 14, 34, 59);
+    const onBoundary = new Date(2026, 4, 20, 14, 35);
+    expect(lastCompleteSlot(justBefore, 5, justBefore)).toBe(173);
+    expect(lastCompleteSlot(onBoundary, 5, onBoundary)).toBe(174);
+  });
+
+  it('past day: every slot is complete', () => {
+    expect(lastCompleteSlot(new Date(2026, 4, 19, 23, 59), 5, now)).toBe(287);
+    expect(lastCompleteSlot(new Date(2026, 4, 19), 1, now)).toBe(1439);
+  });
+
+  it('future day: no slot is complete', () => {
+    expect(lastCompleteSlot(new Date(2026, 4, 21), 5, now)).toBe(-1);
+  });
+
+  it('inside the first bucket of today nothing is complete yet', () => {
+    const midnight = new Date(2026, 4, 20, 0, 2);
+    expect(lastCompleteSlot(midnight, 5, midnight)).toBe(-1);
   });
 });
 
