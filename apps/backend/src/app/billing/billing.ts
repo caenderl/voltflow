@@ -83,8 +83,28 @@ interface Interval {
   /** Smart meter deltas over the same span; null when the curve does not cover it. */
   smartImportKwh: number | null;
   smartExportKwh: number | null;
-  /** Both sides usable: the physical counters advanced and the smart curve too. */
-  comparable: boolean;
+  /**
+   * The physical counters advanced (not a meter swap or a typo) — required to
+   * bill this interval as consumption at all, independent of which direction's
+   * curve data is being used.
+   */
+  validCounters: boolean;
+}
+
+/**
+ * The instants a curve fetch must reach to cover the checkpoints bounding
+ * `[from, to)` on each side, so an interval crossing either boundary has curve
+ * data at both of its own endpoints instead of falling back to a pro-rata
+ * split for the whole interval.
+ */
+export function curveWindow(
+  checkpoints: BillingCheckpoint[],
+  from: number,
+  to: number,
+): { from: number; to: number } {
+  const before = [...checkpoints].reverse().find((c) => c.at < from);
+  const after = checkpoints.find((c) => c.at >= to);
+  return { from: before?.at ?? from, to: after?.at ?? to };
 }
 
 /** The smallest billable unit: one tariff, one month, one reading interval. */
@@ -248,41 +268,38 @@ function buildIntervals(checkpoints: BillingCheckpoint[], curve: Curve): Interva
     const to = checkpoints[i];
     const meterImportKwh = to.importKwh - from.importKwh;
     const meterExportKwh = to.exportKwh - from.exportKwh;
-    const smartImportKwh = curve.delta(from.at, to.at, 'import');
-    const smartExportKwh = curve.delta(from.at, to.at, 'export');
     intervals.push({
       from,
       to,
       meterImportKwh,
       meterExportKwh,
-      smartImportKwh,
-      smartExportKwh,
+      smartImportKwh: curve.delta(from.at, to.at, 'import'),
+      smartExportKwh: curve.delta(from.at, to.at, 'export'),
       // A backwards physical counter is a meter swap or a typo; either way the
-      // delta is not energy that was consumed.
-      comparable:
-        meterImportKwh >= 0 &&
-        meterExportKwh >= 0 &&
-        smartImportKwh !== null &&
-        smartExportKwh !== null &&
-        smartImportKwh > 0,
+      // delta is not energy that was consumed, in either direction.
+      validCounters: meterImportKwh >= 0 && meterExportKwh >= 0,
     });
   }
   return intervals;
 }
 
 /**
- * Physical over smart across every comparable interval — one factor for the whole
- * data set rather than per interval, because a single interval's factor carries
- * the full weight of its two endpoint lookups, while the pooled one averages
- * them out. Only used for stretches with no physical delta of their own.
+ * Physical over smart across every interval comparable in this direction — one
+ * factor for the whole data set rather than per interval, because a single
+ * interval's factor carries the full weight of its two endpoint lookups, while
+ * the pooled one averages them out. Only used for stretches with no physical
+ * delta of their own. Checked per direction: an interval with, say, no smart
+ * export data can still teach the import factor, and vice versa.
  */
 function meanFactor(intervals: Interval[], dir: Direction): number | null {
   let meter = 0;
   let smart = 0;
   for (const i of intervals) {
-    if (!i.comparable) continue;
+    if (!i.validCounters) continue;
+    const smartKwh = dir === 'import' ? i.smartImportKwh : i.smartExportKwh;
+    if (smartKwh === null || smartKwh <= 0) continue;
     meter += dir === 'import' ? i.meterImportKwh : i.meterExportKwh;
-    smart += (dir === 'import' ? i.smartImportKwh : i.smartExportKwh) ?? 0;
+    smart += smartKwh;
   }
   return smart > 0 ? round4(meter / smart) : null;
 }
@@ -379,7 +396,7 @@ function fillSlice(
   }
 
   // A backwards physical counter cannot be billed as consumption at all.
-  if (interval.meterImportKwh < 0 || interval.meterExportKwh < 0) {
+  if (!interval.validCounters) {
     return { ...slice, importKwh: 0, exportKwh: 0, source: 'none', billedMs: 0 };
   }
 
@@ -404,7 +421,7 @@ function shareOf(
   dir: Direction,
 ): number {
   const total = dir === 'import' ? interval.smartImportKwh : interval.smartExportKwh;
-  if (interval.comparable && total !== null && total > 0) {
+  if (interval.validCounters && total !== null && total > 0) {
     const part = curve.delta(slice.from, slice.to, dir);
     if (part !== null) return part / total;
   }

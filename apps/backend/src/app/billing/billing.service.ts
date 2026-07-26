@@ -8,6 +8,7 @@ import {
   type BillingTariff,
   type CounterKnot,
   computeBillingStatement,
+  curveWindow,
 } from './billing';
 
 @Injectable()
@@ -28,17 +29,17 @@ export class BillingService {
     const to = new Date(monthStarts[monthStarts.length - 1]);
     const checkpoints = await this.checkpoints();
 
-    // The curve has to reach back to the checkpoint bounding the year on the
-    // left, otherwise the interval crossing New Year has no smart meter delta to
-    // take shares of and falls back to a pro-rata split.
-    const before = [...checkpoints].reverse().find((c) => c.at < from.getTime());
-    const curveFrom = new Date(Math.min(from.getTime(), before?.at ?? from.getTime()));
+    // The curve has to reach past both ends of the year to whichever
+    // checkpoints bound it there, otherwise an interval crossing a year
+    // boundary has no smart meter delta on that side and falls back to a
+    // pro-rata split for the whole interval, not just the part outside the year.
+    const window = curveWindow(checkpoints, from.getTime(), to.getTime());
 
     return computeBillingStatement({
       year,
       monthStarts,
       checkpoints,
-      knots: await this.knots(curveFrom, to),
+      knots: await this.knots(new Date(window.from), new Date(window.to)),
       tariffs: await this.tariffs(),
       daysInYear: isLeapYear(year) ? 366 : 365,
     });

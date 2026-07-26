@@ -5,6 +5,7 @@ import {
   type BillingTariff,
   type CounterKnot,
   computeBillingStatement,
+  curveWindow,
 } from './billing';
 
 // The module compares instants only, so the tests can pretend everything is UTC.
@@ -311,5 +312,49 @@ describe('computeBillingStatement', () => {
     expect(s.totals.net).toBe(0);
     expect(s.totals.measuredShare).toBe(0);
     expect(s.readings).toBe(0);
+  });
+});
+
+describe('curveWindow', () => {
+  const yearStart = at('2026-01-01T00:00:00Z');
+  const yearEnd = at('2027-01-01T00:00:00Z');
+
+  it('reaches back to the checkpoint before the range and forward to the one after', () => {
+    // Without this, the interval closing out December (checkpoint read in
+    // January) would have no curve data at its right endpoint and would fall
+    // back to a day-count split instead of the smart meter's shape.
+    const w = curveWindow(
+      [
+        checkpoint('2025-12-20T00:00:00Z', 900, 0),
+        checkpoint('2026-06-01T00:00:00Z', 1200, 0),
+        checkpoint('2027-01-20T00:00:00Z', 1500, 0),
+      ],
+      yearStart,
+      yearEnd,
+    );
+
+    expect(w.from).toBe(at('2025-12-20T00:00:00Z'));
+    expect(w.to).toBe(at('2027-01-20T00:00:00Z'));
+  });
+
+  it('falls back to the range bounds when no checkpoint lies outside it', () => {
+    const w = curveWindow([checkpoint('2026-06-01T00:00:00Z', 1200, 0)], yearStart, yearEnd);
+
+    expect(w.from).toBe(yearStart);
+    expect(w.to).toBe(yearEnd);
+  });
+
+  it('ignores checkpoints inside the range for both bounds', () => {
+    const w = curveWindow(
+      [
+        checkpoint('2026-03-01T00:00:00Z', 1000, 0),
+        checkpoint('2026-09-01T00:00:00Z', 1300, 0),
+      ],
+      yearStart,
+      yearEnd,
+    );
+
+    expect(w.from).toBe(yearStart);
+    expect(w.to).toBe(yearEnd);
   });
 });
