@@ -31,6 +31,7 @@ export class TariffsSectionComponent {
   readonly formProvider = signal('');
   readonly formImport = signal<number | null>(null);
   readonly formExport = signal<number | null>(null);
+  readonly formBase = signal<number | null>(null);
 
   resetForm(): void {
     this.formEditingId.set(null);
@@ -38,6 +39,7 @@ export class TariffsSectionComponent {
     this.formProvider.set('');
     this.formImport.set(null);
     this.formExport.set(null);
+    this.formBase.set(null);
   }
 
   edit(t: TariffPeriod): void {
@@ -46,6 +48,7 @@ export class TariffsSectionComponent {
     this.formProvider.set(t.provider ?? '');
     this.formImport.set(t.importCtPerKwh);
     this.formExport.set(t.exportCtPerKwh);
+    this.formBase.set(t.baseEurPerYear);
   }
 
   save(): void {
@@ -60,6 +63,7 @@ export class TariffsSectionComponent {
         provider: this.formProvider().trim() || null,
         importCtPerKwh: this.formImport(),
         exportCtPerKwh: this.formExport(),
+        baseEurPerYear: this.formBase(),
       })
       .then((ok) => {
         if (ok) this.resetForm();

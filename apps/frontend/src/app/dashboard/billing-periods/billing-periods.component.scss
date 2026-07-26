@@ -1,0 +1,113 @@
+:host {
+  display: block;
+}
+
+.periods-box {
+  background: var(--surface-1);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.25rem 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--elev-1);
+}
+
+.periods-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+
+  h2 {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .count {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  &:hover h2,
+  &:hover .count {
+    color: var(--on-surface-var);
+  }
+}
+
+.chev {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  fill: var(--muted);
+  transition: transform 0.15s ease;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin-top: 0.9rem;
+}
+
+.periods-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  white-space: nowrap;
+
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid var(--outline);
+  }
+
+  td {
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--outline) 55%, transparent);
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .import {
+    color: var(--import);
+  }
+  .export {
+    color: var(--export);
+  }
+}
+
+/* The reading times are not decoration: a short interval is judged against them. */
+.read-at {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.badge {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--outline);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  color: var(--muted);
+}

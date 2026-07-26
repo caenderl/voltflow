@@ -16,12 +16,21 @@ Results are pretty good for the given requirements and complexity of the app. I 
 
 Erfasst die Live-Werte des **Anker Solix Smart Meters (A17X7)** über den MQTT-Cloud-Server,
 speichert sie in **TimescaleDB** und stellt sie in einer Web-App grafisch dar
-(Live, Tag, Woche, Monat). Bindet zusätzlich eine **Anker SOLIX V1 Wallbox (A5191)**
+(Live, Tag, Woche, Monat, Abrechnung). Bindet zusätzlich eine **Anker SOLIX V1 Wallbox (A5191)**
 per Modbus TCP und einen **SMA PV-Wechselrichter (STP 6000TL-20)** per Speedwire an.
 
 > **Highlight:** Erst mit der PV-Produktion (SMA) **und** dem Smart Meter lässt sich die
 > echte **Hauslast** (PV + Netzbezug − Einspeisung) und daraus **Eigenverbrauch & Autarkie**
 > ableiten — ohne Produktionsdaten war das vorher nicht möglich.
+
+Die **Abrechnung** dreht die Beweisrichtung um: dort ist der abgelesene Zählerstand die
+Wahrheit, das SmartMeter liefert nur noch die Verteilung *innerhalb* eines Ablesezeitraums.
+Die exakte Differenz zweier Stände wird über die kumulative SmartMeter-Kurve auf Monate,
+Tarifwechsel und Jahresgrenzen aufgeteilt — dabei zählt nur die *Form* der Kurve, nicht ihr
+Niveau, und die Anteile eines Zeitraums summieren sich per Konstruktion auf 1. Ein
+fehlgeschätzter Monatsübergang verschiebt also kWh zwischen zwei Monaten, ohne dass welche
+entstehen oder verloren gehen. Strecken außerhalb der Ablesungen werden mit dem gemessenen
+Abweichungsfaktor geschätzt und pro Monat als solche ausgewiesen.
 
 ## Architektur
 
@@ -200,7 +209,8 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/meter/range` | Verfügbarer Datenzeitraum |
 | `GET` / `POST` / `PUT` / `DELETE /api/meter-checkpoints` | Manuelle Zählerstände (Abgleich mit dem physischen Zähler) |
 | `GET /api/meter-checkpoints/reconciliation` | Abgleich der Zählerstände mit dem SmartMeter + Hochrechnung |
-| `GET` / `POST` / `PUT` / `DELETE /api/tariff-periods` | Zeitraum-Tarife (Preise ct/kWh, gültig ab Datum) |
+| `GET` / `POST` / `PUT` / `DELETE /api/tariff-periods` | Zeitraum-Tarife (Preise ct/kWh + Grundpreis €/Jahr, gültig ab Datum) |
+| `GET /api/billing?year=YYYY` | Abrechnung eines Kalenderjahres auf Basis der abgelesenen Zählerstände (Monate, Ableseperioden, Summen) |
 | `GET` / `PUT /api/app-settings` | Globale Anzeige-Einstellungen (z. B. Kalibrierung auf den Zählerstand) |
 | `GET` / `PUT /api/wallbox/config` | Wallbox-Verbindung (Name, IP, Port, Unit-ID, Intervall, an/aus) |
 | `GET /api/wallbox/latest` | Letzter Wallbox-Messwert |

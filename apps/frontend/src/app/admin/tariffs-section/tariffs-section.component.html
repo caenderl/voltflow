@@ -31,6 +31,14 @@
       [value]="formExport()"
       (valueChange)="formExport.set($event)"
     />
+    <app-number-field
+      label="Grundpreis (€/Jahr)"
+      [min]="0"
+      [step]="0.01"
+      placeholder="z. B. 144.86"
+      [value]="formBase()"
+      (valueChange)="formBase.set($event)"
+    />
     <div class="tariff-form-actions">
       @if (formEditingId() !== null) {
         <button type="button" class="btn-text" (click)="resetForm()">Abbrechen</button>
@@ -46,7 +54,9 @@
   }
   <p class="hint-sm">
     Ohne Preise bleibt ein Tarif ohne Wirkung auf die Kosten. Der älteste Tarif gilt auch rückwirkend
-    für alle Daten davor.
+    für alle Daten davor. Alle Preise <b>brutto</b> — die App rechnet keine Mehrwertsteuer, sie
+    multipliziert nur kWh × Preis. Der Grundpreis wird ausschließlich in der Abrechnung berechnet
+    (tagesanteilig), nicht in den Tag-/Wochen-/Monatskosten.
   </p>
 </app-settings-card>
 
@@ -59,6 +69,7 @@
           <th>Anbieter</th>
           <th class="num">Verbrauch</th>
           <th class="num">Einspeisung</th>
+          <th class="num">Grundpreis</th>
           <th class="actions-col"></th>
         </tr>
       </thead>
@@ -72,6 +83,9 @@
             </td>
             <td class="num">
               {{ t.exportCtPerKwh !== null ? (t.exportCtPerKwh | number: '1.2-2' : 'de-DE') + ' ct' : '–' }}
+            </td>
+            <td class="num">
+              {{ t.baseEurPerYear !== null ? (t.baseEurPerYear | number: '1.2-2' : 'de-DE') + ' €/Jahr' : '–' }}
             </td>
             <td class="actions-col">
               <button type="button" class="icon-btn" title="Bearbeiten" (click)="edit(t)">✎</button>

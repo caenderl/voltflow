@@ -308,6 +308,7 @@ export class DashboardDataService {
       provider: event.provider,
       importCtPerKwh: event.importCtPerKwh,
       exportCtPerKwh: event.exportCtPerKwh,
+      baseEurPerYear: event.baseEurPerYear,
     };
     const obs =
       event.id === undefined

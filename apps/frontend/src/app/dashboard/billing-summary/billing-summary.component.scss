@@ -1,0 +1,122 @@
+:host {
+  display: block;
+}
+
+.group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.metric {
+  background: var(--surface-1);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  box-shadow: var(--elev-1);
+
+  .label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    text-transform: uppercase;
+
+    &::before {
+      content: '';
+      flex: none;
+      width: 0.6rem;
+      height: 0.6rem;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+  }
+
+  .value {
+    font-size: 2.1rem;
+    font-weight: 700;
+    line-height: 1.1;
+
+    small {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--muted);
+    }
+  }
+
+  .sub {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  &.import .label::before {
+    background: var(--import);
+  }
+  &.import .value {
+    color: var(--import);
+  }
+  &.export .label::before {
+    background: var(--export);
+  }
+  &.export .value {
+    color: var(--export);
+  }
+  &.base .label::before {
+    background: var(--primary);
+  }
+}
+
+/* The anchor line carries the one caveat every figure above depends on, so it
+   sits directly under them rather than in a footnote. */
+.anchor {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+
+  b {
+    color: var(--on-surface-var);
+    font-weight: 600;
+  }
+}
+
+/* Share of the year that rests on readings, drawn rather than only stated. */
+.bar {
+  flex: none;
+  width: 4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    display: block;
+    height: 100%;
+    width: calc(var(--share) * 100%);
+    background: var(--primary);
+  }
+}
+
+@media (max-width: 540px) {
+  .group {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+
+  .metric {
+    padding: 0.9rem 1rem;
+
+    .value {
+      font-size: 1.5rem;
+    }
+  }
+}

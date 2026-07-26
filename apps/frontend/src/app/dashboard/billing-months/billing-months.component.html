@@ -1,0 +1,90 @@
+@if (hasAnyData()) {
+  <div class="chart-box">
+    <h2>Kosten pro Monat</h2>
+    <div echarts [options]="chart()" class="chart"></div>
+  </div>
+}
+
+<div class="table-box">
+  <h2>Monate</h2>
+  <div class="table-scroll">
+    <table class="months-table">
+      <thead>
+        <tr>
+          <th class="month-col">Monat</th>
+          <th class="num">Bezug</th>
+          <th class="num">Einspeisung</th>
+          @if (priced()) {
+            <th class="num">Kosten</th>
+            <th class="num">Vergütung</th>
+            <th class="num">Grundpreis</th>
+            <th class="num">Netto</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (m of months(); track m.month) {
+          <tr [class.empty]="!m.hasData">
+            <td class="month-col">
+              <span
+                class="anchor-dot"
+                [class.full]="m.measuredShare >= 0.999"
+                [class.none]="m.hasData && m.measuredShare === 0"
+                [style.--share]="m.measuredShare"
+                [title]="anchorTitle(m)"
+              ></span>
+              {{ m.month | date: 'MMMM' }}
+              @if (m.readings > 0) {
+                <span class="readings" [title]="m.readings + ' Ablesung(en) in diesem Monat'">
+                  {{ m.readings }}×
+                </span>
+              }
+            </td>
+
+            @if (m.hasData) {
+              <td class="num import">{{ m.importKwh | number: '1.1-1' }}</td>
+              <td class="num export">{{ m.exportKwh | number: '1.1-1' }}</td>
+              @if (priced()) {
+                <td class="num">{{ m.importCost | number: '1.2-2' }}</td>
+                <td class="num">{{ m.exportRevenue | number: '1.2-2' }}</td>
+                <td class="num muted">{{ m.baseFee | number: '1.2-2' }}</td>
+                <td class="num net">{{ m.net | number: '1.2-2' }}</td>
+              }
+            } @else {
+              <td class="num">–</td>
+              <td class="num">–</td>
+              @if (priced()) {
+                <td class="num">–</td>
+                <td class="num">–</td>
+                <td class="num">–</td>
+                <td class="num">–</td>
+              }
+            }
+          </tr>
+        }
+      </tbody>
+      <tfoot>
+        <tr>
+          <td class="month-col">Gesamt</td>
+          <td class="num import">{{ statement().totals.importKwh | number: '1.1-1' }}</td>
+          <td class="num export">{{ statement().totals.exportKwh | number: '1.1-1' }}</td>
+          @if (priced()) {
+            <td class="num">{{ statement().totals.importCost | number: '1.2-2' }}</td>
+            <td class="num">{{ statement().totals.exportRevenue | number: '1.2-2' }}</td>
+            <td class="num muted">{{ statement().totals.baseFee | number: '1.2-2' }}</td>
+            <td class="num net">{{ statement().totals.net | number: '1.2-2' }}</td>
+          }
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <p class="hint-sm">
+    Energie in kWh, Beträge in € (brutto). Der Punkt vor dem Monat zeigt, wie weit er auf
+    abgelesenen Zählerständen ruht: voll = jede kWh liegt zwischen zwei Ständen, hohl = aus dem
+    SmartMeter geschätzt.
+    @if (!priced()) {
+      Für Beträge fehlen die Preise im Tarif.
+    }
+  </p>
+</div>

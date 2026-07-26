@@ -91,6 +91,12 @@ export interface TariffPeriod {
   importCtPerKwh: number | null;
   /** Feed-in price in ct/kWh. */
   exportCtPerKwh: number | null;
+  /**
+   * Standing charge (Grundpreis) in €/year. Charged pro rata by days and only
+   * by the billing statement — the day/week/month costs are consumption costs,
+   * where a daily share of a standing fee would be noise.
+   */
+  baseEurPerYear: number | null;
 }
 
 /** Payload to create/update a tariff period. */
@@ -99,6 +105,7 @@ export interface TariffPeriodInput {
   provider: string | null;
   importCtPerKwh: number | null;
   exportCtPerKwh: number | null;
+  baseEurPerYear: number | null;
 }
 
 /** Available data range (first/last reading), for period navigation. */
@@ -243,6 +250,103 @@ export interface MeterReconciliation {
   intervals: ReconciliationInterval[];
   totals: ReconciliationTotals | null;
   projection: MeterProjection | null;
+}
+
+// ---------------------------------------------------------------------------
+// Billing statement (Abrechnung) — costs anchored on the hand-read meter
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a month's kWh come from.
+ *
+ * `measured` — inside the checkpointed range: the kWh are a share of a physical
+ *   meter delta that is known exactly, the smart meter only says how that delta
+ *   distributes over the days.
+ * `estimated` — outside it (before the first reading or after the last): the
+ *   smart meter's own kWh, scaled by the deviation factor learned from the
+ *   measured intervals.
+ */
+export type BillingSource = 'measured' | 'estimated';
+
+/** One month of the statement. All money in €, all energy in kWh. */
+export interface BillingMonth {
+  /** First day of the month (YYYY-MM-DD) — also the row's identity. */
+  month: string;
+  importKwh: number;
+  exportKwh: number;
+  importCost: number;
+  exportRevenue: number;
+  /** Share of the annual standing charge falling on this month. */
+  baseFee: number;
+  /** importCost + baseFee − exportRevenue: what the month actually costs. */
+  net: number;
+  /**
+   * False when no data covers the month at all (a future month, or before the
+   * meter existed) — the UI shows "–" rather than a 0 that looks measured.
+   */
+  hasData: boolean;
+  /**
+   * Fraction of the month's energy (import + feed-in) that is `measured` (0–1).
+   * 1 means every kWh is anchored on a pair of hand-read stands; 0 means the
+   * month rests entirely on the smart meter. Anything in between is a month
+   * whose seams reach into an unanchored stretch.
+   */
+  measuredShare: number;
+  /** Hand-read checkpoints falling inside this month — what anchors it. */
+  readings: number;
+}
+
+/**
+ * One reading interval touching the year: what the physical meter counted
+ * between two hand-read stands. Reported in full even when it reaches beyond the
+ * year, because this is the evidence the months rest on — clipping it here would
+ * hide the very number that was read off the meter.
+ */
+export interface BillingPeriod {
+  fromDate: string;
+  toDate: string;
+  fromReadAt: string;
+  toReadAt: string;
+  days: number;
+  /** Exact physical deltas over the interval. */
+  importKwh: number;
+  exportKwh: number;
+  /** Average import per day, for judging one interval against another. */
+  importPerDay: number;
+  /** The interval lies entirely within the statement year. */
+  withinYear: boolean;
+}
+
+/** The year's bottom line. Sums of the rounded months, so the columns add up. */
+export interface BillingTotals {
+  importKwh: number;
+  exportKwh: number;
+  importCost: number;
+  exportRevenue: number;
+  baseFee: number;
+  net: number;
+  /** Fraction of the year's energy (import + feed-in) that is `measured` (0–1). */
+  measuredShare: number;
+}
+
+/** Response of GET /api/billing?year=YYYY. */
+export interface BillingStatement {
+  /** Calendar year the statement covers. */
+  year: number;
+  months: BillingMonth[];
+  periods: BillingPeriod[];
+  totals: BillingTotals;
+  /**
+   * Deviation factors (physical / smart) learned from every checkpointed
+   * interval in the data, used to scale the `estimated` stretches. Null when no
+   * interval is comparable — then estimated kWh are the raw smart meter values.
+   */
+  importFactor: number | null;
+  exportFactor: number | null;
+  /** Hand-read checkpoints that fall inside this year. */
+  readings: number;
+  /** No tariff with prices covers the year — the UI then shows kWh only. */
+  priced: boolean;
 }
 
 /** Name of the WebSocket event used to push live readings. */

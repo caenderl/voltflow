@@ -53,6 +53,7 @@ function parseInput(body: Partial<TariffPeriodInput>): TariffPeriodInput {
         : String(body.provider),
     importCtPerKwh: parsePrice(body.importCtPerKwh, 'importCtPerKwh'),
     exportCtPerKwh: parsePrice(body.exportCtPerKwh, 'exportCtPerKwh'),
+    baseEurPerYear: parsePrice(body.baseEurPerYear, 'baseEurPerYear'),
   };
 }
 
