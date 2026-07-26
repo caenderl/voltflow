@@ -96,6 +96,11 @@ interface Interval {
  * `[from, to)` on each side, so an interval crossing either boundary has curve
  * data at both of its own endpoints instead of falling back to a pro-rata
  * split for the whole interval.
+ *
+ * `checkpoints` must be ordered ascending by `at` — both bounds are found by
+ * first match, so an unsorted list would silently pick the wrong checkpoint.
+ * The fetch itself still has to reach *past* these instants: a knot sits at its
+ * bucket's end, so landing exactly on one is not enough (see BillingService).
  */
 export function curveWindow(
   checkpoints: BillingCheckpoint[],
