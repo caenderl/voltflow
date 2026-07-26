@@ -477,6 +477,15 @@ const MIGRATIONS: { name: string; sql: string }[] = [
             END LOOP;
           END $$`,
   },
+  {
+    // Annual base fee (Grundpreis), gross like every other price in the app.
+    // Only the billing statement charges it — the day/week/month costs are pure
+    // consumption costs, where a per-day share of a standing fee would be noise.
+    // Nullable: a tariff without a base fee is a valid tariff.
+    name: '047-tariff-period-base-fee',
+    sql: `ALTER TABLE tariff_period
+            ADD COLUMN IF NOT EXISTS base_eur_per_year DOUBLE PRECISION`,
+  },
 ];
 
 export async function applyMigrations(

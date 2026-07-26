@@ -12,7 +12,7 @@ export class TariffPeriodService {
 
   async list(): Promise<TariffPeriod[]> {
     const { rows } = await this.db.query(
-      `SELECT id, valid_from::text, provider, import_ct_kwh, export_ct_kwh
+      `SELECT id, valid_from::text, provider, import_ct_kwh, export_ct_kwh, base_eur_per_year
          FROM tariff_period
         ORDER BY valid_from DESC`,
     );
@@ -22,10 +22,18 @@ export class TariffPeriodService {
   async create(input: TariffPeriodInput): Promise<TariffPeriod> {
     try {
       const { rows } = await this.db.query(
-        `INSERT INTO tariff_period (valid_from, provider, import_ct_kwh, export_ct_kwh)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, valid_from::text, provider, import_ct_kwh, export_ct_kwh`,
-        [input.validFrom, input.provider, input.importCtPerKwh, input.exportCtPerKwh],
+        `INSERT INTO tariff_period
+           (valid_from, provider, import_ct_kwh, export_ct_kwh, base_eur_per_year)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, valid_from::text, provider, import_ct_kwh, export_ct_kwh,
+                   base_eur_per_year`,
+        [
+          input.validFrom,
+          input.provider,
+          input.importCtPerKwh,
+          input.exportCtPerKwh,
+          input.baseEurPerYear,
+        ],
       );
       return rowToPeriod(rows[0]);
     } catch (err) {
@@ -38,10 +46,19 @@ export class TariffPeriodService {
     try {
       ({ rows } = await this.db.query(
         `UPDATE tariff_period
-            SET valid_from = $2, provider = $3, import_ct_kwh = $4, export_ct_kwh = $5
+            SET valid_from = $2, provider = $3, import_ct_kwh = $4, export_ct_kwh = $5,
+                base_eur_per_year = $6
           WHERE id = $1
-          RETURNING id, valid_from::text, provider, import_ct_kwh, export_ct_kwh`,
-        [id, input.validFrom, input.provider, input.importCtPerKwh, input.exportCtPerKwh],
+          RETURNING id, valid_from::text, provider, import_ct_kwh, export_ct_kwh,
+                    base_eur_per_year`,
+        [
+          id,
+          input.validFrom,
+          input.provider,
+          input.importCtPerKwh,
+          input.exportCtPerKwh,
+          input.baseEurPerYear,
+        ],
       ));
     } catch (err) {
       throw asDateConflict(err, input.validFrom);
@@ -76,5 +93,6 @@ function rowToPeriod(r: Record<string, unknown>): TariffPeriod {
     provider: (r['provider'] as string | null) ?? null,
     importCtPerKwh: numOrNull(r['import_ct_kwh']),
     exportCtPerKwh: numOrNull(r['export_ct_kwh']),
+    baseEurPerYear: numOrNull(r['base_eur_per_year']),
   };
 }

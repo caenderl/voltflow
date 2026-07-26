@@ -1,0 +1,25 @@
+<div class="period-nav">
+  <button class="nav-btn" (click)="prevClicked.emit()" [disabled]="!canPrev()" aria-label="Vorheriges Jahr">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z" /></svg>
+  </button>
+  <span class="period-label">{{ year() }}</span>
+  <button class="nav-btn" (click)="nextClicked.emit()" [disabled]="!canNext()" aria-label="Nächstes Jahr">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 7.4 10 6l6 6-6 6-1.4-1.4L13.2 12z" /></svg>
+  </button>
+</div>
+
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+
+@if (statement(); as s) {
+  <app-billing-summary [statement]="s" />
+  <app-billing-months [statement]="s" />
+  <app-billing-periods [periods]="s.periods" />
+} @else if (!loading()) {
+  <p class="hint">Für dieses Jahr liegen keine Daten vor.</p>
+}
+
+@if (loading()) {
+  <p class="hint">Lade Abrechnung …</p>
+}

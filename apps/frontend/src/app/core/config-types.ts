@@ -24,6 +24,7 @@ export interface TariffPeriodSaveEvent {
   provider: string | null;
   importCtPerKwh: number | null;
   exportCtPerKwh: number | null;
+  baseEurPerYear: number | null;
 }
 
 /** Top-level sections of the admin page. */

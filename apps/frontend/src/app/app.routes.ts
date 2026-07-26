@@ -1,5 +1,6 @@
 import type { Routes } from '@angular/router';
 import { AdminPageComponent } from './admin/admin-page.component';
+import { BillingContainerComponent } from './dashboard/billing-container/billing-container.component';
 import { Dashboard } from './dashboard/dashboard';
 import { HistoryContainerComponent } from './dashboard/history-container/history-container.component';
 import { LiveContainerComponent } from './dashboard/live-container/live-container.component';
@@ -16,6 +17,7 @@ export const routes: Routes = [
       { path: 'day', component: HistoryContainerComponent, data: { view: 'day' } },
       { path: 'week', component: HistoryContainerComponent, data: { view: 'week' } },
       { path: 'month', component: HistoryContainerComponent, data: { view: 'month' } },
+      { path: 'billing', component: BillingContainerComponent },
       { path: '', redirectTo: 'live', pathMatch: 'full' },
     ],
   },

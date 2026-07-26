@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { MeterModule } from './meter/meter.module';
 import { MeterCheckpointModule } from './meter-checkpoint/meter-checkpoint.module';
 import { TariffPeriodModule } from './tariff-period/tariff-period.module';
+import { BillingModule } from './billing/billing.module';
 import { AppSettingsModule } from './app-settings/app-settings.module';
 import { WallboxModule } from './wallbox/wallbox.module';
 import { SmaModule } from './sma/sma.module';
@@ -17,6 +18,7 @@ import { SystemModule } from './system/system.module';
     MeterModule,
     MeterCheckpointModule,
     TariffPeriodModule,
+    BillingModule,
     AppSettingsModule,
     WallboxModule,
     SmaModule,

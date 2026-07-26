@@ -1,0 +1,132 @@
+:host {
+  display: block;
+}
+
+.chart-box,
+.table-box {
+  background: var(--surface-1);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--elev-1);
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+}
+
+.chart {
+  height: 300px;
+  width: 100%;
+}
+
+/* Seven columns do not fit a phone; the table scrolls inside its card rather
+   than pushing the page sideways. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.months-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  white-space: nowrap;
+
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid var(--outline);
+  }
+
+  td {
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--outline) 55%, transparent);
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .month-col {
+    text-align: left;
+  }
+
+  tbody tr.empty td {
+    color: var(--muted);
+  }
+
+  .import {
+    color: var(--import);
+  }
+  .export {
+    color: var(--export);
+  }
+  .muted {
+    color: var(--muted);
+  }
+  .net {
+    font-weight: 600;
+  }
+
+  tfoot td {
+    border-top: 1px solid var(--outline);
+    border-bottom: none;
+    font-weight: 600;
+    padding-top: 0.6rem;
+  }
+}
+
+/* Anchor indicator: filled = fully backed by readings, hollow = estimated. The
+   partial state is drawn as a fill fraction so it reads as a quantity. */
+.anchor-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--outline);
+  background: linear-gradient(
+    to top,
+    var(--primary) calc(var(--share, 0) * 100%),
+    transparent calc(var(--share, 0) * 100%)
+  );
+  vertical-align: baseline;
+
+  &.full {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+}
+
+.readings {
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--primary);
+}
+
+@media (max-width: 540px) {
+  .chart {
+    height: 240px;
+  }
+
+  .chart-box,
+  .table-box {
+    padding: 0.9rem 1rem 1rem;
+  }
+
+  .months-table {
+    font-size: 0.82rem;
+  }
+}

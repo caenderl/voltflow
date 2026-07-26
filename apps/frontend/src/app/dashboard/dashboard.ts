@@ -17,13 +17,15 @@ export class Dashboard {
 
   readonly appVersion = APP_VERSION;
 
-  // The nav tabs map 1:1 onto the four data-view routes, so their paths are the
-  // View union - a typo would fail to compile.
-  readonly views: { path: View; label: string }[] = [
+  // The nav tabs map onto the data-view routes. The first four are the View
+  // union, so a typo there fails to compile; 'billing' is its own route with no
+  // period arithmetic behind it and therefore not part of that union.
+  readonly views: { path: View | 'billing'; label: string }[] = [
     { path: 'live', label: 'Live' },
     { path: 'day', label: 'Tag' },
     { path: 'week', label: 'Woche' },
     { path: 'month', label: 'Monat' },
+    { path: 'billing', label: 'Abrechnung' },
   ];
 
   // The live view uses a full-height flex layout; the history views don't.

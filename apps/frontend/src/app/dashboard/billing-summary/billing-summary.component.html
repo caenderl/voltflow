@@ -1,0 +1,37 @@
+<section class="group">
+  <div class="metric import">
+    <span class="label">Bezug</span>
+    <span class="value">{{ totals().importKwh | number: '1.2-2' }} <small>kWh</small></span>
+    @if (statement().priced) {
+      <span class="sub">{{ totals().importCost | number: '1.2-2' }} €</span>
+    }
+  </div>
+
+  <div class="metric export">
+    <span class="label">Einspeisung</span>
+    <span class="value">{{ totals().exportKwh | number: '1.2-2' }} <small>kWh</small></span>
+    @if (statement().priced) {
+      <span class="sub">{{ totals().exportRevenue | number: '1.2-2' }} €</span>
+    }
+  </div>
+
+  <div class="metric base">
+    <span class="label">Grundpreis</span>
+    <span class="value">{{ totals().baseFee | number: '1.2-2' }} <small>€</small></span>
+    <span class="sub">tagesanteilig</span>
+  </div>
+
+  <div class="metric netto" [class.import]="totals().net >= 0" [class.export]="totals().net < 0">
+    <span class="label">Netto</span>
+    <span class="value">{{ totals().net | number: '1.2-2' }} <small>€</small></span>
+    <span class="sub">Bezug + Grundpreis − Vergütung</span>
+  </div>
+</section>
+
+<p class="anchor">
+  <span class="bar" [style.--share]="totals().measuredShare" aria-hidden="true"></span>
+  <span>
+    <b>{{ totals().measuredShare | percent: '1.0-0' }}</b> auf Zählerstand gestützt ·
+    {{ anchorNote() }}
+  </span>
+</p>

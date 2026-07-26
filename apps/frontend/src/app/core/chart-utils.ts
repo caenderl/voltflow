@@ -39,6 +39,15 @@ function kwhLabel(v: number | null): string {
   })} kWh`;
 }
 
+/** "1.234,57 €" tooltip label (absolute value, de-DE); "–" for gaps. */
+function eurLabel(v: number | null): string {
+  if (v == null) return '–';
+  return `${Math.abs(Number(v)).toLocaleString('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} €`;
+}
+
 /** "1.234 W" tooltip label (absolute value, de-DE, no decimals); "–" for gaps. */
 function wLabel(v: number | null): string {
   if (v == null) return '–';
@@ -328,13 +337,19 @@ export function categorySeriesChart(
     legend?: boolean;
     stacked?: boolean;
     xAxisLabelInterval?: number | 'auto';
-    /** Y-axis unit: 'kWh' (default) or 'W' for a power line instead of energy bars. */
-    unit?: 'kWh' | 'W';
+    /**
+     * Y-axis unit: 'kWh' (default), 'W' for a power line, or '€' for money —
+     * the unit only picks the tooltip formatter and the axis name.
+     */
+    unit?: 'kWh' | 'W' | '€';
   } = {},
 ): EChartsCoreOption {
   const unit = opts.unit ?? 'kWh';
   return {
-    tooltip: { trigger: 'axis', valueFormatter: unit === 'W' ? wLabel : kwhLabel },
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: unit === 'W' ? wLabel : unit === '€' ? eurLabel : kwhLabel,
+    },
     ...(opts.legend
       ? {
           legend: {

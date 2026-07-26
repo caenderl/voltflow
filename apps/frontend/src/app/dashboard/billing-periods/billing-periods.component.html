@@ -1,0 +1,66 @@
+<div class="periods-box">
+  <button
+    type="button"
+    class="periods-head"
+    [attr.aria-expanded]="open()"
+    (click)="toggle()"
+  >
+    <svg class="chev" [class.open]="open()" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8.6 7.4 10 6l6 6-6 6-1.4-1.4L13.2 12z" />
+    </svg>
+    <h2>Ableseperioden</h2>
+    <span class="count">
+      {{ periods().length }} {{ periods().length === 1 ? 'Zeitraum' : 'Zeiträume' }}
+    </span>
+  </button>
+
+  @if (open()) {
+    @if (periods().length) {
+      <div class="table-scroll">
+        <table class="periods-table">
+          <thead>
+            <tr>
+              <th>Zeitraum</th>
+              <th class="num">Tage</th>
+              <th class="num">Bezug</th>
+              <th class="num">Einspeisung</th>
+              <th class="num">ø Bezug/Tag</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Tracked by position: the list is recomputed as a whole on every
+                 load, and two intervals can share a date. -->
+            @for (p of periods(); track $index) {
+              <tr>
+                <td>
+                  {{ p.fromDate | date: 'dd.MM.yy' }} – {{ p.toDate | date: 'dd.MM.yy' }}
+                  @if (!p.withinYear) {
+                    <span class="badge" title="Reicht über die Jahresgrenze hinaus; die Monate zeigen nur den Anteil in diesem Jahr.">
+                      jahresübergreifend
+                    </span>
+                  }
+                  <span class="read-at">{{ p.fromReadAt }} – {{ p.toReadAt }} Uhr</span>
+                </td>
+                <td class="num">{{ p.days }}</td>
+                <td class="num import">{{ p.importKwh | number: '1.1-1' }}</td>
+                <td class="num export">{{ p.exportKwh | number: '1.1-1' }}</td>
+                <td class="num">{{ p.importPerDay | number: '1.1-1' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <p class="hint-sm">
+        Differenzen der abgelesenen Zählwerke — exakt so, wie sie am Zähler standen. Aus diesen
+        Summen entstehen die Monatswerte oben; die Verteilung innerhalb eines Zeitraums stammt vom
+        SmartMeter.
+      </p>
+    } @else {
+      <p class="hint-sm">
+        Für dieses Jahr gibt es keinen Zeitraum zwischen zwei Ablesungen. Die Monate oben stammen
+        dann vollständig aus dem SmartMeter — zwei Zählerstände genügen, um das zu ändern.
+      </p>
+    }
+  }
+</div>

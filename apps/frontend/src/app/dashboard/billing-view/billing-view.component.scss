@@ -1,0 +1,66 @@
+:host {
+  display: block;
+}
+
+/* Mirrors the history views' period navigation so switching tabs does not move
+   the control the user just used. */
+.period-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 0.25rem 0 1.5rem;
+}
+
+.period-label {
+  min-width: 8rem;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--on-surface);
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--on-surface);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
+
+  svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    fill: currentColor;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--surface-3);
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+}
+
+.hint {
+  color: var(--muted);
+}
+
+.error {
+  color: #ffb4ab;
+  background: color-mix(in srgb, #ff5449 18%, transparent);
+  border: 1px solid #ff5449;
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 1rem;
+}
