@@ -97,6 +97,13 @@ export class BillingService {
    *
    * Grouped by instant so a second `device_sn` cannot interleave two counters
    * into one non-monotonic curve.
+   *
+   * The window is widened by **two** buckets, not one: a knot sits at its
+   * bucket's end, so one bucket of slack only reaches `from` when `from` falls
+   * exactly on a bucket boundary. Reading times generally do not (18:32), and a
+   * first knot landing after `from` leaves the bounding checkpoint uncovered —
+   * which silently drops the whole interval back to a pro-rata split, the very
+   * thing {@link curveWindow} widens the window to avoid.
    */
   private async knots(from: Date, to: Date): Promise<CounterKnot[]> {
     const { rows } = await this.db.query(
@@ -104,14 +111,14 @@ export class BillingService {
          SELECT bucket + INTERVAL '1 hour' AS at,
                 grid_import_energy AS i, grid_export_energy AS e
            FROM meter_1hour
-          WHERE bucket >= $1::timestamptz - INTERVAL '1 hour' AND bucket < $2
+          WHERE bucket >= $1::timestamptz - INTERVAL '2 hours' AND bucket < $2
             AND grid_import_energy IS NOT NULL
             AND grid_export_energy IS NOT NULL
        ), d AS (
          SELECT bucket + INTERVAL '1 day' AS at,
                 grid_import_energy AS i, grid_export_energy AS e
            FROM meter_1day
-          WHERE bucket >= $1::timestamptz - INTERVAL '1 day' AND bucket < $2
+          WHERE bucket >= $1::timestamptz - INTERVAL '2 days' AND bucket < $2
             AND grid_import_energy IS NOT NULL
             AND grid_export_energy IS NOT NULL
             AND bucket + INTERVAL '1 day'
