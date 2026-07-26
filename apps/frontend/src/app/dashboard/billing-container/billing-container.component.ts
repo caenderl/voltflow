@@ -50,6 +50,11 @@ export class BillingContainerComponent {
   /** …nor forward into a year that has not started. */
   readonly canNext = computed(() => this.year() < new Date().getFullYear());
 
+  // Guards against a response for a year the user has since navigated away
+  // from landing after a newer request and overwriting it (same hazard
+  // DashboardDataService.loadPeriod's periodSeq guards against).
+  private loadSeq = 0;
+
   constructor() {
     this.load();
   }
@@ -62,17 +67,24 @@ export class BillingContainerComponent {
   }
 
   private load(): void {
+    const seq = ++this.loadSeq;
+    const current = () => seq === this.loadSeq;
     this.loading.set(true);
     this.error.set(null);
+    // Clear up front so a slow response never leaves the previous year's
+    // statement on screen under the new year's header.
+    this.statement.set(null);
     this.api
       .statement(this.year())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (s) => {
+          if (!current()) return;
           this.statement.set(s);
           this.loading.set(false);
         },
         error: () => {
+          if (!current()) return;
           this.error.set('Abrechnung konnte nicht geladen werden.');
           this.loading.set(false);
         },
