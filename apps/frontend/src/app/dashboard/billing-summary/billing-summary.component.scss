@@ -2,17 +2,15 @@
   display: block;
 }
 
-/* Two cards, side by side and equal width: neither contract is subordinate to
-   the other. They stack on phones. */
+/* Two cards, side by side, equal width and equal height: neither contract is
+   subordinate to the other, and a shorter feed-in card would read as the lesser
+   of the two. The grid's default `stretch` does the sizing — the feed-in card
+   has fewer lines and simply ends in empty space. They stack on phones. */
 .contracts {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
   margin-bottom: 1rem;
-  // Natural heights: the feed-in card has one component and is simply shorter.
-  // Stretching it to match Bezug only pads it with empty space that reads as
-  // something missing.
-  align-items: start;
 }
 
 .contract {
