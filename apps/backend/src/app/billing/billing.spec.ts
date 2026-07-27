@@ -107,14 +107,22 @@ describe('computeBillingStatement', () => {
     expect(s.months[0].importCost).toBe(60);
     expect(s.months[0].exportRevenue).toBe(1.6);
     expect(s.months[0].baseFee).toBe(12.3);
-    expect(s.months[0].net).toBe(70.7);
+    // The consumption contract on its own: work price + standing charge, never
+    // netted against the feed-in contract's revenue.
+    expect(s.months[0].importTotal).toBe(72.3);
     expect(s.months[1].baseFee).toBe(11.11);
 
     expect(s.totals.importCost).toBe(180);
     expect(s.totals.baseFee).toBe(23.41);
-    expect(s.totals.net).toBe(198.61);
-    // Hand-verifiable: the totals are the sum of the printed month rows.
-    expect(s.totals.net).toBe(s.months[0].net + s.months[1].net);
+    expect(s.totals.importTotal).toBe(203.41);
+    expect(s.totals.exportRevenue).toBe(4.8);
+    // Hand-verifiable: the total is what the printed month rows add up to, to
+    // the cent. Compared loosely because summing two 2-decimal floats leaves
+    // noise the total's own rounding removes — that removal is the point.
+    expect(s.totals.importTotal).toBeCloseTo(
+      s.months[0].importTotal + s.months[1].importTotal,
+      2,
+    );
     expect(s.priced).toBe(true);
   });
 
@@ -309,7 +317,7 @@ describe('computeBillingStatement', () => {
 
     expect(s.months).toHaveLength(12);
     expect(s.months.every((m) => !m.hasData)).toBe(true);
-    expect(s.totals.net).toBe(0);
+    expect(s.totals.importTotal).toBe(0);
     expect(s.totals.measuredShare).toBe(0);
     expect(s.readings).toBe(0);
   });

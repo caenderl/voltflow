@@ -278,8 +278,13 @@ export interface BillingMonth {
   exportRevenue: number;
   /** Share of the annual standing charge falling on this month. */
   baseFee: number;
-  /** importCost + baseFee − exportRevenue: what the month actually costs. */
-  net: number;
+  /**
+   * importCost + baseFee — what the consumption contract costs for the month.
+   * Deliberately not netted against `exportRevenue`: consumption and feed-in are
+   * two separate contracts, and a single figure spanning both answers no
+   * question either of them asks.
+   */
+  importTotal: number;
   /**
    * False when no data covers the month at all (a future month, or before the
    * meter existed) — the UI shows "–" rather than a 0 that looks measured.
@@ -324,7 +329,8 @@ export interface BillingTotals {
   importCost: number;
   exportRevenue: number;
   baseFee: number;
-  net: number;
+  /** importCost + baseFee, summed from the rounded months. */
+  importTotal: number;
   /** Fraction of the year's energy (import + feed-in) that is `measured` (0–1). */
   measuredShare: number;
 }

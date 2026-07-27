@@ -1,30 +1,41 @@
-<section class="group">
-  <div class="metric import">
+<!-- Two contracts, two cards. Consumption and feed-in are billed separately and
+     never netted against each other, so the amount owed and the amount paid out
+     each lead their own card. -->
+<section class="contracts">
+  <div class="contract import">
     <span class="label">Bezug</span>
-    <span class="value">{{ totals().importKwh | number: '1.2-2' }} <small>kWh</small></span>
+
     @if (statement().priced) {
-      <span class="sub">{{ totals().importCost | number: '1.2-2' }} €</span>
+      <span class="amount">{{ totals().importTotal | number: '1.2-2' }} <small>€</small></span>
+      <span class="energy">{{ totals().importKwh | number: '1.2-2' }} kWh</span>
+      <dl class="breakdown">
+        <div>
+          <dt>Arbeitspreis</dt>
+          <dd>{{ totals().importCost | number: '1.2-2' }} €</dd>
+        </div>
+        <div>
+          <dt>Grundpreis</dt>
+          <dd>{{ totals().baseFee | number: '1.2-2' }} €</dd>
+        </div>
+      </dl>
+    } @else {
+      <span class="amount">{{ totals().importKwh | number: '1.2-2' }} <small>kWh</small></span>
+      <span class="energy">keine Preise im Tarif hinterlegt</span>
     }
   </div>
 
-  <div class="metric export">
+  <div class="contract export">
     <span class="label">Einspeisung</span>
-    <span class="value">{{ totals().exportKwh | number: '1.2-2' }} <small>kWh</small></span>
+
     @if (statement().priced) {
-      <span class="sub">{{ totals().exportRevenue | number: '1.2-2' }} €</span>
+      <span class="amount">{{ totals().exportRevenue | number: '1.2-2' }} <small>€</small></span>
+      <span class="energy">{{ totals().exportKwh | number: '1.2-2' }} kWh</span>
+      <!-- No breakdown: the feed-in contract has a single component. Repeating
+           the amount under itself would only pad the card to match Bezug. -->
+    } @else {
+      <span class="amount">{{ totals().exportKwh | number: '1.2-2' }} <small>kWh</small></span>
+      <span class="energy">keine Preise im Tarif hinterlegt</span>
     }
-  </div>
-
-  <div class="metric base">
-    <span class="label">Grundpreis</span>
-    <span class="value">{{ totals().baseFee | number: '1.2-2' }} <small>€</small></span>
-    <span class="sub">tagesanteilig</span>
-  </div>
-
-  <div class="metric netto" [class.import]="totals().net >= 0" [class.export]="totals().net < 0">
-    <span class="label">Netto</span>
-    <span class="value">{{ totals().net | number: '1.2-2' }} <small>€</small></span>
-    <span class="sub">Bezug + Grundpreis − Vergütung</span>
   </div>
 </section>
 

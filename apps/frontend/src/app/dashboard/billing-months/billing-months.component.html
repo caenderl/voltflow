@@ -10,17 +10,27 @@
   <div class="table-scroll">
     <table class="months-table">
       <thead>
-        <tr>
-          <th class="month-col">Monat</th>
-          <th class="num">Bezug</th>
-          <th class="num">Einspeisung</th>
-          @if (priced()) {
-            <th class="num">Kosten</th>
-            <th class="num">Vergütung</th>
+        @if (priced()) {
+          <tr>
+            <th rowspan="2" class="month-col">Monat</th>
+            <th colspan="4" class="group-head import">Bezug</th>
+            <th colspan="2" class="group-head export">Einspeisung</th>
+          </tr>
+          <tr>
+            <th class="num">kWh</th>
+            <th class="num">Arbeitspreis</th>
             <th class="num">Grundpreis</th>
-            <th class="num">Netto</th>
-          }
-        </tr>
+            <th class="num">Summe</th>
+            <th class="num">kWh</th>
+            <th class="num">Vergütung</th>
+          </tr>
+        } @else {
+          <tr>
+            <th class="month-col">Monat</th>
+            <th class="num">Bezug</th>
+            <th class="num">Einspeisung</th>
+          </tr>
+        }
       </thead>
       <tbody>
         @for (m of months(); track m.month) {
@@ -43,20 +53,24 @@
 
             @if (m.hasData) {
               <td class="num import">{{ m.importKwh | number: '1.1-1' }}</td>
-              <td class="num export">{{ m.exportKwh | number: '1.1-1' }}</td>
               @if (priced()) {
                 <td class="num">{{ m.importCost | number: '1.2-2' }}</td>
-                <td class="num">{{ m.exportRevenue | number: '1.2-2' }}</td>
                 <td class="num muted">{{ m.baseFee | number: '1.2-2' }}</td>
-                <td class="num net">{{ m.net | number: '1.2-2' }}</td>
+                <td class="num sum">{{ m.importTotal | number: '1.2-2' }}</td>
+              }
+              <td class="num export">{{ m.exportKwh | number: '1.1-1' }}</td>
+              @if (priced()) {
+                <td class="num sum">{{ m.exportRevenue | number: '1.2-2' }}</td>
               }
             } @else {
               <td class="num">–</td>
-              <td class="num">–</td>
               @if (priced()) {
                 <td class="num">–</td>
                 <td class="num">–</td>
                 <td class="num">–</td>
+              }
+              <td class="num">–</td>
+              @if (priced()) {
                 <td class="num">–</td>
               }
             }
@@ -67,12 +81,14 @@
         <tr>
           <td class="month-col">Gesamt</td>
           <td class="num import">{{ statement().totals.importKwh | number: '1.1-1' }}</td>
-          <td class="num export">{{ statement().totals.exportKwh | number: '1.1-1' }}</td>
           @if (priced()) {
             <td class="num">{{ statement().totals.importCost | number: '1.2-2' }}</td>
-            <td class="num">{{ statement().totals.exportRevenue | number: '1.2-2' }}</td>
             <td class="num muted">{{ statement().totals.baseFee | number: '1.2-2' }}</td>
-            <td class="num net">{{ statement().totals.net | number: '1.2-2' }}</td>
+            <td class="num sum">{{ statement().totals.importTotal | number: '1.2-2' }}</td>
+          }
+          <td class="num export">{{ statement().totals.exportKwh | number: '1.1-1' }}</td>
+          @if (priced()) {
+            <td class="num sum">{{ statement().totals.exportRevenue | number: '1.2-2' }}</td>
           }
         </tr>
       </tfoot>

@@ -76,8 +76,31 @@
   .muted {
     color: var(--muted);
   }
-  .net {
+  /* The per-contract total each group builds up to. */
+  .sum {
     font-weight: 600;
+    color: var(--on-surface);
+  }
+
+  /* Group headers name the contract the columns beneath belong to; the divider
+     keeps Bezug and Einspeisung from reading as one row of figures. */
+  .group-head {
+    text-align: center;
+    border-bottom: 1px solid color-mix(in srgb, var(--outline) 55%, transparent);
+
+    &.import {
+      color: var(--import);
+    }
+    &.export {
+      color: var(--export);
+      border-left: 1px solid var(--outline);
+    }
+  }
+
+  thead tr:last-child th:nth-child(5),
+  tbody td:nth-child(6),
+  tfoot td:nth-child(6) {
+    border-left: 1px solid var(--outline);
   }
 
   tfoot td {
