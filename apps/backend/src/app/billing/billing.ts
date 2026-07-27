@@ -481,7 +481,8 @@ function monthOf(
   return {
     month: monthKey(year, index),
     ...rounded,
-    net: round2(rounded.importCost + rounded.baseFee - rounded.exportRevenue),
+    // Summed from the already-rounded parts, so the card adds up on screen.
+    importTotal: round2(rounded.importCost + rounded.baseFee),
     hasData: withData.length > 0,
     measuredShare: total > 0 ? round4(measured / total) : 0,
     readings: checkpoints.filter((c) => c.at >= start && c.at < monthEnd).length,
@@ -505,17 +506,13 @@ function sumMonths(months: BillingMonth[], slices: Slice[]): BillingTotals {
     if (s.source === 'measured') measured += s.importKwh + s.exportKwh;
   }
 
-  const importCost = sum((m) => m.importCost);
-  const exportRevenue = sum((m) => m.exportRevenue);
-  const baseFee = sum((m) => m.baseFee);
-
   return {
     importKwh: sum((m) => m.importKwh),
     exportKwh: sum((m) => m.exportKwh),
-    importCost,
-    exportRevenue,
-    baseFee,
-    net: round2(importCost + baseFee - exportRevenue),
+    importCost: sum((m) => m.importCost),
+    exportRevenue: sum((m) => m.exportRevenue),
+    baseFee: sum((m) => m.baseFee),
+    importTotal: sum((m) => m.importTotal),
     measuredShare: total > 0 ? round4(measured / total) : 0,
   };
 }
