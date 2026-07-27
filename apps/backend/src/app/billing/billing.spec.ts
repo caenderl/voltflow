@@ -123,6 +123,15 @@ describe('computeBillingStatement', () => {
       s.months[0].importTotal + s.months[1].importTotal,
       2,
     );
+    // The promise the Bezug card makes: its two listed components add up to the
+    // amount printed above them, every month and for the year.
+    for (const m of s.months) {
+      expect(m.importTotal).toBeCloseTo(m.importCost + m.baseFee, 2);
+    }
+    expect(s.totals.importTotal).toBeCloseTo(
+      s.totals.importCost + s.totals.baseFee,
+      2,
+    );
     expect(s.priced).toBe(true);
   });
 

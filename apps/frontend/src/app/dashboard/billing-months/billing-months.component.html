@@ -21,14 +21,14 @@
             <th class="num">Arbeitspreis</th>
             <th class="num">Grundpreis</th>
             <th class="num">Summe</th>
-            <th class="num">kWh</th>
+            <th class="num group-start">kWh</th>
             <th class="num">Vergütung</th>
           </tr>
         } @else {
           <tr>
             <th class="month-col">Monat</th>
             <th class="num">Bezug</th>
-            <th class="num">Einspeisung</th>
+            <th class="num group-start">Einspeisung</th>
           </tr>
         }
       </thead>
@@ -58,7 +58,7 @@
                 <td class="num muted">{{ m.baseFee | number: '1.2-2' }}</td>
                 <td class="num sum">{{ m.importTotal | number: '1.2-2' }}</td>
               }
-              <td class="num export">{{ m.exportKwh | number: '1.1-1' }}</td>
+              <td class="num export group-start">{{ m.exportKwh | number: '1.1-1' }}</td>
               @if (priced()) {
                 <td class="num sum">{{ m.exportRevenue | number: '1.2-2' }}</td>
               }
@@ -69,7 +69,7 @@
                 <td class="num">–</td>
                 <td class="num">–</td>
               }
-              <td class="num">–</td>
+              <td class="num group-start">–</td>
               @if (priced()) {
                 <td class="num">–</td>
               }
@@ -86,7 +86,7 @@
             <td class="num muted">{{ statement().totals.baseFee | number: '1.2-2' }}</td>
             <td class="num sum">{{ statement().totals.importTotal | number: '1.2-2' }}</td>
           }
-          <td class="num export">{{ statement().totals.exportKwh | number: '1.1-1' }}</td>
+          <td class="num export group-start">{{ statement().totals.exportKwh | number: '1.1-1' }}</td>
           @if (priced()) {
             <td class="num sum">{{ statement().totals.exportRevenue | number: '1.2-2' }}</td>
           }

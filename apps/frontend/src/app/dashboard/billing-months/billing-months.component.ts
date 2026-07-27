@@ -36,7 +36,10 @@ export class BillingMonthsComponent {
         {
           name: 'Kosten',
           color: CHART_COLORS.import,
-          data: months.map((m) => (m.hasData ? round2(m.importCost + m.baseFee) : null)),
+          // importTotal, not importCost + baseFee recomputed here: the chart
+          // must show the same figure the table and the card do, and only the
+          // computation rounds it.
+          data: months.map((m) => (m.hasData ? m.importTotal : null)),
         },
         {
           name: 'Vergütung',
@@ -56,8 +59,4 @@ export class BillingMonthsComponent {
     if (pct === 0) return 'Kein Zählerstand in Reichweite — vollständig aus dem SmartMeter.';
     return `${pct} % durch Zählerstände gestützt, der Rest aus dem SmartMeter verteilt.`;
   }
-}
-
-function round2(v: number): number {
-  return Math.round(v * 100) / 100;
 }
