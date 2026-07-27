@@ -97,9 +97,10 @@
     }
   }
 
-  thead tr:last-child th:nth-child(5),
-  tbody td:nth-child(6),
-  tfoot td:nth-child(6) {
+  /* Marks the first cell of the Einspeisung group. Carried by a class rather
+     than an nth-child index so inserting or reordering a column cannot move the
+     divider somewhere meaningless without anyone noticing. */
+  .group-start {
     border-left: 1px solid var(--outline);
   }
 
