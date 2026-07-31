@@ -1,0 +1,100 @@
+:host {
+  display: block;
+}
+
+.head {
+  margin: 2rem 0 1rem;
+
+  h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  /* The one sentence that answers the question the section asks — sized like
+     body text, not like a footnote. */
+  p {
+    margin: 0;
+    max-width: 62ch;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--on-surface-var);
+  }
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.chart-box {
+  background: var(--surface-1);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem 0.9rem;
+  box-shadow: var(--elev-1);
+
+  h3 {
+    margin: 0 0 0.6rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--on-surface-var);
+  }
+}
+
+.chart {
+  height: 300px;
+  width: 100%;
+}
+
+/* Reads as one sentence of context for the curve above it, so the items sit on
+   one line with separators rather than as a list. */
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0.5rem 0 0;
+  padding: 0.7rem 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--outline) 70%, transparent);
+  list-style: none;
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+
+  li + li::before {
+    content: '·';
+    margin-right: 1rem;
+    color: var(--outline);
+  }
+}
+
+.hint {
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .tiles {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .chart {
+    height: 240px;
+  }
+}
+
+/* Too narrow for one line: stack the facts and drop the separators, which
+   would otherwise dangle at the start of every wrapped line. */
+@media (max-width: 640px) {
+  .facts {
+    flex-direction: column;
+    gap: 0.3rem;
+
+    li + li::before {
+      content: none;
+    }
+  }
+}

@@ -1,0 +1,31 @@
+:host {
+  display: block;
+}
+
+/* Sits where the other views put their period navigation, so the eye finds the
+   "which timespan am I looking at?" answer in the same place. */
+.period {
+  margin: 0.25rem 0 1.25rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--on-surface);
+  font-variant-numeric: tabular-nums;
+}
+
+.peak-note {
+  margin: -0.75rem 0 0;
+  max-width: 68ch;
+}
+
+.hint {
+  color: var(--muted);
+}
+
+.error {
+  color: #ffb4ab;
+  background: color-mix(in srgb, #ff5449 18%, transparent);
+  border: 1px solid #ff5449;
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 1rem;
+}

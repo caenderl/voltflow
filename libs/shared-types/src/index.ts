@@ -698,3 +698,125 @@ export interface BackupStatus {
   local: LocalBackups | null;
   offsite: OffsiteStatus | null;
 }
+
+// ---------------------------------------------------------------------------
+// Statistics (GET /api/statistics) — all-time records over the stored data
+// ---------------------------------------------------------------------------
+
+/** A power record: the highest value seen, and when it was measured. */
+export interface StatPeak {
+  /** ISO timestamp of the bucket the peak was measured in. */
+  time: string;
+  powerW: number;
+}
+
+/** An energy record: the strongest local day and its kWh. */
+export interface StatDayRecord {
+  /** Local day, YYYY-MM-DD. */
+  day: string;
+  kwh: number;
+}
+
+/** PV records. Null fields mean the data does not (yet) support the figure. */
+export interface PvStatistics {
+  /** Highest instantaneous production, over the whole daily aggregate. */
+  peak: StatPeak | null;
+  /** Best day's yield, over the fully covered days. */
+  bestDay: StatDayRecord | null;
+  /** Mean yield of the fully covered days, kWh. */
+  avgDayKwh: number | null;
+}
+
+/** House-consumption records (PV + grid import − feed-in). */
+export interface ConsumptionStatistics {
+  /**
+   * Highest house load on the 1-minute grid. Limited to the retention of the
+   * minute aggregate (see {@link StatisticsResponse.peakWindowDays}) — the
+   * long-term aggregates only keep hourly averages, which are no peak.
+   */
+  peak: StatPeak | null;
+  /** Highest daily consumption, over the fully covered days. */
+  maxDay: StatDayRecord | null;
+  /** Mean consumption of the fully covered days, kWh. */
+  avgDayKwh: number | null;
+}
+
+/**
+ * The house's base load: what it draws at night with nothing switched on.
+ * Measured per night as a low percentile of the house load between midnight and
+ * 05:00 local, with the wallbox's own power subtracted — a charging car is not
+ * standby, and it would otherwise dominate the figure.
+ */
+export interface StandbyStatistics {
+  /** Mean of the nightly base loads, W. */
+  avgW: number | null;
+  /** Quietest / busiest night's base load, W. */
+  minW: number | null;
+  maxW: number | null;
+  /** Nights that went into the average. */
+  nights: number;
+  /** avgW held for 24 h. */
+  perDayKwh: number | null;
+  /** …and for a year (365 days). */
+  perYearKwh: number | null;
+  /** Share of the average day's consumption that is base load (0..1). */
+  shareOfConsumption: number | null;
+}
+
+/** One simulated battery size and what it would have achieved. */
+export interface BatteryCurvePoint {
+  capacityKwh: number;
+  /** Share of consumption covered without the grid (0..1). */
+  autarky: number;
+  /** Share of PV production used at home instead of fed in (0..1). */
+  selfConsumption: number;
+}
+
+/**
+ * Battery sizing, simulated hour by hour over every fully covered day: grid
+ * import is served from the battery first, feed-in charges it (losses applied
+ * on the way in), and what the battery cannot cover stays grid import.
+ */
+export interface BatteryStatistics {
+  /** Autarky actually measured, i.e. the curve's 0 kWh point (0..1). */
+  baseAutarky: number | null;
+  /** Autarky / self-consumption over a range of sizes, ascending. */
+  curve: BatteryCurvePoint[];
+  /**
+   * Smallest simulated size that would have removed *all* grid import over the
+   * measured period. Null when no size reaches it — with too little sun the
+   * energy is simply missing, and no storage can invent it.
+   */
+  fullAutarkyKwh: number | null;
+  /** Size beyond which another kWh adds less than a point of autarky. */
+  kneeKwh: number | null;
+  /** Autarky at {@link kneeKwh} (0..1). */
+  kneeAutarky: number | null;
+  /** Typical / worst dark-hours consumption a battery has to bridge, kWh. */
+  medianNightKwh: number | null;
+  maxNightKwh: number | null;
+  /** Totals the simulation ran on, kWh. */
+  productionKwh: number;
+  consumptionKwh: number;
+  /** Round-trip efficiency the simulation assumed (0..1). */
+  efficiency: number;
+}
+
+/** Response of GET /api/statistics. */
+export interface StatisticsResponse {
+  /** First / last local day with complete hourly data (YYYY-MM-DD). */
+  firstDay: string | null;
+  lastDay: string | null;
+  /** Days with complete data — the basis of every daily figure below. */
+  days: number;
+  /**
+   * How far back the 1-minute aggregate reaches, in days. The peak *power*
+   * figures cannot look further back than this; everything else spans the
+   * whole history.
+   */
+  peakWindowDays: number;
+  pv: PvStatistics;
+  consumption: ConsumptionStatistics;
+  standby: StandbyStatistics;
+  battery: BatteryStatistics;
+}

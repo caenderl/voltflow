@@ -211,6 +211,7 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/meter-checkpoints/reconciliation` | Abgleich der Zählerstände mit dem SmartMeter + Hochrechnung |
 | `GET` / `POST` / `PUT` / `DELETE /api/tariff-periods` | Zeitraum-Tarife (Preise ct/kWh + Grundpreis €/Jahr, gültig ab Datum) |
 | `GET /api/billing?year=YYYY` | Abrechnung eines Kalenderjahres auf Basis der abgelesenen Zählerstände (Monate, Ableseperioden, Summen) |
+| `GET /api/statistics` | Rekorde über den gesamten Bestand: PV-/Verbrauchsspitzen, Grundlast, Speicher-Dimensionierung |
 | `GET` / `PUT /api/app-settings` | Globale Anzeige-Einstellungen (z. B. Kalibrierung auf den Zählerstand) |
 | `GET` / `PUT /api/wallbox/config` | Wallbox-Verbindung (Name, IP, Port, Unit-ID, Intervall, an/aus) |
 | `GET /api/wallbox/latest` | Letzter Wallbox-Messwert |

@@ -1,0 +1,50 @@
+<header class="head">
+  <h2>Batteriespeicher</h2>
+  <!-- The verdict is a statement about measured days; with none, the hint at
+       the bottom is the whole story. -->
+  @if (hasData()) {
+    <p>{{ verdict() }}</p>
+  }
+</header>
+
+@if (hasData()) {
+  <div class="tiles">
+    <app-stat-card
+      label="Autarkie heute"
+      accent="primary"
+      [value]="baseAutarky()"
+      caption="ohne Speicher, so gemessen"
+    />
+    <app-stat-card
+      label="Empfohlene Größe"
+      accent="solar"
+      [value]="kneeValue()"
+      unit="kWh"
+      [caption]="kneeCaption()"
+    />
+    <app-stat-card
+      label="Für 100 % Autarkie"
+      accent="import"
+      [value]="fullValue()"
+      unit="kWh"
+      [caption]="fullCaption()"
+    />
+  </div>
+
+  <div class="chart-box">
+    <h3>Autarkie nach Speichergröße</h3>
+    <div echarts [options]="chart()" class="chart"></div>
+    <ul class="facts">
+      @for (fact of facts(); track fact) {
+        <li>{{ fact }}</li>
+      }
+    </ul>
+  </div>
+
+  <p class="hint-sm">{{ basis() }}</p>
+} @else {
+  <p class="hint">
+    Noch kein Tag mit lückenlosen Daten — die Simulation braucht mindestens einen
+    vollständigen Tag aus Zähler und Wechselrichter.
+  </p>
+}

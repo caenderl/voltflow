@@ -1,0 +1,31 @@
+<section class="cards">
+  <app-stat-card
+    label="PV-Erzeugung"
+    accent="solar"
+    [value]="pvPeak()"
+    unit="W"
+    [caption]="pvPeakAt()"
+  >
+    <app-stat-rows [rows]="pvRows()" />
+  </app-stat-card>
+
+  <app-stat-card
+    label="Verbrauch"
+    accent="import"
+    [value]="loadPeak()"
+    unit="W"
+    [caption]="loadPeakAt()"
+  >
+    <app-stat-rows [rows]="loadRows()" />
+  </app-stat-card>
+
+  <app-stat-card
+    label="Grundlast"
+    accent="primary"
+    [value]="standbyPower()"
+    unit="W"
+    [caption]="standbyCaption()"
+  >
+    <app-stat-rows [rows]="standbyRows()" />
+  </app-stat-card>
+</section>
