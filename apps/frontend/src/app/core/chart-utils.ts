@@ -54,6 +54,12 @@ function wLabel(v: number | null): string {
   return `${Math.round(Math.abs(Number(v))).toLocaleString('de-DE')} W`;
 }
 
+/** "92,4 %" tooltip label (values are already in percent); "–" for gaps. */
+function pctLabel(v: number | null): string {
+  if (v == null) return '–';
+  return `${Number(v).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
+}
+
 /** Append points to a time-series buffer, keeping it sorted, de-duped by
  *  timestamp and trimmed to `windowMs` (relative to the newest point). */
 export function appendWindowed<T extends { time: string }>(
@@ -338,17 +344,22 @@ export function categorySeriesChart(
     stacked?: boolean;
     xAxisLabelInterval?: number | 'auto';
     /**
-     * Y-axis unit: 'kWh' (default), 'W' for a power line, or '€' for money —
-     * the unit only picks the tooltip formatter and the axis name.
+     * Y-axis unit: 'kWh' (default), 'W' for a power line, '€' for money or '%'
+     * for a share (values passed in as 0..100) — the unit only picks the
+     * tooltip formatter and the axis name.
      */
-    unit?: 'kWh' | 'W' | '€';
+    unit?: 'kWh' | 'W' | '€' | '%';
+    /** X-axis caption, for a category axis that is not time (e.g. kWh). */
+    xAxisName?: string;
   } = {},
 ): EChartsCoreOption {
   const unit = opts.unit ?? 'kWh';
+  const formatter =
+    unit === 'W' ? wLabel : unit === '€' ? eurLabel : unit === '%' ? pctLabel : kwhLabel;
   return {
     tooltip: {
       trigger: 'axis',
-      valueFormatter: unit === 'W' ? wLabel : unit === '€' ? eurLabel : kwhLabel,
+      valueFormatter: formatter,
     },
     ...(opts.legend
       ? {
@@ -359,10 +370,23 @@ export function categorySeriesChart(
           },
         }
       : {}),
-    grid: { left: 50, right: 20, top: opts.legend ? 40 : 20, bottom: 30 },
+    grid: {
+      left: 50,
+      right: 20,
+      top: opts.legend ? 40 : 20,
+      bottom: opts.xAxisName ? 46 : 30,
+    },
     xAxis: {
       type: 'category',
       data: labels,
+      ...(opts.xAxisName
+        ? {
+            name: opts.xAxisName,
+            nameLocation: 'middle',
+            nameGap: 28,
+            nameTextStyle: { color: CHART_COLORS.axisLabel },
+          }
+        : {}),
       // Thin labels automatically on narrow screens instead of forcing all,
       // unless a fixed interval is requested (e.g. many-slot minute charts,
       // where 'auto' wouldn't reliably land on round-hour boundaries).

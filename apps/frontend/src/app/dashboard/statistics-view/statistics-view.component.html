@@ -1,0 +1,23 @@
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+
+@if (statistics(); as s) {
+  <p class="period">{{ period() }}</p>
+
+  <app-statistics-highlights
+    [pv]="s.pv"
+    [consumption]="s.consumption"
+    [standby]="s.standby"
+  />
+
+  @if (showPeakNote()) {
+    <p class="hint-sm peak-note">{{ peakNote() }}</p>
+  }
+
+  <app-statistics-battery [battery]="s.battery" [days]="s.days" />
+} @else if (loading()) {
+  <p class="hint">Lade Statistik …</p>
+} @else if (!error()) {
+  <p class="hint">Es liegen noch keine Daten vor.</p>
+}

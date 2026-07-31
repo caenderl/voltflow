@@ -1,0 +1,41 @@
+// Pushed to the bottom of a flex card, so cards of unequal text length still
+// line their detail blocks up.
+:host {
+  display: block;
+  margin-top: auto;
+  padding-top: 0.9rem;
+}
+
+.stat-rows {
+  margin: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--outline) 70%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+
+  div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  dt {
+    color: var(--muted);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--on-surface-var);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+}
+
+.hint {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}

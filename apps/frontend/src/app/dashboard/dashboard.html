@@ -11,11 +11,20 @@
         @for (v of views; track v.path) {
           <a
             class="tab"
+            [class.icon-tab]="v.icon"
             role="tab"
             [routerLink]="'/' + v.path"
             routerLinkActive="active"
+            [attr.aria-label]="v.icon ? v.label : null"
+            [attr.title]="v.icon ? v.label : null"
           >
-            {{ v.label }}
+            @if (v.icon) {
+              <svg viewBox="0 0 24 24" fill-rule="evenodd" aria-hidden="true">
+                <path [attr.d]="v.icon" />
+              </svg>
+            } @else {
+              {{ v.label }}
+            }
           </a>
         }
       </nav>
