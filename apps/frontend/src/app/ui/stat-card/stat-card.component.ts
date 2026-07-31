@@ -1,8 +1,12 @@
 import { Component, computed, input } from '@angular/core';
-import { EM_DASH } from '../../core/stat-format';
 
 /** Which semantic the headline figure carries (colours the value and the dot). */
 export type StatAccent = 'solar' | 'import' | 'primary';
+
+// Mirrors core/stat-format's EM_DASH. Not imported from there: this component
+// is a presentational primitive under ui/ and stays free of any dependency on
+// app-specific formatting, same as its siblings (number-field, text-field, …).
+const EM_DASH = '–';
 
 /**
  * A headline figure with its unit, a caption underneath and room for detail

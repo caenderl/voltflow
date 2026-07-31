@@ -53,6 +53,17 @@ const BATTERY_EFFICIENCY = 0.9;
 const DARK_KWH = 0.05;
 
 /**
+ * Longest run of missing inverter hours still treated as provably dark. Long
+ * enough for a stuck Speedwire reconnect (the inverter drops its session
+ * several times a day, per the collector's own retry logic), nowhere near a
+ * day's daylight span — a longer run bounded by dark hours on both sides is
+ * far more likely to be a real outage that swallowed actual production than an
+ * unusually long night, and must stay unknown rather than being recorded as a
+ * measured zero.
+ */
+const MAX_FILLABLE_GAP_HOURS = 3;
+
+/**
  * Hours a day needs to count as complete. 23, not 24: the spring DST day has
  * one hour less, and a day that is short one hour would still be excluded from
  * the records for good reason if it were a real gap — this only tolerates the
@@ -133,27 +144,60 @@ export function computeStatistics(input: StatisticsInput): StatisticsResponse {
 }
 
 /**
- * Fill the PV gaps that are provably dark: an hour without inverter data whose
- * neighbouring hours both produced nothing sat in the middle of the night, and
- * night production is zero, not unknown.
+ * Fill the PV gaps that are provably dark: a run of hours without inverter
+ * data, bounded on both sides by hours that measured (near) nothing, sat in
+ * the middle of the night — night production is zero, not unknown.
  *
  * Worth the special case because the inverter is the flaky end of the chain —
- * it loses its Speedwire socket now and then — and without this a single
- * missed poll at 3 a.m. would throw away the whole day's records.
+ * it loses its Speedwire socket several times a day — and without this even a
+ * single missed poll at 3 a.m. would throw away the whole day's records.
+ *
+ * Capped at {@link MAX_FILLABLE_GAP_HOURS}: chaining unboundedly long runs is
+ * not safe the way a single hour is. Two dark hours on either end of the gap
+ * only prove darkness in between when the gap is short — stretched across an
+ * entire missing daylight span, "dark before and after" is exactly what a real
+ * outage that swallowed a whole day's production looks like too, and filling
+ * that with zero would record real, unmeasured generation as a confirmed
+ * zero-output day instead of leaving it unknown.
  */
 function fillDarkGaps(hours: HourEnergy[]): HourEnergy[] {
-  return hours.map((h, i) => {
-    if (h.pvKwh !== null) return h;
-    const before = hours[i - 1];
-    const after = hours[i + 1];
-    const dark = (n: HourEnergy | undefined): boolean =>
-      n !== undefined && n.pvKwh !== null && n.pvKwh < DARK_KWH;
-    if (!dark(before) || !dark(after)) return h;
-    // Only when those neighbours really are the adjacent hours — over a gap in
-    // the meter data too, "dark before and after" says nothing about between.
-    if (!adjacent(before, h) || !adjacent(h, after)) return h;
-    return { ...h, pvKwh: 0 };
-  });
+  const filled = [...hours];
+  const dark = (n: HourEnergy | undefined): boolean =>
+    n !== undefined && n.pvKwh !== null && n.pvKwh < DARK_KWH;
+
+  let i = 0;
+  while (i < filled.length) {
+    if (filled[i].pvKwh !== null) {
+      i++;
+      continue;
+    }
+    // Extend the run only across hours that are both missing and genuinely
+    // adjacent — a real gap in the meter data between two missing PV hours
+    // means they are not one continuous stretch of night.
+    let j = i;
+    while (
+      j + 1 < filled.length &&
+      filled[j + 1].pvKwh === null &&
+      adjacent(filled[j], filled[j + 1])
+    ) {
+      j++;
+    }
+
+    const before = filled[i - 1];
+    const after = filled[j + 1];
+    const short = j - i + 1 <= MAX_FILLABLE_GAP_HOURS;
+    if (
+      short &&
+      dark(before) &&
+      dark(after) &&
+      adjacent(before, filled[i]) &&
+      adjacent(filled[j], after)
+    ) {
+      for (let k = i; k <= j; k++) filled[k] = { ...filled[k], pvKwh: 0 };
+    }
+    i = j + 1;
+  }
+  return filled;
 }
 
 /** Whether `b` is the hour right after `a`. */
