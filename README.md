@@ -225,6 +225,7 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/sma/house-load?from&to` | Abgeleitete Hauslast-Zeitreihe (W) |
 | `GET /api/sma/balance?from&to` | Energiebilanz: Eigenverbrauch & Autarkie |
 | `GET /api/system/health` | Host-Health (Load/RAM/Disk) + Container-Liste (Admin-Tab „System", nicht persistiert) |
+| `GET /api/system/backups` | Backup-Status: lokale Dumps (Alter, Größe) + Off-Site-Repo aus `backups/status.json` |
 | WS-Event `reading` | Live-Messwert Smart Meter (~alle 5 s) |
 | WS-Event `wallbox-reading` | Live-Wallbox-Wert (~alle 30 s) |
 | WS-Event `sma-reading` | Live-SMA-Wert (~alle 60 s) |
@@ -267,7 +268,8 @@ stehen auskommentiert in `backup.env.example`). Einrichtung einmalig auf dem Ser
 
 ```bash
 # 1) restic + rclone installieren, Google-Drive-Remote einrichten
-sudo apt install restic rclone
+#    (jq schreibt am Ende jedes Laufs backups/status.json für den Admin-Tab)
+sudo apt install restic rclone jq
 rclone config          # neues Remote "gdrive" (Typ "drive"), OAuth durchklicken
 #   Empfohlen: eigene Google-OAuth-Client-ID (Drive-API aktivieren), sonst
 #   drosselt Google rclones geteilte Default-ID. Headless-Server:
@@ -300,6 +302,19 @@ Aggregate und Zeilenzahlen und räumt danach alles ab — Exit-Code 0 = verifizi
 ```bash
 COMPOSE_FILE=docker-compose.prod.yml ./scripts/verify-restore.sh
 ```
+
+**Backup-Status im Admin-Tab „System".** Die Karte „Backups" zeigt beide Stufen:
+Alter, Anzahl und Größenverlauf der lokalen Dumps sowie den letzten Off-Site-Lauf
+(Repo-Größe, Snapshots, `restic check`, Retention). Dafür zwei Dinge:
+
+- `docker-compose.prod.yml` mountet `./backups` read-only in den Backend-Container
+  (`BACKUP_DIR=/backups`); ohne den Mount bleibt die Karte leer.
+- `backup-offsite.sh` legt am Ende **jedes** Laufs `backups/status.json` ab — auch
+  bei einem Fehlschlag, dann mit `ok: false` und der gescheiterten Stufe. Das
+  Backend liest nur diese Datei: es hat weder restic noch das Repo-Passwort, und
+  eine Live-Abfrage ginge bei jedem Seitenaufruf übers Netz ins Cloud-Repo.
+  Benötigt `jq` auf dem Server; fehlt es, läuft das Backup normal weiter und nur
+  die Statusdatei entfällt.
 
 > **restic-Passwort sicher & separat aufbewahren** (Passwortmanager) — ohne das
 > Passwort ist das gesamte Repo unwiederherstellbar. Restore regelmäßig testen

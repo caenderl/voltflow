@@ -1,0 +1,52 @@
+<div class="backup-grid">
+  <!-- On-host dumps (scripts/backup.sh, nightly + rotation) -->
+  <article class="backup-panel">
+    <div class="panel-head">
+      <span class="panel-label">Lokale Dumps</span>
+      <span class="panel-value" [style.color]="localColor()">{{ localValue() }}</span>
+    </div>
+    <p class="panel-sub">{{ localSub() }}</p>
+    @if (hasLocal()) {
+      <div echarts [options]="localChart()" class="backup-spark"></div>
+    } @else {
+      <p class="empty">
+        Kein Zugriff auf das Backup-Verzeichnis. In Produktion wird
+        <code>./backups</code> read-only in den Backend-Container gemountet.
+      </p>
+    }
+  </article>
+
+  <!-- Off-site restic repo (status.json from scripts/backup-offsite.sh) -->
+  <article class="backup-panel">
+    <div class="panel-head">
+      <span class="panel-label">Off-Site (restic)</span>
+      <span class="panel-value" [style.color]="offsiteColor()">{{ offsiteValue() }}</span>
+    </div>
+    <p class="panel-sub">{{ offsiteSub() }}</p>
+
+    @if (offsite(); as o) {
+      <ul class="snapshot-list">
+        @for (s of latestSnapshots(); track s.id) {
+          <li class="snapshot-row">
+            <div class="snapshot-text">
+              <span class="snapshot-name">{{ snapshotLabel(s) }}</span>
+              <span class="snapshot-detail">{{ snapshotDetail(s) }}</span>
+            </div>
+            <span class="snapshot-time">{{ snapshotTime(s) }}</span>
+          </li>
+        }
+      </ul>
+      <p class="panel-foot">
+        <span>{{ repository() }}</span>
+        @if (retentionLabel()) {
+          <span>Aufbewahrung {{ retentionLabel() }}</span>
+        }
+      </p>
+    } @else {
+      <p class="empty">
+        Noch kein Off-Site-Status. Die Datei <code>backups/status.json</code> entsteht
+        beim nächsten nächtlichen Lauf von <code>scripts/backup-offsite.sh</code>.
+      </p>
+    }
+  </article>
+</div>

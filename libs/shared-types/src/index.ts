@@ -611,3 +611,90 @@ export interface SystemHealth {
   /** Empty when the Docker socket is unavailable/unreadable. */
   containers: ContainerStatus[];
 }
+
+// ---------------------------------------------------------------------------
+// Backups (admin "System" tab)
+// ---------------------------------------------------------------------------
+
+/** One rotated on-host database dump written by scripts/backup.sh. */
+export interface BackupDump {
+  /** File name, e.g. "voltflow-20260731-030001.sql.gz". */
+  file: string;
+  /**
+   * ISO timestamp the dump was written. Taken from the file's mtime, not from
+   * the name: the name carries the *host's* local time with no offset, which a
+   * container running in UTC would misread by the DST offset.
+   */
+  time: string;
+  sizeBytes: number;
+}
+
+/** The on-host dump tier (scripts/backup.sh + its KEEP rotation). */
+export interface LocalBackups {
+  /** Directory the dumps were read from (as seen by the backend). */
+  dir: string;
+  /** Dumps oldest first. */
+  dumps: BackupDump[];
+  /** Bytes all dumps occupy together. */
+  totalBytes: number;
+}
+
+/** One restic snapshot in the off-site repository. */
+export interface OffsiteSnapshot {
+  /** restic short id, e.g. "9dbe0ad6". */
+  id: string;
+  time: string;
+  /** First tag: "db" (the SQL dump) or "config" (.env + certs). */
+  tag: string;
+  /** Bytes restic read for this snapshot (the uncompressed dump). */
+  sizeBytes: number;
+  /** Bytes actually stored after dedup + compression. Null if unknown. */
+  addedBytes: number | null;
+  /** How long the snapshot took, in seconds. Null if unknown. */
+  durationSec: number | null;
+}
+
+/** GFS retention as configured in scripts/backup.env. */
+export interface OffsiteRetention {
+  daily: number;
+  weekly: number;
+  monthly: number;
+}
+
+/**
+ * Status of the off-site restic repository, written as `status.json` by
+ * scripts/backup-offsite.sh at the end of every run (success *and* failure).
+ * The backend only reads that file — it has neither restic nor the repo
+ * credentials, and a live query would go over the network to the cloud repo.
+ */
+export interface OffsiteStatus {
+  /** ISO timestamp of the run that produced this status. */
+  time: string;
+  /** False when the run aborted (backup, retention or check failed). */
+  ok: boolean;
+  /** Stage the run failed in, e.g. "backup" / "check". Null when ok. */
+  failedStage: string | null;
+  /** Verdict of the `restic check` that ran last. Null if it never got there. */
+  checkOk: boolean | null;
+  /** Repository location, e.g. "rclone:gdrive:voltflow-backups". */
+  repository: string;
+  /** Total repo size in bytes (restic stats). Null when unavailable. */
+  repoSizeBytes: number | null;
+  /** Snapshots in the repo across all tags. Null when unavailable. */
+  snapshotCount: number | null;
+  retention: OffsiteRetention | null;
+  /** The newest snapshot per tag plus recent history, oldest first. */
+  snapshots: OffsiteSnapshot[];
+}
+
+/**
+ * Both backup tiers, returned by GET /api/system/backups. Each tier is null
+ * when its source is unavailable (backup dir not mounted / off-site never ran),
+ * so a missing tier never fails the whole response.
+ */
+export interface BackupStatus {
+  /** ISO timestamp the snapshot was assembled. */
+  time: string;
+  local: LocalBackups | null;
+  offsite: OffsiteStatus | null;
+}

@@ -1,7 +1,8 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
-import type { SystemHealth } from '@org/shared-types';
+import type { BackupStatus, SystemHealth } from '@org/shared-types';
 import { SettingsCardComponent } from '../../ui/settings-card/settings-card.component';
 import { SystemApiService } from '../../core/system-api.service';
+import { SystemBackupsComponent } from './system-backups.component';
 import { SystemContainersComponent } from './system-containers.component';
 import { SystemMetricsComponent } from './system-metrics.component';
 
@@ -12,14 +13,19 @@ const POLL_MS = 10_000;
 
 /**
  * "System" section: polls host health and keeps a 10-minute rolling window in
- * memory (nothing is persisted). Renders live metric charts + the container
- * list. Polling starts on mount and stops when the tab is left (this component
- * is created/destroyed by the admin @switch).
+ * memory (nothing is persisted). Renders live metric charts, the container
+ * list and the backup status. Polling starts on mount and stops when the tab is
+ * left (this component is created/destroyed by the admin @switch).
  */
 @Component({
   selector: 'app-system-section',
   standalone: true,
-  imports: [SettingsCardComponent, SystemMetricsComponent, SystemContainersComponent],
+  imports: [
+    SettingsCardComponent,
+    SystemMetricsComponent,
+    SystemContainersComponent,
+    SystemBackupsComponent,
+  ],
   templateUrl: './system-section.component.html',
   styleUrl: './system-section.component.scss',
 })
@@ -35,10 +41,20 @@ export class SystemSectionComponent {
   readonly containers = computed(() => this.latest()?.containers ?? []);
   readonly uptime = computed(() => formatUptime(this.latest()?.uptimeSec ?? null));
 
+  /** Backups change once a night — fetched once on mount, not polled. */
+  readonly backups = signal<BackupStatus | null>(null);
+  readonly backupSubtitle = computed(() => {
+    const b = this.backups();
+    if (!b) return '';
+    const tiers = [b.local ? 'lokal' : null, b.offsite ? 'off-site' : null].filter(Boolean);
+    return tiers.length ? `${tiers.join(' + ')}` : 'keine Quelle verfügbar';
+  });
+
   constructor() {
     this.load();
     const id = setInterval(() => this.load(), POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(id));
+    this.api.backups().subscribe({ next: (b) => this.backups.set(b), error: () => undefined });
   }
 
   private load(): void {

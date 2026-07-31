@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import type { SystemHealth } from '@org/shared-types';
+import type { BackupStatus, SystemHealth } from '@org/shared-types';
 
 /** REST access to host health for the admin "System" tab (polled, not stored). */
 @Injectable({ providedIn: 'root' })
@@ -10,5 +10,10 @@ export class SystemApiService {
 
   health(): Observable<SystemHealth> {
     return this.http.get<SystemHealth>('/api/system/health');
+  }
+
+  /** Backup tiers (on-host dumps + off-site restic). Nightly data — fetch once. */
+  backups(): Observable<BackupStatus> {
+    return this.http.get<BackupStatus>('/api/system/backups');
   }
 }
