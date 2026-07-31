@@ -104,6 +104,25 @@ describe('computeStatistics', () => {
     expect(computeStatistics(input({ hours: gapAtNoon })).days).toBe(0);
   });
 
+  it('keeps a day whose inverter dropped out for a few hours overnight', () => {
+    const gapAtNight = day('2026-06-02', SUNNY, 1).map((h) =>
+      h.hour >= 1 && h.hour <= 3 ? { ...h, pvKwh: null } : h,
+    );
+    const s = computeStatistics(input({ hours: gapAtNight }));
+    expect(s.days).toBe(1);
+    expect(s.pv.bestDay?.kwh).toBe(6);
+  });
+
+  it('does not treat a whole missing daylight span as zero production', () => {
+    // Hours 1..22 missing — bounded by dark hours 0 and 23, but far too long
+    // to assume it was night. A real outage like this must stay unmeasured,
+    // not turn into a false "0 kWh" record.
+    const allDayGap = day('2026-06-02', SUNNY, 1).map((h) =>
+      h.hour >= 1 && h.hour <= 22 ? { ...h, pvKwh: null } : h,
+    );
+    expect(computeStatistics(input({ hours: allDayGap })).days).toBe(0);
+  });
+
   it('keeps a 23-hour day: that is the DST day, not a gap', () => {
     const dst = day('2026-03-29', 0, 1).filter((h) => h.hour !== 2);
     expect(computeStatistics(input({ hours: dst })).days).toBe(1);
