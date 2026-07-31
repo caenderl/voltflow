@@ -112,6 +112,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-voltflow}:${POSTGRES_PASSWORD:-voltflow}@db:5432/${POSTGRES_DB:-voltflow}
       PORT: 3000
+      # Where the backups volume below is mounted (System tab -> "Backups").
+      BACKUP_DIR: /backups
     # Admin "System" tab: read-only host monitoring. The container list is read
     # from the Docker socket; load/memory/disk come from /proc + statfs on the
     # overlay (which maps to the host disk). The socket is owned by root:docker,
@@ -125,6 +127,11 @@ services:
       - "${DOCKER_GID:-999}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # The dumps written by the backup cron jobs, read-only: the tab only ever
+      # stats the .gz files (never opens one) and reads the status.json that
+      # scripts/backup-offsite.sh leaves behind. Nothing here is a secret; the
+      # restic repo password lives in scripts/backup.env, which stays out.
+      - ./backups:/backups:ro
     depends_on:
       db:
         condition: service_healthy

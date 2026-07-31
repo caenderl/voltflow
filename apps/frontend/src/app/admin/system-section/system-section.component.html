@@ -14,5 +14,9 @@
     >
       <app-system-containers [containers]="containers()" />
     </app-settings-card>
+
+    <app-settings-card heading="Backups" [subtitle]="backupSubtitle()">
+      <app-system-backups [status]="backups()" />
+    </app-settings-card>
   </div>
 }
