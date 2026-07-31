@@ -26,6 +26,17 @@ function ago(hours: number | null): string {
   return `vor ${Math.round(hours / 24)} d`;
 }
 
+/** Display order + label for known tags — DB first (the important one), then
+ *  config; an unlisted tag would sort last instead of landing wherever its
+ *  name happens to fall alphabetically. */
+const TAG_LABELS: Record<string, string> = { db: 'Datenbank', config: 'Konfiguration' };
+const TAG_ORDER = Object.keys(TAG_LABELS);
+
+function tagRank(tag: string): number {
+  const i = TAG_ORDER.indexOf(tag);
+  return i === -1 ? TAG_ORDER.length : i;
+}
+
 /** Auto-scaled size: the config snapshots are kilobytes, the repo is megabytes. */
 function bytes(n: number): string {
   const [value, unit] =
@@ -122,11 +133,13 @@ export class SystemBackupsComponent {
       const seen = byTag.get(s.tag);
       if (!seen || s.time > seen.time) byTag.set(s.tag, s);
     }
-    return [...byTag.values()].sort((a, b) => a.tag.localeCompare(b.tag));
+    return [...byTag.values()].sort(
+      (a, b) => tagRank(a.tag) - tagRank(b.tag) || a.tag.localeCompare(b.tag),
+    );
   });
 
   snapshotLabel(s: OffsiteSnapshot): string {
-    return s.tag === 'db' ? 'Datenbank' : s.tag === 'config' ? 'Konfiguration' : s.tag;
+    return TAG_LABELS[s.tag] ?? s.tag;
   }
 
   /** "63,1 MB · 3,0 MB neu · 111 s" — what dedup actually saved that night. */

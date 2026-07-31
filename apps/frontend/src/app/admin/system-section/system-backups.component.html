@@ -24,7 +24,7 @@
     </div>
     <p class="panel-sub">{{ offsiteSub() }}</p>
 
-    @if (offsite(); as o) {
+    @if (offsite()) {
       <ul class="snapshot-list">
         @for (s of latestSnapshots(); track s.id) {
           <li class="snapshot-row">

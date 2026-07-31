@@ -19,3 +19,10 @@
     color: #ff8a80;
   }
 }
+
+/** Inline error for a single card's body (vs. .system-note, which is full-page). */
+.card-error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #ff8a80;
+}

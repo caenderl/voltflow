@@ -16,7 +16,11 @@
     </app-settings-card>
 
     <app-settings-card heading="Backups" [subtitle]="backupSubtitle()">
-      <app-system-backups [status]="backups()" />
+      @if (backupsError()) {
+        <p class="card-error">Backup-Status konnte nicht geladen werden.</p>
+      } @else {
+        <app-system-backups [status]="backups()" />
+      }
     </app-settings-card>
   </div>
 }
