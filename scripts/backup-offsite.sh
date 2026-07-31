@@ -75,7 +75,10 @@ write_status() {
   [ -n "$stats" ] || stats="{}"
 
   tmp="$STATUS_FILE.part"
-  mkdir -p "$(dirname "$STATUS_FILE")"
+  # Guarded like everything else here: under `set -e` an unguarded failure
+  # would abort the whole script mid-function, and when called from on_error
+  # that means the fail ping never fires — the one thing this must not skip.
+  mkdir -p "$(dirname "$STATUS_FILE")" || true
   # Written to a temp file and moved into place so the backend never reads a
   # half-written file.
   if jq -n \

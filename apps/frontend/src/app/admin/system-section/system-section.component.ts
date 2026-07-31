@@ -43,6 +43,8 @@ export class SystemSectionComponent {
 
   /** Backups change once a night — fetched once on mount, not polled. */
   readonly backups = signal<BackupStatus | null>(null);
+  /** Distinct from "no tier configured yet": the request itself failed. */
+  readonly backupsError = signal(false);
   readonly backupSubtitle = computed(() => {
     const b = this.backups();
     if (!b) return '';
@@ -54,7 +56,13 @@ export class SystemSectionComponent {
     this.load();
     const id = setInterval(() => this.load(), POLL_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(id));
-    this.api.backups().subscribe({ next: (b) => this.backups.set(b), error: () => undefined });
+    this.api.backups().subscribe({
+      next: (b) => {
+        this.backupsError.set(false);
+        this.backups.set(b);
+      },
+      error: () => this.backupsError.set(true),
+    });
   }
 
   private load(): void {
