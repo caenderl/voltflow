@@ -210,6 +210,11 @@ function wattLabel(v: number): string {
  * feed-in green below 0). No tooltip; a faint zero line marks the import/export
  * boundary. The y-axis auto-scales to the data so the magnitude is readable.
  * The time axis is fixed to [min, max] so the window stays constant.
+ *
+ * Unanimated: the option object is rebuilt for every incoming reading and
+ * applied whole (notMerge), so ECharts would replay its entrance animation each
+ * time — the line twitches instead of scrolling. Drawing straight lets the
+ * window just slide left by one sample per update.
  */
 export function liveSparkChart(
   meter: [string, number][],
@@ -229,6 +234,7 @@ export function liveSparkChart(
     data: d,
   });
   return {
+    animation: false,
     grid: { left: 46, right: 12, top: 10, bottom: 6 },
     xAxis: { type: 'time', show: false, min: opts.min, max: opts.max },
     yAxis: {

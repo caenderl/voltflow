@@ -212,4 +212,9 @@ describe('liveSparkChart', () => {
     expect(xAxis.min).toBe('A');
     expect(xAxis.max).toBe('B');
   });
+
+  // Re-applied whole on every reading, so any animation replays as a twitch.
+  it('is unanimated', () => {
+    expect(liveSparkChart(data).animation).toBe(false);
+  });
 });
