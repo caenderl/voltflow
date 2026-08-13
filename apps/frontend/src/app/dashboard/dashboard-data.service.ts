@@ -43,6 +43,9 @@ export const LIVE_WINDOW_MIN = 10;
 export const LIVE_WINDOW_MS = LIVE_WINDOW_MIN * 60 * 1000;
 
 const TODAY_REFRESH_MS = 5 * 60 * 1000;
+/** At most one live resync per this interval, so flipping between tabs cannot
+ *  turn into a request per switch. */
+const RESUME_THROTTLE_MS = 30 * 1000;
 const LOAD_ERROR = 'Daten konnten nicht geladen werden (Backend erreichbar?).';
 
 /**
@@ -105,6 +108,8 @@ export class DashboardDataService {
   readonly error = signal<string | null>(null);
 
   private started = false;
+  /** When the live window was last (re)fetched — see resumeLive's throttle. */
+  private lastLiveSync = 0;
 
   /** Connect live streams and load the initial data. Idempotent. */
   start(): void {
@@ -124,6 +129,12 @@ export class DashboardDataService {
     });
     this.live.wallboxReadings$().subscribe((w) => this.wallbox.set(w));
     this.live.smaReadings$().subscribe((s) => this.sma.set(s));
+    this.live.reconnects$().subscribe(() => this.resumeLive());
+    // A backgrounded tab / PWA is suspended without the socket necessarily
+    // dropping, so becoming visible again is its own resume trigger.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') this.resumeLive();
+    });
 
     this.loadInto(this.meterApi.range(), (r) => this.dataRange.set(r));
     this.loadTariffPeriods();
@@ -370,9 +381,31 @@ export class DashboardDataService {
     );
   }
 
+  /**
+   * Resync after a gap in the live stream (app was in the background, socket
+   * dropped). No readings arrive while suspended, and `appendWindowed` trims
+   * the buffer relative to its NEWEST point — so the first reading after the
+   * gap (the gateway emits one on every connect) drops everything older than
+   * the window around it and the hero chart collapses to a sliver at the right
+   * edge until it slowly refills. Refetching the window restores it at once.
+   *
+   * Deliberately not conditional on how stale the buffer looks: the gateway
+   * emits the latest reading to every connecting client, and if that lands
+   * before this runs the buffer would look perfectly fresh while being exactly
+   * one point wide. Only a throttle guards it.
+   */
+  private resumeLive(): void {
+    if (Date.now() - this.lastLiveSync < RESUME_THROTTLE_MS) return;
+    this.backfillLive();
+    // The refresh interval is throttled/frozen while suspended too, so today's
+    // Bezug/Einspeisung can be just as stale as the chart.
+    this.loadToday();
+  }
+
   /** Seed the live buffers with the last window of data so the hero chart is
    *  populated immediately instead of filling up over time. */
   private backfillLive(): void {
+    this.lastLiveSync = Date.now();
     const to = new Date();
     const from = new Date(to.getTime() - LIVE_WINDOW_MS);
     this.loadInto(this.meterApi.series(from, to, 'raw'), (s) => {

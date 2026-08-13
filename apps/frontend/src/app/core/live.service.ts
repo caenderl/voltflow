@@ -34,6 +34,20 @@ export class LiveService {
     return this.on<SmaReading>(SMA_READING_EVENT);
   }
 
+  /**
+   * Emits each time the socket comes back after a drop (backgrounded app,
+   * network blip). Everything in between is missing from the live stream, so
+   * subscribers use this to refetch what they buffer.
+   */
+  reconnects$(): Observable<void> {
+    return new Observable<void>((subscriber) => {
+      const manager = this.conn.io;
+      const handler = () => subscriber.next();
+      manager.on('reconnect', handler);
+      return () => manager.off('reconnect', handler);
+    });
+  }
+
   private on<T>(event: string): Observable<T> {
     return new Observable<T>((subscriber) => {
       const socket = this.conn;
