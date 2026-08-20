@@ -203,7 +203,7 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 
 | Endpoint | Beschreibung |
 |----------|--------------|
-| `GET /api/meter/latest` | Letzter Messwert |
+| `GET /api/meter/latest?deviceSn` | Letzter Messwert (ohne `deviceSn`: neuester über alle Zähler) |
 | `GET /api/meter/series?from&to&resolution=raw\|1min\|1hour\|1day` | Leistungs-Zeitreihe |
 | `GET /api/meter/energy?period=day\|week\|month&date=YYYY-MM-DD` | kWh-Bezug/Einspeisung |
 | `GET /api/meter/range` | Verfügbarer Datenzeitraum |
@@ -214,12 +214,12 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/statistics` | Rekorde über den gesamten Bestand: PV-/Verbrauchsspitzen, Grundlast, Speicher-Dimensionierung |
 | `GET` / `PUT /api/app-settings` | Globale Anzeige-Einstellungen (z. B. Kalibrierung auf den Zählerstand) |
 | `GET` / `PUT /api/wallbox/config` | Wallbox-Verbindung (Name, IP, Port, Unit-ID, Intervall, an/aus) |
-| `GET /api/wallbox/latest` | Letzter Wallbox-Messwert |
+| `GET /api/wallbox/latest?deviceSn` | Letzter Wallbox-Messwert (ohne `deviceSn`: neuester über alle Wallboxen) |
 | `GET /api/wallbox/history?from&to` | Rohe Wallbox-Messwerte |
 | `GET /api/wallbox/energy/daily?from&to` | Geladene Energie pro Tag (kWh) |
 | `GET /api/wallbox/energy/hourly?from&to` | Geladene Energie pro Stunde (kWh, Tagesansicht) |
 | `GET` / `PUT /api/sma/config` | SMA-Verbindung (Name, IP, Intervall, an/aus) |
-| `GET /api/sma/latest` | Letzter SMA-Messwert |
+| `GET /api/sma/latest?deviceSn` | Letzter SMA-Messwert (ohne `deviceSn`: neuester über alle Wechselrichter) |
 | `GET /api/sma/history?from&to` | Rohe SMA-Messwerte |
 | `GET /api/sma/energy/daily?from&to` | PV-Ertrag pro Tag (kWh) |
 | `GET /api/sma/power/minute?from&to` | PV-Leistung pro Minute (W, Tagesansicht) |

@@ -486,6 +486,43 @@ const MIGRATIONS: { name: string; sql: string }[] = [
     sql: `ALTER TABLE tariff_period
             ADD COLUMN IF NOT EXISTS base_eur_per_year DOUBLE PRECISION`,
   },
+  {
+    // Rebuild of 036: both source caggs are grouped by (device_sn, bucket), so
+    // joining them on the bucket alone multiplies rows as soon as a second
+    // meter or a second inverter exists - every meter row would match every
+    // inverter row of the same minute and the house load would be counted
+    // twice over. Each side is now summed to one row per bucket BEFORE the
+    // join, which is a no-op with today's single device pair.
+    //
+    // Extension point (storage): a battery adds two terms to the same shape -
+    //   house = PV + import - export + discharge - charge
+    // i.e. one more CTE summed per bucket, LEFT JOINed like `pv`, with its two
+    // columns folded into house_power. CREATE OR REPLACE keeps the existing
+    // column list, so new columns may only be appended.
+    name: '048-house-load-view-per-bucket',
+    sql: `CREATE OR REPLACE VIEW house_load_1min AS
+          WITH grid AS (
+            SELECT bucket,
+                   sum(grid_to_home_power_avg) AS grid_import,
+                   sum(pv_to_grid_power_avg)   AS grid_export
+              FROM meter_1min
+             GROUP BY bucket
+          ), pv AS (
+            SELECT bucket, sum(grid_power_avg) AS pv_power
+              FROM sma_1min
+             GROUP BY bucket
+          )
+          SELECT
+            g.bucket                       AS bucket,
+            COALESCE(p.pv_power, 0)        AS pv_power,
+            g.grid_import                  AS grid_import,
+            g.grid_export                  AS grid_export,
+            COALESCE(p.pv_power, 0)
+              + COALESCE(g.grid_import, 0)
+              - COALESCE(g.grid_export, 0) AS house_power
+          FROM grid g
+          LEFT JOIN pv p ON p.bucket = g.bucket`,
+  },
 ];
 
 export async function applyMigrations(

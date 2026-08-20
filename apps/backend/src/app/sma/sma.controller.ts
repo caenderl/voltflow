@@ -41,9 +41,14 @@ export class SmaController {
     return this.sma.saveConfig(config);
   }
 
+  /**
+   * Latest reading. `deviceSn` picks one device; without it the newest reading
+   * across all devices of this kind is returned (unambiguous while there is
+   * exactly one).
+   */
   @Get('latest')
-  latest(): Promise<SmaReading | null> {
-    return this.sma.latest();
+  latest(@Query('deviceSn') deviceSn?: string): Promise<SmaReading | null> {
+    return this.sma.latest(deviceSn);
   }
 
   @Get('range')

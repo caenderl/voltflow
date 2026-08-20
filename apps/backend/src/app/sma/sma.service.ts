@@ -70,9 +70,14 @@ export class SmaService
     return this.config.save(c);
   }
 
-  async latest(): Promise<SmaReading | null> {
+  async latest(deviceSn?: string): Promise<SmaReading | null> {
     const { rows } = await this.db.query(
-      `SELECT ${READING_COLUMNS} FROM sma_readings ORDER BY time DESC LIMIT 1`,
+      `SELECT ${READING_COLUMNS}
+         FROM sma_readings
+        WHERE ($1::text IS NULL OR device_sn = $1)
+        ORDER BY time DESC
+        LIMIT 1`,
+      [deviceSn || null],
     );
     return rows.length ? rowToSmaReading(rows[0]) : null;
   }
@@ -134,12 +139,17 @@ export class SmaService
    * writing asleep snapshots), not "no data", so no delta/gap logic is
    * needed here; a missing bucket (collector down) is simply absent from
    * the result and left for the caller to render as a gap.
+   *
+   * Summed across devices (the cagg is grouped by device_sn): the series is
+   * the site's PV power, so a second inverter adds to the same minute instead
+   * of emitting a second point for it.
    */
   async minutePower(from: Date, to: Date): Promise<SmaMinutePower[]> {
     const { rows } = await this.db.query(
-      `SELECT bucket, grid_power_avg
+      `SELECT bucket, sum(grid_power_avg) AS grid_power_avg
          FROM sma_1min
         WHERE bucket >= $1 AND bucket < $2
+        GROUP BY bucket
         ORDER BY bucket`,
       [from, to],
     );
@@ -169,19 +179,32 @@ export class SmaService
    * Energy balance over [from, to): PV production (SMA total_yield delta) vs.
    * grid import/export (meter counter deltas), yielding self-consumption and
    * self-sufficiency (autarky).
+   *
+   * Every counter delta is taken PER DEVICE and only then summed - the same
+   * shape dailyEnergy() uses. A plain max() - min() over all rows would, with
+   * two inverters, subtract the smaller device's counter from the larger one's
+   * and report a production figure belonging to neither.
    */
   async balance(from: Date, to: Date): Promise<EnergyBalance> {
     const { rows: pv } = await this.db.query(
-      `SELECT max(total_yield_kwh) - min(total_yield_kwh) AS production_kwh
-         FROM sma_readings
-        WHERE time >= $1 AND time < $2`,
+      `SELECT sum(dev_yield) AS production_kwh
+         FROM (
+           SELECT max(total_yield_kwh) - min(total_yield_kwh) AS dev_yield
+             FROM sma_readings
+            WHERE time >= $1 AND time < $2
+            GROUP BY device_sn
+         ) d`,
       [from, to],
     );
     const { rows: grid } = await this.db.query(
-      `SELECT max(grid_import_energy) - min(grid_import_energy) AS import_kwh,
-              max(grid_export_energy) - min(grid_export_energy) AS export_kwh
-         FROM meter_reading
-        WHERE time >= $1 AND time < $2`,
+      `SELECT sum(dev_import) AS import_kwh, sum(dev_export) AS export_kwh
+         FROM (
+           SELECT max(grid_import_energy) - min(grid_import_energy) AS dev_import,
+                  max(grid_export_energy) - min(grid_export_energy) AS dev_export
+             FROM meter_reading
+            WHERE time >= $1 AND time < $2
+            GROUP BY device_sn
+         ) d`,
       [from, to],
     );
 

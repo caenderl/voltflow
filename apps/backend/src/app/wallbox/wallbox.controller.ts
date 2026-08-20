@@ -42,9 +42,14 @@ export class WallboxController {
     return this.wallbox.saveConfig(config);
   }
 
+  /**
+   * Latest reading. `deviceSn` picks one device; without it the newest reading
+   * across all devices of this kind is returned (unambiguous while there is
+   * exactly one).
+   */
   @Get('latest')
-  latest(): Promise<WallboxReading | null> {
-    return this.wallbox.latest();
+  latest(@Query('deviceSn') deviceSn?: string): Promise<WallboxReading | null> {
+    return this.wallbox.latest(deviceSn);
   }
 
   @Get('range')
