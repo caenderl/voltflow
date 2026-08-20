@@ -11,7 +11,28 @@
   font-size: 0.9rem;
 }
 
+// One row per pair of readings, so the list grows for as long as the meter is
+// read. It is capped at roughly three intervals; the header and the Gesamt row
+// are pinned, because the totals are the answer this table exists to give and
+// must never be the thing you have to scroll for.
+.table-scroll {
+  --rows-visible: 3;
+  // Measured. Taller than the checkpoint rows because each carries a second
+  // line (the read-at times) under the period.
+  --row-h: 3.625rem;
+  --head-h: 3rem;
+  --foot-h: 3.5625rem;
+
+  max-height: calc(var(--head-h) + var(--rows-visible) * var(--row-h) + var(--foot-h));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .reconciliation-table {
+  // Height of the first header row - the offset the second row pins at, so the
+  // two stack flush instead of overlapping.
+  --group-h: 1.375rem;
+
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
@@ -24,7 +45,23 @@
     letter-spacing: 0.04em;
     color: var(--muted);
     padding: 0 0.75rem 0.6rem;
-    border-bottom: 1px solid var(--outline);
+    // Sticky rather than a border for the same reason as the rule below: with
+    // border-collapse the collapsed border belongs to the table grid, not to
+    // the stuck cell, and scrolls out from under it.
+    position: sticky;
+    z-index: 2;
+    background: var(--surface-3);
+  }
+
+  // Two header rows: the group labels pin to the top, the column labels pin
+  // directly under them.
+  thead tr:first-child th {
+    top: 0;
+  }
+
+  thead tr:nth-child(2) th {
+    top: var(--group-h);
+    box-shadow: inset 0 -1px 0 var(--outline);
   }
 
   th.group-head {
@@ -63,8 +100,14 @@
     color: var(--muted);
   }
 
+  // Always visible: the totals are what the table is read for, so they stay
+  // pinned to the bottom of the scroll box while the intervals move past.
   tfoot td {
-    border-top: 1px solid var(--outline);
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--surface-3);
+    box-shadow: inset 0 1px 0 var(--outline);
     border-bottom: none;
     font-weight: 500;
   }

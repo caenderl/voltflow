@@ -7,114 +7,116 @@
       <p class="verdict">{{ v }}</p>
     }
 
-    <table class="reconciliation-table">
-      <thead>
-        <tr>
-          <th rowspan="2" class="period-col">Zeitraum</th>
-          <th rowspan="2" class="num">Tage</th>
-          <th colspan="3" class="group-head">Bezug</th>
-          <th colspan="3" class="group-head">Einspeisung</th>
-        </tr>
-        <tr>
-          <th class="num">Zähler</th>
-          <th class="num">SmartMeter</th>
-          <th class="num">Abweichung</th>
-          <th class="num">Zähler</th>
-          <th class="num">SmartMeter</th>
-          <th class="num">Abweichung</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- Tracked by position: the list is recomputed as a whole on every
-             load, and duplicate checkpoint dates would collide on a date key. -->
-        @for (i of intervals(); track $index) {
-          <tr [class.skipped]="i.status !== 'ok'">
-            <td class="period-col">
-              {{ i.fromDate | date: 'dd.MM.yy' }} – {{ i.toDate | date: 'dd.MM.yy' }}
-              @if (i.status !== 'ok') {
-                <span class="badge" [title]="statusHint(i.status)">
-                  {{ i.status === 'no-data' ? 'keine Daten' : 'Zählersprung' }}
-                </span>
-              }
-              <!-- The SmartMeter value rests on a bucket up to 3 h off the
-                   reading time (a data gap) — the deviation is only approximate. -->
-              @if (i.approximate) {
-                <span class="badge" [title]="approxHint">≈ ungefähr</span>
-              }
-              <!-- The anchor the SmartMeter was read at, not decoration: it is
-                   what a surprising deviation has to be judged against. -->
-              <span class="read-at">{{ i.fromReadAt }} – {{ i.toReadAt }} Uhr</span>
-            </td>
-            <td class="num">{{ i.days }}</td>
-
-            <td class="num">{{ i.meterImportKwh | number: '1.1-1' }}</td>
-            <td class="num">
-              {{ i.smartImportKwh !== null ? (i.smartImportKwh | number: '1.1-1') : '–' }}
-            </td>
-            <td class="num deviation">
-              @if (i.importDeviationKwh !== null) {
-                {{ i.importDeviationKwh > 0 ? '+' : '' }}{{ i.importDeviationKwh | number: '1.1-1' }}
-                <span class="pct">
-                  {{ i.importDeviationPct !== null ? (i.importDeviationPct | number: '1.2-2') + ' %' : '' }}
-                </span>
-              } @else {
-                –
-              }
-            </td>
-
-            <td class="num">{{ i.meterExportKwh | number: '1.1-1' }}</td>
-            <td class="num">
-              {{ i.smartExportKwh !== null ? (i.smartExportKwh | number: '1.1-1') : '–' }}
-            </td>
-            <td class="num deviation">
-              @if (i.exportDeviationKwh !== null) {
-                {{ i.exportDeviationKwh > 0 ? '+' : '' }}{{ i.exportDeviationKwh | number: '1.1-1' }}
-                <span class="pct">
-                  {{ i.exportDeviationPct !== null ? (i.exportDeviationPct | number: '1.2-2') + ' %' : '' }}
-                </span>
-              } @else {
-                –
-              }
-            </td>
-          </tr>
-        }
-      </tbody>
-
-      @if (totals(); as t) {
-        <tfoot>
+    <div class="table-scroll">
+      <table class="reconciliation-table">
+        <thead>
           <tr>
-            <td class="period-col">
-              Gesamt
-              <span class="foot-note">
-                {{ t.intervalCount }} {{ t.intervalCount === 1 ? 'Zeitraum' : 'Zeiträume' }}
-                @if (t.skippedCount > 0) {
-                  · {{ t.skippedCount }} übersprungen
-                }
-              </span>
-            </td>
-            <td class="num">{{ t.days }}</td>
-
-            <td class="num">{{ t.meterImportKwh | number: '1.1-1' }}</td>
-            <td class="num">{{ t.smartImportKwh | number: '1.1-1' }}</td>
-            <td class="num deviation">
-              {{ t.importDeviationKwh > 0 ? '+' : '' }}{{ t.importDeviationKwh | number: '1.1-1' }}
-              <span class="pct">
-                {{ t.importDeviationPct !== null ? (t.importDeviationPct | number: '1.2-2') + ' %' : '' }}
-              </span>
-            </td>
-
-            <td class="num">{{ t.meterExportKwh | number: '1.1-1' }}</td>
-            <td class="num">{{ t.smartExportKwh | number: '1.1-1' }}</td>
-            <td class="num deviation">
-              {{ t.exportDeviationKwh > 0 ? '+' : '' }}{{ t.exportDeviationKwh | number: '1.1-1' }}
-              <span class="pct">
-                {{ t.exportDeviationPct !== null ? (t.exportDeviationPct | number: '1.2-2') + ' %' : '' }}
-              </span>
-            </td>
+            <th rowspan="2" class="period-col">Zeitraum</th>
+            <th rowspan="2" class="num">Tage</th>
+            <th colspan="3" class="group-head">Bezug</th>
+            <th colspan="3" class="group-head">Einspeisung</th>
           </tr>
-        </tfoot>
-      }
-    </table>
+          <tr>
+            <th class="num">Zähler</th>
+            <th class="num">SmartMeter</th>
+            <th class="num">Abweichung</th>
+            <th class="num">Zähler</th>
+            <th class="num">SmartMeter</th>
+            <th class="num">Abweichung</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Tracked by position: the list is recomputed as a whole on every
+               load, and duplicate checkpoint dates would collide on a date key. -->
+          @for (i of intervals(); track $index) {
+            <tr [class.skipped]="i.status !== 'ok'">
+              <td class="period-col">
+                {{ i.fromDate | date: 'dd.MM.yy' }} – {{ i.toDate | date: 'dd.MM.yy' }}
+                @if (i.status !== 'ok') {
+                  <span class="badge" [title]="statusHint(i.status)">
+                    {{ i.status === 'no-data' ? 'keine Daten' : 'Zählersprung' }}
+                  </span>
+                }
+                <!-- The SmartMeter value rests on a bucket up to 3 h off the
+                     reading time (a data gap) — the deviation is only approximate. -->
+                @if (i.approximate) {
+                  <span class="badge" [title]="approxHint">≈ ungefähr</span>
+                }
+                <!-- The anchor the SmartMeter was read at, not decoration: it is
+                     what a surprising deviation has to be judged against. -->
+                <span class="read-at">{{ i.fromReadAt }} – {{ i.toReadAt }} Uhr</span>
+              </td>
+              <td class="num">{{ i.days }}</td>
+
+              <td class="num">{{ i.meterImportKwh | number: '1.1-1' }}</td>
+              <td class="num">
+                {{ i.smartImportKwh !== null ? (i.smartImportKwh | number: '1.1-1') : '–' }}
+              </td>
+              <td class="num deviation">
+                @if (i.importDeviationKwh !== null) {
+                  {{ i.importDeviationKwh > 0 ? '+' : '' }}{{ i.importDeviationKwh | number: '1.1-1' }}
+                  <span class="pct">
+                    {{ i.importDeviationPct !== null ? (i.importDeviationPct | number: '1.2-2') + ' %' : '' }}
+                  </span>
+                } @else {
+                  –
+                }
+              </td>
+
+              <td class="num">{{ i.meterExportKwh | number: '1.1-1' }}</td>
+              <td class="num">
+                {{ i.smartExportKwh !== null ? (i.smartExportKwh | number: '1.1-1') : '–' }}
+              </td>
+              <td class="num deviation">
+                @if (i.exportDeviationKwh !== null) {
+                  {{ i.exportDeviationKwh > 0 ? '+' : '' }}{{ i.exportDeviationKwh | number: '1.1-1' }}
+                  <span class="pct">
+                    {{ i.exportDeviationPct !== null ? (i.exportDeviationPct | number: '1.2-2') + ' %' : '' }}
+                  </span>
+                } @else {
+                  –
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+
+        @if (totals(); as t) {
+          <tfoot>
+            <tr>
+              <td class="period-col">
+                Gesamt
+                <span class="foot-note">
+                  {{ t.intervalCount }} {{ t.intervalCount === 1 ? 'Zeitraum' : 'Zeiträume' }}
+                  @if (t.skippedCount > 0) {
+                    · {{ t.skippedCount }} übersprungen
+                  }
+                </span>
+              </td>
+              <td class="num">{{ t.days }}</td>
+
+              <td class="num">{{ t.meterImportKwh | number: '1.1-1' }}</td>
+              <td class="num">{{ t.smartImportKwh | number: '1.1-1' }}</td>
+              <td class="num deviation">
+                {{ t.importDeviationKwh > 0 ? '+' : '' }}{{ t.importDeviationKwh | number: '1.1-1' }}
+                <span class="pct">
+                  {{ t.importDeviationPct !== null ? (t.importDeviationPct | number: '1.2-2') + ' %' : '' }}
+                </span>
+              </td>
+
+              <td class="num">{{ t.meterExportKwh | number: '1.1-1' }}</td>
+              <td class="num">{{ t.smartExportKwh | number: '1.1-1' }}</td>
+              <td class="num deviation">
+                {{ t.exportDeviationKwh > 0 ? '+' : '' }}{{ t.exportDeviationKwh | number: '1.1-1' }}
+                <span class="pct">
+                  {{ t.exportDeviationPct !== null ? (t.exportDeviationPct | number: '1.2-2') + ' %' : '' }}
+                </span>
+              </td>
+            </tr>
+          </tfoot>
+        }
+      </table>
+    </div>
 
     <p class="hint-sm">
       Alle Werte in kWh. Verglichen werden die Differenzen der Zählwerke, nicht die Momentanwerte —
