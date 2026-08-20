@@ -64,7 +64,12 @@ _POWER_FIELDS = (
 # just grid_power - a single dropped Speedwire UDP read can leave grid_power
 # missing on an otherwise-normal read where pv_power_a/b came through fine,
 # which is a lossy read, not the inverter actually asleep.
-_PRODUCTION_FIELDS = ("grid_power", "pv_power_a", "pv_power_b")
+#
+# Public because collector._apply_daily_carry gates the daily_yield carry on
+# the same definition of "did it produce?". Two copies would silently drift the
+# moment a field is added here, which is exactly the bug that gate was written
+# to close.
+PRODUCTION_FIELDS = ("grid_power", "pv_power_a", "pv_power_b")
 
 # A failed read is retried this many times (immediately) before it counts as a
 # failed cycle - most Speedwire read losses are transient and recover at once.
@@ -191,7 +196,7 @@ def _has_production(values: dict | None) -> bool:
     """
     if values is None:
         return False
-    return any(values.get(f) is not None for f in _PRODUCTION_FIELDS)
+    return any(values.get(f) is not None for f in PRODUCTION_FIELDS)
 
 
 def _yield_advanced(base: float | None, current: float | None) -> bool:

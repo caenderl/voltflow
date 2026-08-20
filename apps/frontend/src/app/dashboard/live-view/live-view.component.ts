@@ -12,6 +12,8 @@ export interface FlowState {
   mode: FlowMode;
   watts: number;
   charging: boolean;
+  /** No fresh meter reading in a while — the figure below is not current. */
+  stale: boolean;
 }
 
 @Component({

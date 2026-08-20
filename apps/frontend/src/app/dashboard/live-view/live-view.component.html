@@ -21,9 +21,13 @@
   <div class="state-label">
     {{ flow().mode === 'export' ? 'Überschuss' : flow().mode === 'import' ? 'Netzbezug' : 'Ausgeglichen' }}
   </div>
-  <div class="big-watts">{{ flow().watts | number }}<span>W</span></div>
+  <div class="big-watts" [class.stale]="flow().stale">{{ flow().watts | number }}<span>W</span></div>
 
-  @if (flow().charging) {
+  @if (flow().stale) {
+    <div class="charge-pill stale" title="Der Smart Meter meldet seit einer Weile nichts">
+      Veraltet — keine aktuellen Messwerte
+    </div>
+  } @else if (flow().charging) {
     <div class="charge-pill ok">✓ genug zum Laden</div>
   }
 

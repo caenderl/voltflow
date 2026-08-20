@@ -81,6 +81,11 @@
   background-clip: text;
   color: transparent;
 
+  // A reading that is no longer current should not look like a live one.
+  &.stale {
+    opacity: 0.45;
+  }
+
   span {
     font-size: 2rem;
     font-weight: 500;
@@ -104,6 +109,12 @@
     background: color-mix(in srgb, var(--export) 22%, transparent);
     color: var(--export);
     border-color: color-mix(in srgb, var(--export) 50%, transparent);
+  }
+
+  &.stale {
+    background: color-mix(in srgb, var(--solar) 18%, transparent);
+    color: var(--solar);
+    border-color: color-mix(in srgb, var(--solar) 45%, transparent);
   }
 }
 

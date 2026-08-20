@@ -109,9 +109,15 @@ export class MeterCheckpointService {
            -- single device) - not a plain ORDER BY bucket DESC LIMIT 1 across
            -- devices, which would pick an arbitrary device once a second one
            -- shares the same latest bucket.
+           --
+           -- min(bucket), not max(): the sum is only as fresh as its OLDEST
+           -- contributor, so a second meter that stopped reporting hours ago
+           -- must make the whole comparison count as stale. max() would let a
+           -- current meter mask it and present a mixed-freshness total as an
+           -- exact match against the hand-read checkpoint.
            SELECT sum(grid_import_energy) AS grid_import_energy,
                   sum(grid_export_energy) AS grid_export_energy,
-                  max(bucket)             AS bucket
+                  min(bucket)             AS bucket
              FROM (
                SELECT DISTINCT ON (device_sn)
                       device_sn, bucket, grid_import_energy, grid_export_energy

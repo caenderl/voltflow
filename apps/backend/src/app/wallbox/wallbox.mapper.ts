@@ -11,6 +11,7 @@ export function rowToWallboxReading(row: Record<string, unknown>): WallboxReadin
     activePowerW: numOrNull(row['active_power_w']),
     sessionEnergyWh: numOrNull(row['session_energy_wh']),
     sessionDurationS: numOrNull(row['session_duration_s']),
+    energyWh: numOrNull(row['energy_wh']),
     l1CurrentA: numOrNull(row['l1_current_a']),
     l2CurrentA: numOrNull(row['l2_current_a']),
     l3CurrentA: numOrNull(row['l3_current_a']),

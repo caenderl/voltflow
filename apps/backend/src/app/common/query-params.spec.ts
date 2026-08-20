@@ -46,6 +46,11 @@ describe('parseIntInRange', () => {
     expect(parseIntInRange('', 'port', 1, 65535, 502)).toBe(502);
   });
 
+  it('rejects an absent value when no fallback is given', () => {
+    expect(() => parseIntInRange(undefined, 'year', 2000, 2100)).toThrow(BadRequestException);
+    expect(() => parseIntInRange('', 'year', 2000, 2100)).toThrow(BadRequestException);
+  });
+
   it('rejects out-of-range and non-integer values', () => {
     expect(() => parseIntInRange(0, 'port', 1, 65535, 502)).toThrow(BadRequestException);
     expect(() => parseIntInRange(70000, 'port', 1, 65535, 502)).toThrow(BadRequestException);

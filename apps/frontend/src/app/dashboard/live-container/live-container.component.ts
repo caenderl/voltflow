@@ -2,7 +2,7 @@ import { Component, computed, inject } from '@angular/core';
 import { WALLBOX_STATUS_LABELS } from '@org/shared-types';
 import { liveSparkChart, netWatts } from '../../core/chart-utils';
 import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
-import { clockTick } from '../../core/clock';
+import { ClockService } from '../../core/clock.service';
 import { DashboardDataService, LIVE_WINDOW_MS } from '../dashboard-data.service';
 import { LiveViewComponent, type FlowState } from '../live-view/live-view.component';
 import type { SmaState } from '../sma-card/sma-card.component';
@@ -20,9 +20,12 @@ const CHARGE_THRESHOLD_W = 1400;
 const STALE_INTERVAL_FACTOR = 3;
 const MIN_STALE_MS = 15_000;
 
-function isStale(readingTime: string, pollIntervalS: number): boolean {
+/** The smart meter has no configurable interval; the collector polls it at 5s. */
+const METER_INTERVAL_S = 5;
+
+function isStale(readingTime: string, pollIntervalS: number, now: number): boolean {
   const threshold = Math.max(pollIntervalS * STALE_INTERVAL_FACTOR * 1000, MIN_STALE_MS);
-  return Date.now() - new Date(readingTime).getTime() > threshold;
+  return now - new Date(readingTime).getTime() > threshold;
 }
 
 @Component({
@@ -45,6 +48,7 @@ function isStale(readingTime: string, pollIntervalS: number): boolean {
 })
 export class LiveContainerComponent {
   private readonly data = inject(DashboardDataService);
+  private readonly clock = inject(ClockService);
 
   // Today's Bezug/Einspeisung, corrected onto the physical meter when
   // calibration is on — the same factor the history and admin views use.
@@ -62,12 +66,11 @@ export class LiveContainerComponent {
     if (this.data.smaConfig()?.enabled === false) return null;
     const s = this.data.sma();
     if (!s) return null;
-    clockTick(); // re-evaluate staleness as time passes without a new reading
     return {
       productionW: s.gridPower ?? 0,
       dailyYieldKwh: (s.dailyYieldWh ?? 0) / 1000,
       asleep: s.asleep,
-      stale: isStale(s.time, this.data.smaConfig()?.pollIntervalS ?? 60),
+      stale: isStale(s.time, this.data.smaConfig()?.pollIntervalS ?? 60, this.clock.now()),
     };
   });
 
@@ -75,26 +78,32 @@ export class LiveContainerComponent {
     if (this.data.wallboxConfig()?.enabled === false) return null;
     const w = this.data.wallbox();
     if (!w) return null;
-    clockTick(); // re-evaluate staleness as time passes without a new reading
     const status = w.status ?? 0;
     return {
       statusLabel: WALLBOX_STATUS_LABELS[status] ?? `Status ${status}`,
       charging: status === 2,
       powerW: w.activePowerW ?? 0,
       sessionKwh: (w.sessionEnergyWh ?? 0) / 1000,
-      stale: isStale(w.time, this.data.wallboxConfig()?.pollIntervalS ?? 30),
+      stale: isStale(w.time, this.data.wallboxConfig()?.pollIntervalS ?? 30, this.clock.now()),
     };
   });
 
+  /**
+   * The hero figure. Stale-checked like the two device cards: the smart meter
+   * is the device under the single-MQTT-session limit and so the likeliest to
+   * go quiet, and a frozen headline number with no cue is the most misleading
+   * thing the dashboard can show.
+   */
   readonly flow = computed<FlowState>(() => {
     const r = this.data.latest();
+    const stale = r !== null && isStale(r.time, METER_INTERVAL_S, this.clock.now());
     const imp = r?.gridToHomePower ?? 0;
     const exp = r?.pvToGridPower ?? 0;
     if (exp > 0) {
-      return { mode: 'export', watts: exp, charging: exp >= CHARGE_THRESHOLD_W };
+      return { mode: 'export', watts: exp, charging: exp >= CHARGE_THRESHOLD_W, stale };
     }
-    if (imp > 0) return { mode: 'import', watts: imp, charging: false };
-    return { mode: 'idle', watts: 0, charging: false };
+    if (imp > 0) return { mode: 'import', watts: imp, charging: false, stale };
+    return { mode: 'idle', watts: 0, charging: false, stale };
   });
 
   readonly liveSpark = computed(() => {

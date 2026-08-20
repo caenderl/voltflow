@@ -116,6 +116,13 @@ export class BillingService {
    * non-monotonic curve (max() would have picked whichever device's counter is
    * numerically larger). A no-op today, with exactly one grid-meter.
    *
+   * An instant is only kept when EVERY meter present in the window reported
+   * there. Summing partial coverage would drop the curve to the reporting
+   * meters' subtotal and lift it again on the next complete bucket — a cliff
+   * in a curve the billing maths reads as monotonic, which would move real kWh
+   * between months. A dropped knot is instead just a gap the curve interpolates
+   * across, the same way it already handles a collector outage.
+   *
    * The window is widened by **two** buckets, not one: a knot sits at its
    * bucket's end, so one bucket of slack only reaches `from` when `from` falls
    * exactly on a bucket boundary. Reading times generally do not (18:32), and a
@@ -126,14 +133,14 @@ export class BillingService {
   private async knots(from: Date, to: Date): Promise<CounterKnot[]> {
     const { rows } = await this.db.query(
       `WITH h AS (
-         SELECT bucket + INTERVAL '1 hour' AS at,
+         SELECT bucket + INTERVAL '1 hour' AS at, device_sn,
                 grid_import_energy AS i, grid_export_energy AS e
            FROM meter_1hour
           WHERE bucket >= $1::timestamptz - INTERVAL '2 hours' AND bucket < $2
             AND grid_import_energy IS NOT NULL
             AND grid_export_energy IS NOT NULL
        ), d AS (
-         SELECT bucket + INTERVAL '1 day' AS at,
+         SELECT bucket + INTERVAL '1 day' AS at, device_sn,
                 grid_import_energy AS i, grid_export_energy AS e
            FROM meter_1day
           WHERE bucket >= $1::timestamptz - INTERVAL '2 days' AND bucket < $2
@@ -141,12 +148,15 @@ export class BillingService {
             AND grid_export_energy IS NOT NULL
             AND bucket + INTERVAL '1 day'
                 < COALESCE((SELECT min(at) FROM h), 'infinity'::timestamptz)
+       ), k AS (
+         SELECT * FROM h UNION ALL SELECT * FROM d
        )
        SELECT extract(epoch FROM at) * 1000 AS at,
               sum(i) AS import_kwh, sum(e) AS export_kwh
-         FROM (SELECT * FROM h UNION ALL SELECT * FROM d) k
+         FROM k
         WHERE at <= now()
         GROUP BY at
+       HAVING count(DISTINCT device_sn) = (SELECT count(DISTINCT device_sn) FROM k)
         ORDER BY at`,
       [from, to],
     );

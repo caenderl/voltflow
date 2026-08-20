@@ -76,8 +76,17 @@ NX-Monorepo:
 ANKERUSER="deine@mail.de"
 ANKERPASSWORD="..."          # Sonderzeichen -> in Anfuehrungszeichen!
 ANKERCOUNTRY="DE"
-DATABASE_URL="postgresql://voltflow:voltflow@localhost:5432/voltflow"
+
+# DB-Zugang. Pflicht: docker-compose bricht ohne diese Werte ab, statt auf ein
+# schwaches Default-Passwort zurueckzufallen. DATABASE_URL muss dazu passen.
+POSTGRES_USER="voltflow"
+POSTGRES_PASSWORD="..."      # frei waehlbar, aber nicht leer lassen
+POSTGRES_DB="voltflow"
+DATABASE_URL="postgresql://voltflow:...@localhost:5432/voltflow"
 ```
+
+> Der DB-Container lauscht nur auf `127.0.0.1` (wie in Prod) — im Heimnetz ist
+> Postgres damit nicht von anderen Geräten aus erreichbar.
 
 ## Entwicklung (lokal)
 

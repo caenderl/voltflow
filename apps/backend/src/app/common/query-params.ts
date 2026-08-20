@@ -26,15 +26,27 @@ export function parseRange(
   return { from, to };
 }
 
-/** Parse an integer within [min, max]; empty/undefined -> fallback. */
+/**
+ * Parse an integer within [min, max]; empty/undefined -> `fallback`.
+ *
+ * `fallback` is optional so a caller that has already handled the absent case
+ * (e.g. by resolving a default from the DB) does not have to invent a sentinel
+ * it knows can never be returned. Omitting it makes an absent value a 400,
+ * like any other unparseable input.
+ */
 export function parseIntInRange(
   value: unknown,
   field: string,
   min: number,
   max: number,
-  fallback: number,
+  fallback?: number,
 ): number {
-  if (value === null || value === undefined || value === '') return fallback;
+  if (value === null || value === undefined || value === '') {
+    if (fallback === undefined) {
+      throw new BadRequestException(`${field} is required`);
+    }
+    return fallback;
+  }
   const n = Number(value);
   if (!Number.isInteger(n) || n < min || n > max) {
     throw new BadRequestException(`${field} must be an integer in [${min}, ${max}]`);

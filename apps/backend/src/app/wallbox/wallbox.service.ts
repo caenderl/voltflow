@@ -7,7 +7,7 @@ import type {
   WallboxReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
-import { MAX_RAW_ROWS, toDataRange } from '../common/db-utils';
+import { MAX_RAW_ROWS, assertNotTruncated, toDataRange } from '../common/db-utils';
 import type {
   Configurable,
   HasHistory,
@@ -33,7 +33,7 @@ const DEFAULT_CONFIG: WallboxConfig = {
 };
 
 const READING_COLUMNS = `time, device_sn, status, cp_signal, active_power_w,
-  session_energy_wh, session_duration_s,
+  session_energy_wh, session_duration_s, energy_wh,
   l1_current_a, l2_current_a, l3_current_a,
   l1_voltage_v, l2_voltage_v, l3_voltage_v`;
 
@@ -146,9 +146,10 @@ export class WallboxService
          FROM wallbox_reading
         WHERE time >= $1 AND time < $2
         ORDER BY time
-        LIMIT ${MAX_RAW_ROWS}`,
+        LIMIT ${MAX_RAW_ROWS + 1}`,
       [from, to],
     );
+    assertNotTruncated(rows.length, 'wallbox history');
     return rows.map(rowToWallboxReading);
   }
 }
