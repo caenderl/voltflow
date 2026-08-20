@@ -1,6 +1,6 @@
 {
   "name": "Voltflow",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0",
   "license": "UNLICENSED",
   "scripts": {
     "db": "docker compose up -d db",
