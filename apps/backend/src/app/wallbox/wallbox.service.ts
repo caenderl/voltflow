@@ -71,12 +71,14 @@ export class WallboxService
     return this.config.save(c);
   }
 
-  async latest(): Promise<WallboxReading | null> {
+  async latest(deviceSn?: string): Promise<WallboxReading | null> {
     const { rows } = await this.db.query(
       `SELECT ${READING_COLUMNS}
          FROM wallbox_reading
+        WHERE ($1::text IS NULL OR device_sn = $1)
         ORDER BY time DESC
         LIMIT 1`,
+      [deviceSn ?? null],
     );
     return rows.length ? rowToWallboxReading(rows[0]) : null;
   }

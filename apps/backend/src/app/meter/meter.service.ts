@@ -33,13 +33,15 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
     return toDataRange(rows[0]);
   }
 
-  async latest(): Promise<MeterReading | null> {
+  async latest(deviceSn?: string): Promise<MeterReading | null> {
     const { rows } = await this.db.query(
       `SELECT time, device_sn, grid_to_home_power, pv_to_grid_power,
               grid_import_energy, grid_export_energy
          FROM meter_reading
+        WHERE ($1::text IS NULL OR device_sn = $1)
         ORDER BY time DESC
         LIMIT 1`,
+      [deviceSn ?? null],
     );
     return rows.length ? rowToReading(rows[0]) : null;
   }

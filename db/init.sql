@@ -386,14 +386,29 @@ CREATE TRIGGER sma_reading_notify
 -- 1-min caggs on the bucket: house = PV production + grid import - feed-in.
 -- meter_1min is the base (always present); sma_1min is absent at night -> 0.
 -- ---------------------------------------------------------------------------
+-- Both caggs are grouped by (device_sn, bucket), so each side is summed to one
+-- row per bucket BEFORE the join: joining on the bucket alone would multiply
+-- rows once a second meter or inverter exists. A storage device extends the
+-- same shape: house = PV + import - export + discharge - charge.
 CREATE OR REPLACE VIEW house_load_1min AS
+WITH grid AS (
+    SELECT bucket,
+           sum(grid_to_home_power_avg) AS grid_import,
+           sum(pv_to_grid_power_avg)   AS grid_export
+      FROM meter_1min
+     GROUP BY bucket
+), pv AS (
+    SELECT bucket, sum(grid_power_avg) AS pv_power
+      FROM sma_1min
+     GROUP BY bucket
+)
 SELECT
-    m.bucket                                          AS bucket,
-    COALESCE(s.grid_power_avg, 0)                     AS pv_power,
-    m.grid_to_home_power_avg                          AS grid_import,
-    m.pv_to_grid_power_avg                            AS grid_export,
-    COALESCE(s.grid_power_avg, 0)
-      + COALESCE(m.grid_to_home_power_avg, 0)
-      - COALESCE(m.pv_to_grid_power_avg, 0)           AS house_power
-FROM meter_1min m
-LEFT JOIN sma_1min s ON s.bucket = m.bucket;
+    g.bucket                                          AS bucket,
+    COALESCE(p.pv_power, 0)                           AS pv_power,
+    g.grid_import                                     AS grid_import,
+    g.grid_export                                     AS grid_export,
+    COALESCE(p.pv_power, 0)
+      + COALESCE(g.grid_import, 0)
+      - COALESCE(g.grid_export, 0)                    AS house_power
+FROM grid g
+LEFT JOIN pv p ON p.bucket = g.bucket;

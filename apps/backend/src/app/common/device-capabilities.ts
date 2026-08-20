@@ -13,9 +13,16 @@ import type { DataRange } from '@org/shared-types';
  * treat any device through the port instead of by concrete type.
  */
 
-/** Reads the single most recent reading, or null when there is none yet. */
+/**
+ * Reads the single most recent reading, or null when there is none yet.
+ *
+ * `deviceSn` picks one device of this kind; without it the newest reading over
+ * all of them is returned. That default is only unambiguous while exactly one
+ * device of a kind is installed - with two it alternates between them, so any
+ * caller that means a particular device has to name it.
+ */
 export interface HasLatest<R> {
-  latest(): Promise<R | null>;
+  latest(deviceSn?: string): Promise<R | null>;
 }
 
 /** Reports the [first, last] timestamp span of stored readings. */
