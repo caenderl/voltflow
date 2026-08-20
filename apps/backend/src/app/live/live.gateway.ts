@@ -49,12 +49,27 @@ export class LiveGateway implements OnModuleInit, OnGatewayConnection {
     }
   }
 
-  /** Send the latest known value of every channel to a new client. */
+  /**
+   * Send the latest known value of every channel to a new client. Channels are
+   * fetched concurrently and independently: one channel's DB error must not
+   * block the others, and — since NestJS's socket.io adapter awaits this with
+   * no .catch() of its own — must never reject out of this method, or it
+   * becomes an unhandled rejection that crashes the process.
+   */
   async handleConnection(client: Socket): Promise<void> {
     this.logger.log(`Client connected: ${client.id}`);
-    for (const { event, latest } of this.channels) {
-      const reading = await latest();
-      if (reading) client.emit(event, reading);
-    }
+    await Promise.allSettled(
+      this.channels.map(async ({ event, latest }) => {
+        try {
+          const reading = await latest();
+          if (reading) client.emit(event, reading);
+        } catch (err) {
+          this.logger.error(
+            `Failed to fetch latest "${event}" for ${client.id}`,
+            err instanceof Error ? err.stack : String(err),
+          );
+        }
+      }),
+    );
   }
 }

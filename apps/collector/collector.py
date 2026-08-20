@@ -16,8 +16,10 @@ Configuration via .env / env:
 """
 
 import asyncio
+import contextlib
 import logging
 import os
+import signal
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -44,6 +46,9 @@ from db import (
 _TZ = ZoneInfo("Europe/Berlin")
 # Power fields zeroed in an asleep row written when the inverter is unreachable.
 _SMA_POWER_FIELDS = ("grid_power", "pv_power_a", "pv_power_b", "power_l1", "power_l2", "power_l3")
+# Mirrors sma_stream._PRODUCTION_FIELDS (duplicated, not imported, to keep this
+# module importable without pysma-plus - see the lazy-import note above).
+_SMA_PRODUCTION_FIELDS = ("grid_power", "pv_power_a", "pv_power_b")
 
 load_dotenv()
 
@@ -74,13 +79,15 @@ def _apply_daily_carry(carry: dict, snap: dict, today) -> None:
     PREVIOUS day's daily_yield through the night until its own reset at first
     production (NOT at local midnight), so a real read early in a new day would
     otherwise carry yesterday's kWh into today. Guard: today's daily_yield stays
-    0 until the inverter has actually produced today (grid_power > 0); only then
-    are reported values trusted. total_yield_kwh is a monotonic lifetime counter,
+    0 until the inverter has actually produced today (any of grid_power /
+    pv_power_a / pv_power_b > 0 - not grid_power alone, which a single lossy
+    Speedwire read can drop while the PV fields still arrive); only then are
+    reported values trusted. total_yield_kwh is a monotonic lifetime counter,
     carried verbatim when a read is missing it.
     """
     if carry["date"] != today:
         carry["date"], carry["daily_wh"], carry["produced"] = today, 0.0, False
-    if (snap.get("grid_power") or 0) > 0:
+    if any((snap.get(f) or 0) > 0 for f in _SMA_PRODUCTION_FIELDS):
         carry["produced"] = True
 
     reported = snap.get("daily_yield_wh")
@@ -107,31 +114,52 @@ async def _create_pool_with_retry():
             await asyncio.sleep(RECONNECT_DELAY)
 
 
+async def _run_with_reconnect(label: str, stream_factory, on_reading) -> None:
+    """Drain an async-generator stream forever, reconnecting after
+    RECONNECT_DELAY on any error. Shared by _run_meter and _run_wallbox, which
+    differ only in the stream factory and what a reading does once read.
+
+    Uses contextlib.aclosing so the generator's own `finally` (closing the
+    MQTT/Modbus session) always runs synchronously before reconnecting - an
+    `async for` abandoned via an exception in its body does not call aclose()
+    itself; without this, cleanup is deferred to whenever the event loop's GC
+    finalizer happens to schedule it, which is not guaranteed to happen before
+    the next connection attempt.
+    """
+    while True:
+        try:
+            async with contextlib.aclosing(stream_factory()) as stream:
+                async for reading in stream:
+                    await on_reading(reading)
+        except Exception as err:  # noqa: BLE001
+            LOG.warning("%s stream error: %s: %s - reconnecting in %ss",
+                        label, type(err).__name__, err, RECONNECT_DELAY)
+            await asyncio.sleep(RECONNECT_DELAY)
+
+
 async def _run_meter(pool) -> None:
     """Continuously stream smart meter readings into the DB (with reconnect)."""
     from meter_stream import stream_readings
 
     device_registered = False
     count = 0
-    while True:
-        try:
-            async for reading in stream_readings(interval=5):
-                if not device_registered:
-                    await register_device(pool, reading, "smartmeter")
-                    device_registered = True
-                await insert_reading(pool, reading)
-                count += 1
-                if count % 12 == 0:  # ~one status line per minute
-                    LOG.info(
-                        "%d meter readings stored (latest: g2h=%s pv2g=%s)",
-                        count,
-                        reading.get("grid_to_home_power"),
-                        reading.get("pv_to_grid_power"),
-                    )
-        except Exception as err:  # noqa: BLE001
-            LOG.warning("Meter stream error: %s: %s - reconnecting in %ss",
-                        type(err).__name__, err, RECONNECT_DELAY)
-            await asyncio.sleep(RECONNECT_DELAY)
+
+    async def on_reading(reading: dict) -> None:
+        nonlocal device_registered, count
+        if not device_registered:
+            await register_device(pool, reading, "smartmeter")
+            device_registered = True
+        await insert_reading(pool, reading)
+        count += 1
+        if count % 12 == 0:  # ~one status line per minute
+            LOG.info(
+                "%d meter readings stored (latest: g2h=%s pv2g=%s)",
+                count,
+                reading.get("grid_to_home_power"),
+                reading.get("pv_to_grid_power"),
+            )
+
+    await _run_with_reconnect("Meter", lambda: stream_readings(interval=5), on_reading)
 
 
 async def _run_wallbox(pool, cfg: dict) -> None:
@@ -144,22 +172,38 @@ async def _run_wallbox(pool, cfg: dict) -> None:
     interval = cfg.get("poll_interval_s") or 30
     device_registered = False
     count = 0
-    while True:
-        try:
-            async for snap in stream_wallbox(host, port=port, unit_id=unit_id, interval=interval):
-                if not device_registered:
-                    await register_device(pool, snap, "wallbox")
-                    device_registered = True
-                await insert_wallbox_reading(pool, snap)
-                count += 1
-                LOG.info(
-                    "wallbox reading #%d stored (status=%s power=%sW)",
-                    count, snap.get("status"), snap.get("active_power_w"),
-                )
-        except Exception as err:  # noqa: BLE001
-            LOG.warning("Wallbox stream error: %s: %s - reconnecting in %ss",
-                        type(err).__name__, err, RECONNECT_DELAY)
-            await asyncio.sleep(RECONNECT_DELAY)
+    last_reading_at: float | None = None  # monotonic clock, for energy_wh below
+
+    async def on_reading(snap: dict) -> None:
+        nonlocal device_registered, count, last_reading_at
+        # Energy since the PREVIOUS reading, from the actual elapsed wall-clock
+        # time rather than the configured poll interval - correct regardless of
+        # its exact value (poll_interval_s is user-adjustable, 5-3600s) and
+        # immune to gaps around a reconnect, unlike integrating at a fixed
+        # assumed rate. Capped at 2x the interval so a long gap (collector
+        # restart, wallbox offline) is not integrated as one implausible energy
+        # spike on the first reading back.
+        now = asyncio.get_running_loop().time()
+        elapsed_s = min(now - last_reading_at, 2 * interval) if last_reading_at is not None else 0.0
+        last_reading_at = now
+        power = snap.get("active_power_w")
+        snap["energy_wh"] = (power * elapsed_s / 3600) if snap.get("status") == 2 and power is not None else 0.0
+
+        if not device_registered:
+            await register_device(pool, snap, "wallbox")
+            device_registered = True
+        await insert_wallbox_reading(pool, snap)
+        count += 1
+        LOG.info(
+            "wallbox reading #%d stored (status=%s power=%sW)",
+            count, snap.get("status"), snap.get("active_power_w"),
+        )
+
+    await _run_with_reconnect(
+        "Wallbox",
+        lambda: stream_wallbox(host, port=port, unit_id=unit_id, interval=interval),
+        on_reading,
+    )
 
 
 async def _run_sma(pool, cfg: dict, password: str) -> None:
@@ -225,22 +269,34 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
 
     while True:
         try:
-            async for snap in stream_sma(host, password, interval=interval):
-                carry["serial"] = snap.get("device_sn") or carry["serial"]
-                carry["model"] = snap.get("device_pn") or carry["model"]
-                # Keep the last known level when a read omits grid_power alone -
-                # that is still production, not "unknown" (see sleep_implausible).
-                if snap.get("asleep"):
-                    carry["last_power"] = 0.0
-                elif snap.get("grid_power") is not None:
-                    carry["last_power"] = snap["grid_power"]
-                fail_cycles, gapping = 0, False
-                _apply_daily_carry(carry, snap, datetime.now(_TZ).date())
-                if not registered:
-                    await register_device(pool, snap, "inverter")
-                    registered = True
-                await insert_sma_reading(pool, snap)
-                log_transition(snap)
+            async with contextlib.aclosing(stream_sma(host, password, interval=interval)) as stream:
+                async for snap in stream:
+                    carry["serial"] = snap.get("device_sn") or carry["serial"]
+                    carry["model"] = snap.get("device_pn") or carry["model"]
+                    # Keep the last known level when a read omits grid_power alone -
+                    # that is still production, not "unknown" (see sleep_implausible).
+                    if snap.get("asleep"):
+                        carry["last_power"] = 0.0
+                    elif snap.get("grid_power") is not None:
+                        carry["last_power"] = snap["grid_power"]
+                    fail_cycles, gapping = 0, False
+                    _apply_daily_carry(carry, snap, datetime.now(_TZ).date())
+                    # DB errors are kept out of the except-Exception block below,
+                    # which is written for SMA session/device failures: a pool
+                    # hiccup here must not be misread as "inverter unreachable"
+                    # and, on a snap that is legitimately below
+                    # PRODUCING_ABOVE_W, fabricate an asleep (0 W) row for a
+                    # device that was never actually the problem.
+                    try:
+                        if not registered:
+                            await register_device(pool, snap, "inverter")
+                            registered = True
+                        await insert_sma_reading(pool, snap)
+                    except Exception as db_err:  # noqa: BLE001
+                        LOG.warning("SMA reading dropped (DB error: %s: %s)",
+                                    type(db_err).__name__, db_err)
+                        continue
+                    log_transition(snap)
         except SmaSessionStale as err:
             # The stream asked for a fresh session while the inverter is still
             # reachable. Nothing is wrong with the device, so record nothing and
@@ -301,8 +357,15 @@ async def _supervise(pool, kind: str, read_config, run_factory) -> None:
             task.cancel()
             try:
                 await task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            except asyncio.CancelledError:
                 pass
+            except Exception as err:  # noqa: BLE001
+                # _run_sma/_run_wallbox already catch broadly internally, so
+                # this only fires for a bug that escapes them - but when it
+                # does, silently swallowing it (as before) is exactly what
+                # makes that class of bug invisible in production.
+                LOG.error("%s collector task ended with an unexpected error: %s: %s",
+                          kind, type(err).__name__, err)
             task, active_key = None, None
 
     waiting_logged = False
@@ -368,9 +431,56 @@ async def run() -> None:
             LOG.error("COLLECTOR=%r started no collectors", COLLECTOR)
             return
 
-        await asyncio.gather(*tasks)
+        await _run_until_signal(tasks)
     finally:
         await pool.close()
+
+
+async def _run_until_signal(tasks: list[asyncio.Task]) -> None:
+    """Run the collector tasks until SIGTERM/SIGINT, then cancel them and wait
+    for their cleanup before returning.
+
+    Docker sends every container SIGTERM on `docker compose up -d` (a routine
+    part of every deploy, not just a crash). Python's default disposition for
+    an unhandled SIGTERM terminates the process immediately - `finally` blocks
+    do not run - so without this, the meter collector's MQTT session is never
+    closed server-side before the replacement container opens a new one,
+    which is the most direct way to violate the "only one Anker MQTT session"
+    limit on every single release.
+    """
+    loop = asyncio.get_running_loop()
+    stop = loop.create_future()
+
+    def _request_stop(sig: signal.Signals) -> None:
+        if not stop.done():
+            LOG.info("Received %s - shutting down", sig.name)
+            stop.set_result(None)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, _request_stop, sig)
+
+    run_task = asyncio.gather(*tasks)
+    await asyncio.wait({run_task, stop}, return_when=asyncio.FIRST_COMPLETED)
+
+    # Either a signal arrived, or one task ended on its own - each retries
+    # internally, so the latter "should not normally happen", but either way
+    # cancel whatever is still running and wait for every task's cleanup
+    # (closing its MQTT/Modbus/Speedwire session) before returning, rather
+    # than leaving healthy tasks orphaned when the process exits.
+    for t in tasks:
+        if not t.done():
+            t.cancel()
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for r in results:
+        if isinstance(r, Exception) and not isinstance(r, asyncio.CancelledError):
+            LOG.error("Collector task ended unexpectedly: %s", r)
+
+    # run_task (the original gather) must still be retrieved once itself, or
+    # asyncio logs its own aggregated exception as leaked - the exception it
+    # carries is already covered by the per-task loop above.
+    if run_task.done():
+        with contextlib.suppress(Exception):
+            run_task.exception()
 
 
 if __name__ == "__main__":

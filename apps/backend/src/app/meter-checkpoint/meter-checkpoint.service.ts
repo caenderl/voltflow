@@ -104,14 +104,24 @@ export class MeterCheckpointService {
                 AS counter_stale
          FROM meter_checkpoint c
          LEFT JOIN LATERAL (
-           SELECT grid_import_energy, grid_export_energy, bucket
-             FROM meter_1hour
-            WHERE bucket <  ((c.date + c.read_at) AT TIME ZONE $1)
-              AND bucket >= ((c.date + c.read_at) AT TIME ZONE $1) - $2::interval
-              AND grid_import_energy IS NOT NULL
-              AND grid_export_energy IS NOT NULL
-            ORDER BY bucket DESC
-            LIMIT 1
+           -- Per grid-meter device, its latest qualifying bucket before the
+           -- read time, then summed to a site total (a no-op with today's
+           -- single device) - not a plain ORDER BY bucket DESC LIMIT 1 across
+           -- devices, which would pick an arbitrary device once a second one
+           -- shares the same latest bucket.
+           SELECT sum(grid_import_energy) AS grid_import_energy,
+                  sum(grid_export_energy) AS grid_export_energy,
+                  max(bucket)             AS bucket
+             FROM (
+               SELECT DISTINCT ON (device_sn)
+                      device_sn, bucket, grid_import_energy, grid_export_energy
+                 FROM meter_1hour
+                WHERE bucket <  ((c.date + c.read_at) AT TIME ZONE $1)
+                  AND bucket >= ((c.date + c.read_at) AT TIME ZONE $1) - $2::interval
+                  AND grid_import_energy IS NOT NULL
+                  AND grid_export_energy IS NOT NULL
+                ORDER BY device_sn, bucket DESC
+             ) per_device
          ) s ON TRUE
         ORDER BY c.date, c.read_at`,
       [TIMEZONE, READ_WINDOW, EXACT_WINDOW],
@@ -131,17 +141,26 @@ export class MeterCheckpointService {
     return computeReconciliation(samples, await this.currentCounters());
   }
 
-  /** The smart meter's latest cumulative counters, or null without readings. */
+  /**
+   * The smart meter's latest cumulative counters, or null without readings.
+   * Latest reading per device_sn, summed to a site total (a no-op today, with
+   * exactly one grid-meter) - not a plain ORDER BY time DESC LIMIT 1 across
+   * devices, which would pick whichever device happened to report last.
+   */
   private async currentCounters(): Promise<CounterSnapshot | null> {
     const { rows } = await this.db.query(
-      `SELECT time, grid_import_energy, grid_export_energy
-         FROM meter_reading
-        WHERE grid_import_energy IS NOT NULL
-          AND grid_export_energy IS NOT NULL
-        ORDER BY time DESC
-        LIMIT 1`,
+      `SELECT max(time) AS time,
+              sum(grid_import_energy) AS grid_import_energy,
+              sum(grid_export_energy) AS grid_export_energy
+         FROM (
+           SELECT DISTINCT ON (device_sn) time, grid_import_energy, grid_export_energy
+             FROM meter_reading
+            WHERE grid_import_energy IS NOT NULL
+              AND grid_export_energy IS NOT NULL
+            ORDER BY device_sn, time DESC
+         ) latest_per_device`,
     );
-    if (!rows.length) return null;
+    if (!rows.length || rows[0]['time'] === null) return null;
     return {
       time: new Date(rows[0]['time'] as string).toISOString(),
       importKwh: Number(rows[0]['grid_import_energy']),

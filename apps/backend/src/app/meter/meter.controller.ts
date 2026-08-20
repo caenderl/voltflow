@@ -47,7 +47,7 @@ export class MeterController {
   }
 
   @Get('energy')
-  energy(
+  async energy(
     @Query('period') periodStr?: string,
     @Query('date') dateStr?: string,
   ): Promise<EnergySummary> {
@@ -59,30 +59,7 @@ export class MeterController {
     if (isNaN(ref.getTime())) {
       throw new BadRequestException('Invalid date.');
     }
-    const { from, to } = computeRange(period, ref);
+    const { from, to } = await this.meter.computeRange(period, ref);
     return this.meter.energy(period, from, to);
   }
-}
-
-/** Returns [from, to) for the selected period (local time). */
-function computeRange(period: EnergyPeriod, ref: Date): { from: Date; to: Date } {
-  const from = new Date(ref);
-  from.setHours(0, 0, 0, 0);
-  const to = new Date(from);
-
-  if (period === 'day') {
-    to.setDate(to.getDate() + 1);
-  } else if (period === 'week') {
-    // week starts on Monday
-    const day = (from.getDay() + 6) % 7; // Mon=0 .. Sun=6
-    from.setDate(from.getDate() - day);
-    to.setTime(from.getTime());
-    to.setDate(to.getDate() + 7);
-  } else {
-    // month
-    from.setDate(1);
-    to.setTime(from.getTime());
-    to.setMonth(to.getMonth() + 1);
-  }
-  return { from, to };
 }

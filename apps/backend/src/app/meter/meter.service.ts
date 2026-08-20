@@ -10,7 +10,7 @@ import type {
   SeriesResponse,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
-import { numOrNull, round3, toDataRange } from '../common/db-utils';
+import { MAX_RAW_ROWS, numOrNull, round3, toDataRange } from '../common/db-utils';
 import type { HasLatest, HasRange } from '../common/device-capabilities';
 import { DbService } from '../database/db.service';
 import { rowToReading } from './meter.mapper';
@@ -22,9 +22,40 @@ const VIEW_BY_RESOLUTION: Record<Exclude<SeriesResolution, 'raw'>, string> = {
   '1day': 'meter_1day',
 };
 
+/** Postgres date_trunc field + matching interval for one energy period. */
+const PERIOD_TRUNC: Record<EnergyPeriod, { field: string; interval: string }> = {
+  day: { field: 'day', interval: '1 day' },
+  week: { field: 'week', interval: '1 week' }, // date_trunc('week', …) starts Monday
+  month: { field: 'month', interval: '1 month' },
+};
+
 @Injectable()
 export class MeterService implements HasLatest<MeterReading>, HasRange {
   constructor(private readonly db: DbService) {}
+
+  /**
+   * Resolves a period + reference instant to [from, to) in local wall-clock
+   * time. Done in SQL, not with `Date.setHours` (process-local time): the
+   * backend runs in UTC in prod, so a JS-local "day" would not be the actual
+   * Europe/Berlin day. Same reasoning as {@link BillingService.monthStarts}.
+   */
+  async computeRange(
+    period: EnergyPeriod,
+    ref: Date,
+  ): Promise<{ from: Date; to: Date }> {
+    const { field, interval } = PERIOD_TRUNC[period];
+    const { rows } = await this.db.query(
+      `SELECT extract(epoch FROM date_trunc($1, $2::timestamptz AT TIME ZONE $4)
+                       AT TIME ZONE $4) * 1000 AS from_ms,
+              extract(epoch FROM (date_trunc($1, $2::timestamptz AT TIME ZONE $4)
+                       + $3::interval) AT TIME ZONE $4) * 1000 AS to_ms`,
+      [field, ref, interval, TIMEZONE],
+    );
+    return {
+      from: new Date(Number(rows[0]['from_ms'])),
+      to: new Date(Number(rows[0]['to_ms'])),
+    };
+  }
 
   async range(): Promise<DataRange> {
     const { rows } = await this.db.query(
@@ -58,7 +89,8 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
         `SELECT time, grid_to_home_power, pv_to_grid_power
            FROM meter_reading
           WHERE time >= $1 AND time < $2
-          ORDER BY time`,
+          ORDER BY time
+          LIMIT ${MAX_RAW_ROWS}`,
         [from, to],
       );
       points = rows.map((r) => ({

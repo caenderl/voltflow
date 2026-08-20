@@ -7,7 +7,7 @@ import type {
   WallboxReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
-import { toDataRange } from '../common/db-utils';
+import { MAX_RAW_ROWS, toDataRange } from '../common/db-utils';
 import type {
   Configurable,
   HasHistory,
@@ -145,7 +145,8 @@ export class WallboxService
       `SELECT ${READING_COLUMNS}
          FROM wallbox_reading
         WHERE time >= $1 AND time < $2
-        ORDER BY time`,
+        ORDER BY time
+        LIMIT ${MAX_RAW_ROWS}`,
       [from, to],
     );
     return rows.map(rowToWallboxReading);

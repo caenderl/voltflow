@@ -2,6 +2,7 @@ import { Component, computed, input } from '@angular/core';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { SystemHealth } from '@org/shared-types';
 import { CHART_COLORS } from '../../core/chart-utils';
+import { MetricTileComponent } from '../../ui/metric-tile/metric-tile.component';
 import { type SysPoint, sysSparkChart } from './system-charts';
 
 const GB = 1024 ** 3;
@@ -28,7 +29,7 @@ function gb(bytes: number): string {
 @Component({
   selector: 'app-system-metrics',
   standalone: true,
-  imports: [NgxEchartsDirective],
+  imports: [NgxEchartsDirective, MetricTileComponent],
   templateUrl: './system-metrics.component.html',
   styleUrl: './system-metrics.component.scss',
 })

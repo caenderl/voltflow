@@ -12,6 +12,7 @@ Yields the fields relevant for surplus charging:
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 import sys
@@ -84,7 +85,9 @@ async def stream_readings(
         sn, dev = find_smartmeter(myapi.devices)
         if not sn:
             raise RuntimeError("No smart meter found in the device cache.")
-        LOG.info("Smart meter found: %s (%s)", dev.get("alias") or dev.get("name"), sn)
+        device_pn = dev.get("device_pn")
+        alias = dev.get("alias") or dev.get("name")
+        LOG.info("Smart meter found: %s (%s)", alias, sn)
 
         mdev = SolixMqttDeviceFactory(myapi, sn).create_device()
         mqtt_session = await myapi.startMqttSession()
@@ -112,12 +115,27 @@ async def stream_readings(
 
         try:
             while True:
+                # get_status() just returns the in-memory cache with no
+                # timestamp/expiry - a dropped connection would otherwise keep
+                # yielding the last values ever received, indistinguishable
+                # from live data, forever. Check the session and the poller
+                # task explicitly instead: either failing raises here, which
+                # sends the caller into its reconnect path.
+                if not mqtt_session.is_connected():
+                    raise RuntimeError("MQTT session disconnected")
+                if poller.done():
+                    poller.result()  # re-raises the poller's own exception, if any
+                    raise RuntimeError("MQTT poller task ended unexpectedly")
                 status = mdev.get_status()
                 if status.get("grid_to_home_power") is not None:
                     snap = meter_snapshot(status)
                     snap.setdefault("device_sn", sn)
+                    snap["device_pn"] = device_pn
+                    snap["alias"] = alias
                     yield snap
                 await asyncio.sleep(interval)
         finally:
             poller.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await poller
             myapi.stopMqttSession()

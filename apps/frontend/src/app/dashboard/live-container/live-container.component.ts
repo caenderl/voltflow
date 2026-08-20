@@ -2,6 +2,7 @@ import { Component, computed, inject } from '@angular/core';
 import { WALLBOX_STATUS_LABELS } from '@org/shared-types';
 import { liveSparkChart, netWatts } from '../../core/chart-utils';
 import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
+import { clockTick } from '../../core/clock';
 import { DashboardDataService, LIVE_WINDOW_MS } from '../dashboard-data.service';
 import { LiveViewComponent, type FlowState } from '../live-view/live-view.component';
 import type { SmaState } from '../sma-card/sma-card.component';
@@ -9,6 +10,20 @@ import type { WallboxState } from '../wallbox-card/wallbox-card.component';
 
 // Surplus (W) from which charging makes sense (~6 A single-phase). Configurable later.
 const CHARGE_THRESHOLD_W = 1400;
+
+/** A reading whose own `time` is older than this many poll intervals is shown
+ *  as "veraltet" rather than left looking live - wide enough to absorb normal
+ *  jitter around one missed poll. Judged from the reading's own timestamp,
+ *  not from when the socket delivered it: a newly connected client gets the
+ *  last known DB row immediately (see LiveGateway.handleConnection), which
+ *  can itself be hours old if the device has been offline since. */
+const STALE_INTERVAL_FACTOR = 3;
+const MIN_STALE_MS = 15_000;
+
+function isStale(readingTime: string, pollIntervalS: number): boolean {
+  const threshold = Math.max(pollIntervalS * STALE_INTERVAL_FACTOR * 1000, MIN_STALE_MS);
+  return Date.now() - new Date(readingTime).getTime() > threshold;
+}
 
 @Component({
   selector: 'app-live-container',
@@ -47,10 +62,12 @@ export class LiveContainerComponent {
     if (this.data.smaConfig()?.enabled === false) return null;
     const s = this.data.sma();
     if (!s) return null;
+    clockTick(); // re-evaluate staleness as time passes without a new reading
     return {
       productionW: s.gridPower ?? 0,
       dailyYieldKwh: (s.dailyYieldWh ?? 0) / 1000,
       asleep: s.asleep,
+      stale: isStale(s.time, this.data.smaConfig()?.pollIntervalS ?? 60),
     };
   });
 
@@ -58,12 +75,14 @@ export class LiveContainerComponent {
     if (this.data.wallboxConfig()?.enabled === false) return null;
     const w = this.data.wallbox();
     if (!w) return null;
+    clockTick(); // re-evaluate staleness as time passes without a new reading
     const status = w.status ?? 0;
     return {
       statusLabel: WALLBOX_STATUS_LABELS[status] ?? `Status ${status}`,
       charging: status === 2,
       powerW: w.activePowerW ?? 0,
       sessionKwh: (w.sessionEnergyWh ?? 0) / 1000,
+      stale: isStale(w.time, this.data.wallboxConfig()?.pollIntervalS ?? 30),
     };
   });
 

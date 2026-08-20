@@ -1,11 +1,6 @@
 <div class="backup-grid">
   <!-- On-host dumps (scripts/backup.sh, nightly + rotation) -->
-  <article class="backup-panel">
-    <div class="panel-head">
-      <span class="panel-label">Lokale Dumps</span>
-      <span class="panel-value" [style.color]="localColor()">{{ localValue() }}</span>
-    </div>
-    <p class="panel-sub">{{ localSub() }}</p>
+  <app-metric-tile label="Lokale Dumps" [value]="localValue()" [color]="localColor()" [sub]="localSub()">
     @if (hasLocal()) {
       <div echarts [options]="localChart()" class="backup-spark"></div>
     } @else {
@@ -14,16 +9,10 @@
         <code>./backups</code> read-only in den Backend-Container gemountet.
       </p>
     }
-  </article>
+  </app-metric-tile>
 
   <!-- Off-site restic repo (status.json from scripts/backup-offsite.sh) -->
-  <article class="backup-panel">
-    <div class="panel-head">
-      <span class="panel-label">Off-Site (restic)</span>
-      <span class="panel-value" [style.color]="offsiteColor()">{{ offsiteValue() }}</span>
-    </div>
-    <p class="panel-sub">{{ offsiteSub() }}</p>
-
+  <app-metric-tile label="Off-Site (restic)" [value]="offsiteValue()" [color]="offsiteColor()" [sub]="offsiteSub()">
     @if (offsite()) {
       <ul class="snapshot-list">
         @for (s of latestSnapshots(); track s.id) {
@@ -48,5 +37,5 @@
         beim nächsten nächtlichen Lauf von <code>scripts/backup-offsite.sh</code>.
       </p>
     }
-  </article>
+  </app-metric-tile>
 </div>

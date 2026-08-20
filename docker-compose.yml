@@ -7,16 +7,18 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-voltflow}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voltflow}
-      POSTGRES_DB: ${POSTGRES_DB:-voltflow}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    # Loopback-only: "5432:5432" binds 0.0.0.0, exposing the DB to the whole
+    # LAN with whatever POSTGRES_PASSWORD is set. Matches docker-compose.prod.yml.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - voltflow-db-data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-voltflow} -d ${POSTGRES_DB:-voltflow}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10

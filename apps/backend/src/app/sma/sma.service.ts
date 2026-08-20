@@ -9,7 +9,7 @@ import type {
   SmaReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
-import { numOrNull, toDataRange } from '../common/db-utils';
+import { MAX_RAW_ROWS, numOrNull, toDataRange } from '../common/db-utils';
 import type {
   Configurable,
   HasHistory,
@@ -95,7 +95,8 @@ export class SmaService
       `SELECT ${READING_COLUMNS}
          FROM sma_readings
         WHERE time >= $1 AND time < $2
-        ORDER BY time`,
+        ORDER BY time
+        LIMIT ${MAX_RAW_ROWS}`,
       [from, to],
     );
     return rows.map(rowToSmaReading);
