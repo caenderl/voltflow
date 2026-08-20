@@ -2,6 +2,7 @@ import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { BillingStatement } from '@org/shared-types';
 import { BillingApiService } from '../../core/billing-api.service';
+import { clockTick } from '../../core/clock';
 import { DashboardDataService } from '../dashboard-data.service';
 import { BillingViewComponent } from '../billing-view/billing-view.component';
 
@@ -48,7 +49,10 @@ export class BillingContainerComponent {
   });
 
   /** …nor forward into a year that has not started. */
-  readonly canNext = computed(() => this.year() < new Date().getFullYear());
+  readonly canNext = computed(() => {
+    clockTick(); // re-evaluate across a New Year's Eve boundary in a long-lived tab
+    return this.year() < new Date().getFullYear();
+  });
 
   // Guards against a response for a year the user has since navigated away
   // from landing after a newer request and overwriting it (same hazard

@@ -2,6 +2,7 @@ import { Component, computed, input } from '@angular/core';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { BackupStatus, OffsiteSnapshot } from '@org/shared-types';
 import { CHART_COLORS } from '../../core/chart-utils';
+import { MetricTileComponent } from '../../ui/metric-tile/metric-tile.component';
 import { type SysPoint, backupSizeChart } from './system-charts';
 
 const MB = 1024 ** 2;
@@ -56,7 +57,7 @@ function bytes(n: number): string {
 @Component({
   selector: 'app-system-backups',
   standalone: true,
-  imports: [NgxEchartsDirective],
+  imports: [NgxEchartsDirective, MetricTileComponent],
   templateUrl: './system-backups.component.html',
   styleUrl: './system-backups.component.scss',
 })

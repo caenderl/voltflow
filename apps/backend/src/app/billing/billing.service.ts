@@ -24,10 +24,13 @@ export class BillingService {
    * them into instants across DST changes.
    */
   async statement(year: number): Promise<BillingStatement> {
-    const monthStarts = await this.monthStarts(year);
+    const [monthStarts, checkpoints, tariffs] = await Promise.all([
+      this.monthStarts(year),
+      this.checkpoints(),
+      this.tariffs(),
+    ]);
     const from = new Date(monthStarts[0]);
     const to = new Date(monthStarts[monthStarts.length - 1]);
-    const checkpoints = await this.checkpoints();
 
     // The curve has to reach past both ends of the year to whichever
     // checkpoints bound it there, otherwise an interval crossing a year
@@ -40,9 +43,22 @@ export class BillingService {
       monthStarts,
       checkpoints,
       knots: await this.knots(new Date(window.from), new Date(window.to)),
-      tariffs: await this.tariffs(),
+      tariffs,
       daysInYear: isLeapYear(year) ? 366 : 365,
     });
+  }
+
+  /**
+   * The calendar year it is right now in {@link TIMEZONE}, not the Node
+   * process's own (UTC in prod) timezone — matters only in the ~1-2 h window
+   * around New Year's Eve where the two disagree.
+   */
+  async currentYear(): Promise<number> {
+    const { rows } = await this.db.query(
+      `SELECT extract(year FROM now() AT TIME ZONE $1) AS year`,
+      [TIMEZONE],
+    );
+    return Number(rows[0]['year']);
   }
 
   /**
@@ -95,8 +111,10 @@ export class BillingService {
    * a bucket whose end has not passed yet is left out rather than dated into the
    * future.
    *
-   * Grouped by instant so a second `device_sn` cannot interleave two counters
-   * into one non-monotonic curve.
+   * Summed per instant across `device_sn`: a second registered grid-meter adds
+   * its counter to the site total instead of the two interleaving into one
+   * non-monotonic curve (max() would have picked whichever device's counter is
+   * numerically larger). A no-op today, with exactly one grid-meter.
    *
    * The window is widened by **two** buckets, not one: a knot sits at its
    * bucket's end, so one bucket of slack only reaches `from` when `from` falls
@@ -125,7 +143,7 @@ export class BillingService {
                 < COALESCE((SELECT min(at) FROM h), 'infinity'::timestamptz)
        )
        SELECT extract(epoch FROM at) * 1000 AS at,
-              max(i) AS import_kwh, max(e) AS export_kwh
+              sum(i) AS import_kwh, sum(e) AS export_kwh
          FROM (SELECT * FROM h UNION ALL SELECT * FROM d) k
         WHERE at <= now()
         GROUP BY at

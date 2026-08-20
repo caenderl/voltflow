@@ -175,7 +175,11 @@ CREATE TABLE IF NOT EXISTS wallbox_reading (
     l3_current_a       DOUBLE PRECISION,
     l1_voltage_v       DOUBLE PRECISION,
     l2_voltage_v       DOUBLE PRECISION,
-    l3_voltage_v       DOUBLE PRECISION
+    l3_voltage_v       DOUBLE PRECISION,
+    -- Energy since the previous reading (collector, from actual elapsed poll
+    -- time), Wh. Used for charged_kwh below instead of assuming a fixed 30s
+    -- sample rate, which silently breaks once poll_interval_s is changed.
+    energy_wh          DOUBLE PRECISION
 );
 
 SELECT create_hypertable('wallbox_reading', 'time', if_not_exists => TRUE);
@@ -188,9 +192,11 @@ SELECT add_retention_policy('wallbox_reading', INTERVAL '90 days', if_not_exists
 
 -- ---------------------------------------------------------------------------
 -- Continuous aggregates for downsampling wallbox readings.
--- Energy is approximated as power × 30 s poll interval (/ 120 000 → kWh).
--- Real-time aggregation is enabled explicitly (materialized_only = false) so the
--- current bucket is visible (TimescaleDB >= 2.13 defaults this to true).
+-- charged_kwh sums energy_wh (computed by the collector from each reading's
+-- actual elapsed poll time, not an assumed fixed rate - poll_interval_s is
+-- user-adjustable). Real-time aggregation is enabled explicitly
+-- (materialized_only = false) so the current bucket is visible (TimescaleDB
+-- >= 2.13 defaults this to true).
 -- ---------------------------------------------------------------------------
 
 -- 1-minute buckets (UTC) — groundwork for a future "day" power chart
@@ -201,7 +207,7 @@ SELECT
     time_bucket('1 minute', time)                                AS bucket,
     avg(active_power_w)                                          AS avg_power_w,
     max(active_power_w)                                          AS max_power_w,
-    sum(active_power_w) FILTER (WHERE status = 2) / 120000.0    AS charged_kwh
+    sum(energy_wh) FILTER (WHERE status = 2) / 1000.0            AS charged_kwh
 FROM wallbox_reading
 GROUP BY device_sn, bucket
 WITH NO DATA;
@@ -214,7 +220,7 @@ SELECT
     time_bucket('1 hour', time)                                  AS bucket,
     avg(active_power_w)                                          AS avg_power_w,
     max(active_power_w)                                          AS max_power_w,
-    sum(active_power_w) FILTER (WHERE status = 2) / 120000.0    AS charged_kwh
+    sum(energy_wh) FILTER (WHERE status = 2) / 1000.0            AS charged_kwh
 FROM wallbox_reading
 GROUP BY device_sn, bucket
 WITH NO DATA;
@@ -228,7 +234,7 @@ SELECT
     time_bucket('1 day', time, 'Europe/Berlin')                  AS bucket,
     avg(active_power_w)                                          AS avg_power_w,
     max(active_power_w)                                          AS max_power_w,
-    sum(active_power_w) FILTER (WHERE status = 2) / 120000.0    AS charged_kwh
+    sum(energy_wh) FILTER (WHERE status = 2) / 1000.0            AS charged_kwh
 FROM wallbox_reading
 GROUP BY device_sn, bucket
 WITH NO DATA;

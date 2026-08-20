@@ -9,9 +9,10 @@ export class BillingController {
 
   /** Statement for one calendar year; defaults to the current one. */
   @Get()
-  statement(@Query('year') year?: string): Promise<BillingStatement> {
+  async statement(@Query('year') year?: string): Promise<BillingStatement> {
+    const fallback = year ? 0 : await this.billing.currentYear();
     return this.billing.statement(
-      parseIntInRange(year, 'year', 2000, 2100, new Date().getFullYear()),
+      parseIntInRange(year, 'year', 2000, 2100, fallback),
     );
   }
 }

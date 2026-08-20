@@ -101,6 +101,7 @@ _WALLBOX_FIELDS = (
     "l1_voltage_v",
     "l2_voltage_v",
     "l3_voltage_v",
+    "energy_wh",
 )
 
 
@@ -131,8 +132,8 @@ async def insert_wallbox_reading(pool: asyncpg.Pool, snapshot: dict) -> None:
             device_sn, status, cp_signal, active_power_w,
             session_energy_wh, session_duration_s,
             l1_current_a, l2_current_a, l3_current_a,
-            l1_voltage_v, l2_voltage_v, l3_voltage_v
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            l1_voltage_v, l2_voltage_v, l3_voltage_v, energy_wh
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         """,
         snapshot.get("device_sn"),
         *[snapshot.get(f) for f in _WALLBOX_FIELDS],

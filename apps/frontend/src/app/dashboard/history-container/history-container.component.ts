@@ -19,6 +19,7 @@ import {
   slotKey,
   sumByMinuteBucket,
 } from '../../core/chart-utils';
+import { clockTick } from '../../core/clock';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../../core/date-utils';
 import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
 import { type Costs, computeCosts } from '../../core/costs';
@@ -91,6 +92,7 @@ export class HistoryContainerComponent {
   });
 
   readonly canNext = computed(() => {
+    clockTick(); // re-evaluate across a midnight boundary in a long-lived tab
     const { to } = rangeFor(this.view(), this.refDate());
     return to <= startOfDay(new Date());
   });
@@ -219,12 +221,16 @@ export class HistoryContainerComponent {
     if (view === 'day') {
       const hist = this.data.wallboxHistory();
       const slots = minuteBucketSlots(this.refDate());
-      // Charged energy per 5-min bucket from raw readings, replicating the
-      // wallbox_1hour aggregate's formula: sum of active power while charging
-      // (status 2), over 30-second samples, / 120000 -> kWh. Unlike the PV
-      // line, 0 is a real value here (not charging), so every *elapsed* slot is
-      // drawn; the rest of today is still in the future and stays a gap rather
-      // than a zero line running to midnight.
+      // Charged energy per 5-min bucket from raw readings: sum of active power
+      // while charging (status 2) over each sample's actual poll interval,
+      // converted to kWh. Uses the *configured* interval, not a hardcoded 30s -
+      // the interval is user-adjustable (5-3600s) in Admin -> Wallbox, and a
+      // fixed divisor silently over/under-counts energy whenever it differs
+      // from 30s. Unlike the PV line, 0 is a real value here (not charging), so
+      // every *elapsed* slot is drawn; the rest of today is still in the future
+      // and stays a gap rather than a zero line running to midnight.
+      const pollIntervalS = this.data.wallboxConfig()?.pollIntervalS ?? 30;
+      const wPerSampleToKwh = pollIntervalS / 3_600_000;
       const byKey = sumByMinuteBucket(hist, (r) => (r.status === 2 ? (r.activePowerW ?? 0) : 0));
       const lastSlot = lastCompleteSlot(this.refDate());
       return categorySeriesChart(
@@ -235,7 +241,7 @@ export class HistoryContainerComponent {
             color: CHART_COLORS.charge,
             type: 'line',
             data: slots.map((s, i) =>
-              i > lastSlot ? null : round2((byKey.get(s.key) ?? 0) / 120000),
+              i > lastSlot ? null : round2((byKey.get(s.key) ?? 0) * wPerSampleToKwh),
             ),
           },
         ],

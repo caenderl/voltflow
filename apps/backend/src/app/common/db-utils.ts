@@ -1,5 +1,15 @@
 import type { DataRange } from '@org/shared-types';
 
+/**
+ * Cap on rows returned by an unaggregated ("raw" resolution) time-series
+ * query. Without it, a wide from/to span against a low poll interval can pull
+ * well over a million rows into one JSON response - a real OOM risk on the
+ * 256 MB backend container this app is often deployed on (Raspberry Pi).
+ * Generous relative to real usage: a full day of 5s-interval meter readings
+ * is ~17k rows.
+ */
+export const MAX_RAW_ROWS = 50_000;
+
 /** Numeric DB value (pg returns numerics as strings), or null. */
 export function numOrNull(v: unknown): number | null {
   return v === null || v === undefined ? null : Number(v);

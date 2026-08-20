@@ -92,7 +92,10 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   },
   // ---------------------------------------------------------------------------
   // Wallbox continuous aggregates (added after initial release).
-  // Energy ≈ power × 30 s poll interval (/ 120 000 → kWh).
+  // Energy ≈ power × 30 s poll interval (/ 120 000 → kWh) - wrong once
+  // poll_interval_s differs from 30s. wallbox_1min is corrected onto a real
+  // per-reading energy_wh column by 051-053 below; wallbox_1hour/1day are not
+  // (see 053's comment for why).
   // ---------------------------------------------------------------------------
   {
     name: '010-wallbox-1min-aggregate',
@@ -549,6 +552,89 @@ const MIGRATIONS: { name: string; sql: string }[] = [
                            ELSE ARRAY[]::TEXT[]
                          END
            WHERE roles IS NULL`,
+  },
+  {
+    // charged_kwh in the wallbox caggs was `sum(active_power_w) / 120000`,
+    // which silently assumes an exact 30s poll interval - wrong (2x/0.5x) as
+    // soon as wallbox_config.poll_interval_s (user-adjustable, 5-3600s) is set
+    // to anything else. The collector now computes true per-reading energy
+    // from the actual elapsed time between polls (see collector.py _run_wallbox),
+    // independent of the configured interval.
+    name: '051-wallbox-energy-wh-column',
+    sql: `ALTER TABLE wallbox_reading ADD COLUMN IF NOT EXISTS energy_wh DOUBLE PRECISION`,
+  },
+  {
+    // Backfill energy_wh for existing rows from their ACTUAL recorded
+    // timestamps (LAG), not an assumed rate - this is what makes 053 below
+    // safe: without it, every pre-existing row would have energy_wh = NULL
+    // forever, and rebuilding wallbox_1min onto sum(energy_wh) would silently
+    // zero out charged_kwh for all of its history instead of preserving it.
+    // Capped the same way as the live collector (2x poll_interval_s) so a
+    // historical gap does not backfill as one implausible spike.
+    // WHERE energy_wh IS NULL makes re-running a no-op, per this file's own
+    // rule for a backfill migration.
+    name: '052-wallbox-energy-wh-backfill',
+    sql: `UPDATE wallbox_reading wr
+          SET energy_wh = sub.computed_energy_wh
+          FROM (
+            SELECT wr2.time, wr2.device_sn,
+                   CASE WHEN wr2.status = 2 AND wr2.active_power_w IS NOT NULL THEN
+                     wr2.active_power_w * COALESCE(LEAST(
+                       EXTRACT(EPOCH FROM (wr2.time - LAG(wr2.time)
+                         OVER (PARTITION BY wr2.device_sn ORDER BY wr2.time))),
+                       2 * COALESCE((SELECT poll_interval_s FROM wallbox_config WHERE id = 1), 30)
+                     ), 0) / 3600
+                   ELSE 0 END AS computed_energy_wh
+              FROM wallbox_reading wr2
+          ) sub
+          WHERE wr.time = sub.time AND wr.device_sn = sub.device_sn
+            AND wr.energy_wh IS NULL`,
+  },
+  {
+    // Rebuild wallbox_1min onto the new energy_wh column. Only wallbox_1min,
+    // not wallbox_1hour/wallbox_1day: this cagg's own retention (90 days, see
+    // 046) exactly matches wallbox_reading's raw retention, so recomputing it
+    // from raw data loses nothing - it would only lose what is about to fall
+    // out of the 90-day window anyway. wallbox_1hour (2y) and wallbox_1day
+    // (10y) both retain far more history than the 90-day raw table can
+    // rebuild from, so rebuilding *those* would destroy real charging history
+    // - exactly what "Never DROP / rewrite data" (see file header) rules out.
+    // They keep the old formula (accurate for the 30s default interval) until
+    // a deliberate, backup-first rebuild.
+    //
+    // Guarded on the view's own definition (not a run-once flag) so this is a
+    // true no-op after the first successful run, the same idiom as 046.
+    name: '053-wallbox-1min-energy-wh-rebuild',
+    sql: `DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM timescaledb_information.continuous_aggregates
+               WHERE view_schema = 'public' AND view_name = 'wallbox_1min'
+                 AND view_definition LIKE '%120000%'
+            ) THEN
+              PERFORM remove_retention_policy('wallbox_1min', if_exists => TRUE);
+              EXECUTE 'DROP MATERIALIZED VIEW wallbox_1min';
+              EXECUTE $sql$
+                CREATE MATERIALIZED VIEW wallbox_1min
+                WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+                SELECT
+                  device_sn,
+                  time_bucket('1 minute', time)                      AS bucket,
+                  avg(active_power_w)                                AS avg_power_w,
+                  max(active_power_w)                                AS max_power_w,
+                  sum(energy_wh) FILTER (WHERE status = 2) / 1000.0  AS charged_kwh
+                FROM wallbox_reading
+                GROUP BY device_sn, bucket
+                WITH NO DATA
+              $sql$;
+              PERFORM add_continuous_aggregate_policy('wallbox_1min',
+                start_offset      => INTERVAL '3 days',
+                end_offset        => INTERVAL '1 minute',
+                schedule_interval => INTERVAL '1 minute',
+                if_not_exists     => TRUE);
+              PERFORM add_retention_policy('wallbox_1min', INTERVAL '90 days', if_not_exists => TRUE);
+            END IF;
+          END $$`,
   },
 ];
 

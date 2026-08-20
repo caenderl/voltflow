@@ -1,35 +1,20 @@
 <div class="metric-grid">
   <!-- CPU load -->
-  <article class="metric-card">
-    <div class="metric-head">
-      <span class="metric-label">CPU-Last</span>
-      <span class="metric-value" [style.color]="loadColor()">{{ loadValue() }}</span>
-    </div>
-    <p class="metric-sub">{{ loadSub() }}</p>
+  <app-metric-tile label="CPU-Last" [value]="loadValue()" [color]="loadColor()" [sub]="loadSub()">
     <div echarts [options]="loadChart()" class="metric-spark"></div>
-  </article>
+  </app-metric-tile>
 
   <!-- Memory -->
-  <article class="metric-card">
-    <div class="metric-head">
-      <span class="metric-label">Arbeitsspeicher</span>
-      <span class="metric-value" [style.color]="memColor()">{{ memValue() }}</span>
-    </div>
-    <p class="metric-sub">{{ memSub() }}</p>
+  <app-metric-tile label="Arbeitsspeicher" [value]="memValue()" [color]="memColor()" [sub]="memSub()">
     <div echarts [options]="memChart()" class="metric-spark"></div>
-  </article>
+  </app-metric-tile>
 
   <!-- Disk (near-static: a usage bar reads clearer than a sparkline) -->
-  <article class="metric-card">
-    <div class="metric-head">
-      <span class="metric-label">Festplatte</span>
-      <span class="metric-value" [style.color]="diskColor()">{{ diskValue() }}</span>
-    </div>
-    <p class="metric-sub">{{ diskSub() }}</p>
+  <app-metric-tile label="Festplatte" [value]="diskValue()" [color]="diskColor()" [sub]="diskSub()">
     <div class="disk-bar" role="img" [attr.aria-label]="'Belegung ' + diskValue()">
       @if (hasDisk()) {
         <span class="disk-fill" [style.width.%]="diskPct()" [style.background]="diskColor()"></span>
       }
     </div>
-  </article>
+  </app-metric-tile>
 </div>
