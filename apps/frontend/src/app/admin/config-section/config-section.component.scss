@@ -28,6 +28,12 @@
   padding: 0.55rem 0.9rem;
   border-radius: var(--radius-sm);
   background: var(--surface-2);
+  /* Both boxes the same width, and a little wider than the longer label needs
+     on its own (~6.8rem for "Einspeisung"): sized to content they came out
+     visibly unequal, which read as a layout slip rather than two readings of
+     the same kind. Not `flex: 1` — that would stretch them across the whole
+     settings card. */
+  min-width: 7.5rem;
 
   dt {
     font-size: 0.72rem;

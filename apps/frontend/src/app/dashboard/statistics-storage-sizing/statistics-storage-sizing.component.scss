@@ -13,10 +13,11 @@
   }
 
   /* The one sentence that answers the question the section asks — sized like
-     body text, not like a footnote. */
+     body text, not like a footnote. Runs the full width of the section rather
+     than at a measure of its own, so it lines up with the tiles underneath
+     instead of breaking mid-sentence well short of them. */
   p {
     margin: 0;
-    max-width: 62ch;
     font-size: 0.95rem;
     line-height: 1.5;
     color: var(--on-surface-var);
