@@ -55,31 +55,33 @@
 
 <app-settings-card heading="Erfasste Stände">
   @if (checkpoints().length) {
-    <table class="checkpoint-table">
-      <thead>
-        <tr>
-          <th>Datum</th>
-          <th>Uhrzeit</th>
-          <th class="num">Stand Bezug</th>
-          <th class="num">Stand Einspeisung</th>
-          <th class="actions-col"></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (c of checkpoints(); track c.id) {
-          <tr [class.editing]="formCpEditingId() === c.id">
-            <td>{{ c.date | date: 'dd.MM.yyyy' }}</td>
-            <td>{{ c.readAt }}</td>
-            <td class="num">{{ c.importKwh | number: '1.1-2' : 'de-DE' }} kWh</td>
-            <td class="num">{{ c.exportKwh | number: '1.1-2' : 'de-DE' }} kWh</td>
-            <td class="actions-col">
-              <button type="button" class="icon-btn" title="Bearbeiten" (click)="edit(c)">✎</button>
-              <button type="button" class="icon-btn" title="Löschen" (click)="deleteCheckpoint(c)">🗑</button>
-            </td>
+    <div class="table-scroll">
+      <table class="checkpoint-table">
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Uhrzeit</th>
+            <th class="num">Stand Bezug</th>
+            <th class="num">Stand Einspeisung</th>
+            <th class="actions-col"></th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (c of checkpoints(); track c.id) {
+            <tr [class.editing]="formCpEditingId() === c.id">
+              <td>{{ c.date | date: 'dd.MM.yyyy' }}</td>
+              <td>{{ c.readAt }}</td>
+              <td class="num">{{ c.importKwh | number: '1.1-2' : 'de-DE' }} kWh</td>
+              <td class="num">{{ c.exportKwh | number: '1.1-2' : 'de-DE' }} kWh</td>
+              <td class="actions-col">
+                <button type="button" class="icon-btn" title="Bearbeiten" (click)="edit(c)">✎</button>
+                <button type="button" class="icon-btn" title="Löschen" (click)="deleteCheckpoint(c)">🗑</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   } @else {
     <p class="hint-sm">Noch keine Zählerstände erfasst.</p>
   }
