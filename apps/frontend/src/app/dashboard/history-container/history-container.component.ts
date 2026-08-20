@@ -19,7 +19,7 @@ import {
   slotKey,
   sumByMinuteBucket,
 } from '../../core/chart-utils';
-import { clockTick } from '../../core/clock';
+import { ClockService } from '../../core/clock.service';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../../core/date-utils';
 import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
 import { type Costs, computeCosts } from '../../core/costs';
@@ -54,6 +54,7 @@ import { HistoryViewComponent } from '../history-view/history-view.component';
 })
 export class HistoryContainerComponent {
   private readonly data = inject(DashboardDataService);
+  private readonly clock = inject(ClockService);
   private readonly router = inject(Router);
 
   // Bound from the route's `data: { view }` via withComponentInputBinding().
@@ -92,9 +93,10 @@ export class HistoryContainerComponent {
   });
 
   readonly canNext = computed(() => {
-    clockTick(); // re-evaluate across a midnight boundary in a long-lived tab
+    // Reads the ticking clock so the gate re-opens on its own at midnight in
+    // a tab that is simply left open.
     const { to } = rangeFor(this.view(), this.refDate());
-    return to <= startOfDay(new Date());
+    return to <= startOfDay(new Date(this.clock.now()));
   });
 
   readonly powerChart = computed(() => {
@@ -221,17 +223,17 @@ export class HistoryContainerComponent {
     if (view === 'day') {
       const hist = this.data.wallboxHistory();
       const slots = minuteBucketSlots(this.refDate());
-      // Charged energy per 5-min bucket from raw readings: sum of active power
-      // while charging (status 2) over each sample's actual poll interval,
-      // converted to kWh. Uses the *configured* interval, not a hardcoded 30s -
-      // the interval is user-adjustable (5-3600s) in Admin -> Wallbox, and a
-      // fixed divisor silently over/under-counts energy whenever it differs
-      // from 30s. Unlike the PV line, 0 is a real value here (not charging), so
-      // every *elapsed* slot is drawn; the rest of today is still in the future
-      // and stays a gap rather than a zero line running to midnight.
-      const pollIntervalS = this.data.wallboxConfig()?.pollIntervalS ?? 30;
-      const wPerSampleToKwh = pollIntervalS / 3_600_000;
-      const byKey = sumByMinuteBucket(hist, (r) => (r.status === 2 ? (r.activePowerW ?? 0) : 0));
+      // Charged energy per 5-min bucket, summed straight from each reading's
+      // own measured energyWh (Wh -> kWh). Deliberately NOT re-derived from
+      // activePowerW x an assumed sample spacing: the poll interval is
+      // user-adjustable (5-3600s), so any assumed rate both mis-scales the
+      // present and retroactively rescales every past day the moment the
+      // setting changes. The collector integrates over the real elapsed time
+      // between polls, which is the same figure the backend aggregates use.
+      // Unlike the PV line, 0 is a real value here (not charging), so every
+      // *elapsed* slot is drawn; the rest of today is still in the future and
+      // stays a gap rather than a zero line running to midnight.
+      const byKey = sumByMinuteBucket(hist, (r) => r.energyWh ?? 0);
       const lastSlot = lastCompleteSlot(this.refDate());
       return categorySeriesChart(
         slots.map((s) => s.label),
@@ -241,7 +243,7 @@ export class HistoryContainerComponent {
             color: CHART_COLORS.charge,
             type: 'line',
             data: slots.map((s, i) =>
-              i > lastSlot ? null : round2((byKey.get(s.key) ?? 0) * wPerSampleToKwh),
+              i > lastSlot ? null : round2((byKey.get(s.key) ?? 0) / 1000),
             ),
           },
         ],

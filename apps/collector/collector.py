@@ -46,9 +46,6 @@ from db import (
 _TZ = ZoneInfo("Europe/Berlin")
 # Power fields zeroed in an asleep row written when the inverter is unreachable.
 _SMA_POWER_FIELDS = ("grid_power", "pv_power_a", "pv_power_b", "power_l1", "power_l2", "power_l3")
-# Mirrors sma_stream._PRODUCTION_FIELDS (duplicated, not imported, to keep this
-# module importable without pysma-plus - see the lazy-import note above).
-_SMA_PRODUCTION_FIELDS = ("grid_power", "pv_power_a", "pv_power_b")
 
 load_dotenv()
 
@@ -72,7 +69,7 @@ RECONNECT_DELAY = 10
 CONFIG_POLL_S = 30
 
 
-def _apply_daily_carry(carry: dict, snap: dict, today) -> None:
+def _apply_daily_carry(carry: dict, snap: dict, today, production_fields) -> None:
     """Fill daily_yield_wh / total_yield_kwh on a snapshot from carry state.
 
     daily_yield_wh restarts at 0 each local day. The inverter keeps reporting the
@@ -84,10 +81,14 @@ def _apply_daily_carry(carry: dict, snap: dict, today) -> None:
     Speedwire read can drop while the PV fields still arrive); only then are
     reported values trusted. total_yield_kwh is a monotonic lifetime counter,
     carried verbatim when a read is missing it.
+
+    `production_fields` is sma_stream.PRODUCTION_FIELDS, passed in rather than
+    imported at module level so this module stays importable without
+    pysma-plus (the meter/wallbox images ship without it).
     """
     if carry["date"] != today:
         carry["date"], carry["daily_wh"], carry["produced"] = today, 0.0, False
-    if any((snap.get(f) or 0) > 0 for f in _SMA_PRODUCTION_FIELDS):
+    if any((snap.get(f) or 0) > 0 for f in production_fields):
         carry["produced"] = True
 
     reported = snap.get("daily_yield_wh")
@@ -119,6 +120,13 @@ async def _run_with_reconnect(label: str, stream_factory, on_reading) -> None:
     RECONNECT_DELAY on any error. Shared by _run_meter and _run_wallbox, which
     differ only in the stream factory and what a reading does once read.
 
+    A failure inside `on_reading` (i.e. writing to the DB) drops that one
+    reading and keeps the stream open, exactly as _run_sma does: the device
+    session is not what failed, and tearing it down would mean the meter opens
+    a brand-new Anker MQTT session over a transient Postgres blip - churn
+    against an account that permits only one. Only the stream itself failing
+    triggers a reconnect.
+
     Uses contextlib.aclosing so the generator's own `finally` (closing the
     MQTT/Modbus session) always runs synchronously before reconnecting - an
     `async for` abandoned via an exception in its body does not call aclose()
@@ -130,7 +138,11 @@ async def _run_with_reconnect(label: str, stream_factory, on_reading) -> None:
         try:
             async with contextlib.aclosing(stream_factory()) as stream:
                 async for reading in stream:
-                    await on_reading(reading)
+                    try:
+                        await on_reading(reading)
+                    except Exception as db_err:  # noqa: BLE001
+                        LOG.warning("%s reading dropped (DB error: %s: %s)",
+                                    label, type(db_err).__name__, db_err)
         except Exception as err:  # noqa: BLE001
             LOG.warning("%s stream error: %s: %s - reconnecting in %ss",
                         label, type(err).__name__, err, RECONNECT_DELAY)
@@ -220,7 +232,12 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
     applies internally is applied here, so a reconnect out of real production
     leaves a gap until the inverter answers again.
     """
-    from sma_stream import SmaSessionStale, sleep_implausible, stream_sma
+    from sma_stream import (
+        PRODUCTION_FIELDS,
+        SmaSessionStale,
+        sleep_implausible,
+        stream_sma,
+    )
 
     host = cfg["host"]
     interval = cfg.get("poll_interval_s") or 60
@@ -280,7 +297,7 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
                     elif snap.get("grid_power") is not None:
                         carry["last_power"] = snap["grid_power"]
                     fail_cycles, gapping = 0, False
-                    _apply_daily_carry(carry, snap, datetime.now(_TZ).date())
+                    _apply_daily_carry(carry, snap, datetime.now(_TZ).date(), PRODUCTION_FIELDS)
                     # DB errors are kept out of the except-Exception block below,
                     # which is written for SMA session/device failures: a pool
                     # hiccup here must not be misread as "inverter unreachable"
@@ -322,7 +339,7 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
                 carry["last_power"] = 0.0
                 snap = {f: 0.0 for f in _SMA_POWER_FIELDS}
                 snap.update(asleep=True, device_sn=carry["serial"], device_pn=carry["model"])
-                _apply_daily_carry(carry, snap, datetime.now(_TZ).date())
+                _apply_daily_carry(carry, snap, datetime.now(_TZ).date(), PRODUCTION_FIELDS)
                 try:
                     await insert_sma_reading(pool, snap)
                 except Exception:  # noqa: BLE001

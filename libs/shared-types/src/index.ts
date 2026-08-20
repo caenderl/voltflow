@@ -449,6 +449,15 @@ export interface WallboxReading {
   sessionEnergyWh: number | null;
   /** Duration of the current charging session in s. */
   sessionDurationS: number | null;
+  /**
+   * Energy charged since the PREVIOUS reading in Wh, integrated by the
+   * collector over the actual elapsed time between polls. Prefer this over
+   * re-deriving energy from activePowerW and an assumed sample spacing: the
+   * poll interval is user-configurable and changing it would otherwise
+   * retroactively rescale every historical reading. Null only for rows written
+   * before the column existed.
+   */
+  energyWh: number | null;
   l1CurrentA: number | null;
   l2CurrentA: number | null;
   l3CurrentA: number | null;

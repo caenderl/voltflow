@@ -2,7 +2,7 @@ import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { BillingStatement } from '@org/shared-types';
 import { BillingApiService } from '../../core/billing-api.service';
-import { clockTick } from '../../core/clock';
+import { ClockService } from '../../core/clock.service';
 import { DashboardDataService } from '../dashboard-data.service';
 import { BillingViewComponent } from '../billing-view/billing-view.component';
 
@@ -33,6 +33,7 @@ import { BillingViewComponent } from '../billing-view/billing-view.component';
 export class BillingContainerComponent {
   private readonly api = inject(BillingApiService);
   private readonly data = inject(DashboardDataService);
+  private readonly clock = inject(ClockService);
   // Explicit, because `load()` also runs from the year navigation, outside the
   // injection context where takeUntilDestroyed() could find one itself.
   private readonly destroyRef = inject(DestroyRef);
@@ -50,8 +51,9 @@ export class BillingContainerComponent {
 
   /** …nor forward into a year that has not started. */
   readonly canNext = computed(() => {
-    clockTick(); // re-evaluate across a New Year's Eve boundary in a long-lived tab
-    return this.year() < new Date().getFullYear();
+    // Reads the ticking clock so the gate re-opens on its own when a tab is
+    // left open over New Year's Eve.
+    return this.year() < new Date(this.clock.now()).getFullYear();
   });
 
   // Guards against a response for a year the user has since navigated away

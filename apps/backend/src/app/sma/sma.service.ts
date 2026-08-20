@@ -9,7 +9,7 @@ import type {
   SmaReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
-import { MAX_RAW_ROWS, numOrNull, toDataRange } from '../common/db-utils';
+import { MAX_RAW_ROWS, assertNotTruncated, numOrNull, toDataRange } from '../common/db-utils';
 import type {
   Configurable,
   HasHistory,
@@ -96,9 +96,10 @@ export class SmaService
          FROM sma_readings
         WHERE time >= $1 AND time < $2
         ORDER BY time
-        LIMIT ${MAX_RAW_ROWS}`,
+        LIMIT ${MAX_RAW_ROWS + 1}`,
       [from, to],
     );
+    assertNotTruncated(rows.length, 'SMA history');
     return rows.map(rowToSmaReading);
   }
 

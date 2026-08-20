@@ -14,8 +14,22 @@ import type { Pool } from 'pg';
  *    its backfill as a separate, earlier entry — see 040-042.
  *  - Never DROP / rewrite data here. For destructive or data-moving changes
  *    use a real versioned migration tool + a backup first.
+ *
+ * `skipIf` is an optional guard query returning a single boolean: true skips
+ * the step. It exists for work that cannot express its own "already done" test
+ * inside the statement — an expensive backfill whose re-run would be a no-op
+ * but still scans the table, or a statement that may not run in a transaction
+ * and therefore cannot be wrapped in `DO $$ IF … $$`. A guard is never a
+ * substitute for writing the statement idempotently where that is possible.
  */
-const MIGRATIONS: { name: string; sql: string }[] = [
+interface Migration {
+  name: string;
+  sql: string;
+  /** Single-row, single-column boolean query; `true` skips `sql`. */
+  skipIf?: string;
+}
+
+const MIGRATIONS: Migration[] = [
   {
     name: '001-tariff-table',
     sql: `CREATE TABLE IF NOT EXISTS tariff (
@@ -553,27 +567,43 @@ const MIGRATIONS: { name: string; sql: string }[] = [
                          END
            WHERE roles IS NULL`,
   },
+  // ---------------------------------------------------------------------------
+  // Wallbox charged energy: from an assumed poll rate to a measured one.
+  //
+  // charged_kwh in all three wallbox caggs was `sum(active_power_w) / 120000`,
+  // i.e. power x an assumed 30 s sample spacing. poll_interval_s is
+  // user-adjustable (5-3600 s), so the figure is wrong by exactly
+  // interval/30 whenever it is not 30 s - this deployment polls at 20 s and
+  // was reporting ~49 % too much charged energy. The collector now records
+  // true per-reading energy in wallbox_reading.energy_wh, measured from the
+  // actual elapsed time between polls, and the aggregates simply sum it.
+  //
+  // The rebuild recomputes each aggregate from the raw hypertable, so it is
+  // only safe while the raw retention window still covers the whole
+  // aggregate. Each drop below therefore tests exactly that and skips itself
+  // otherwise, leaving the old (wrong but present) history alone rather than
+  // deleting rows it cannot reproduce - the file's "never DROP data" rule.
+  // On this deployment raw data begins 2026-06-25, well inside the 90-day
+  // window, so all three rebuild cleanly.
+  // ---------------------------------------------------------------------------
   {
-    // charged_kwh in the wallbox caggs was `sum(active_power_w) / 120000`,
-    // which silently assumes an exact 30s poll interval - wrong (2x/0.5x) as
-    // soon as wallbox_config.poll_interval_s (user-adjustable, 5-3600s) is set
-    // to anything else. The collector now computes true per-reading energy
-    // from the actual elapsed time between polls (see collector.py _run_wallbox),
-    // independent of the configured interval.
     name: '051-wallbox-energy-wh-column',
     sql: `ALTER TABLE wallbox_reading ADD COLUMN IF NOT EXISTS energy_wh DOUBLE PRECISION`,
   },
   {
-    // Backfill energy_wh for existing rows from their ACTUAL recorded
-    // timestamps (LAG), not an assumed rate - this is what makes 053 below
-    // safe: without it, every pre-existing row would have energy_wh = NULL
-    // forever, and rebuilding wallbox_1min onto sum(energy_wh) would silently
-    // zero out charged_kwh for all of its history instead of preserving it.
-    // Capped the same way as the live collector (2x poll_interval_s) so a
-    // historical gap does not backfill as one implausible spike.
-    // WHERE energy_wh IS NULL makes re-running a no-op, per this file's own
-    // rule for a backfill migration.
+    // Backfill from each row's ACTUAL recorded spacing (LAG over its own
+    // device), capped at 2x the poll interval so a collector outage does not
+    // integrate into one implausible spike - the same rule the live collector
+    // applies. Without this the rebuilt aggregates would sum NULLs and report
+    // zero for every historical bucket.
+    //
+    // `WHERE energy_wh IS NULL` makes a re-run write nothing, but the LAG
+    // window still sorts the whole hypertable (measured: a 7 MB disk-spilling
+    // sort on every backend start), so the guard skips the statement outright
+    // once no NULLs remain. It re-arms itself if an older collector writes
+    // NULL rows again, which is what makes a backend-first deploy self-heal.
     name: '052-wallbox-energy-wh-backfill',
+    skipIf: `SELECT NOT EXISTS (SELECT 1 FROM wallbox_reading WHERE energy_wh IS NULL)`,
     sql: `UPDATE wallbox_reading wr
           SET energy_wh = sub.computed_energy_wh
           FROM (
@@ -591,20 +621,13 @@ const MIGRATIONS: { name: string; sql: string }[] = [
             AND wr.energy_wh IS NULL`,
   },
   {
-    // Rebuild wallbox_1min onto the new energy_wh column. Only wallbox_1min,
-    // not wallbox_1hour/wallbox_1day: this cagg's own retention (90 days, see
-    // 046) exactly matches wallbox_reading's raw retention, so recomputing it
-    // from raw data loses nothing - it would only lose what is about to fall
-    // out of the 90-day window anyway. wallbox_1hour (2y) and wallbox_1day
-    // (10y) both retain far more history than the 90-day raw table can
-    // rebuild from, so rebuilding *those* would destroy real charging history
-    // - exactly what "Never DROP / rewrite data" (see file header) rules out.
-    // They keep the old formula (accurate for the 30s default interval) until
-    // a deliberate, backup-first rebuild.
-    //
-    // Guarded on the view's own definition (not a run-once flag) so this is a
-    // true no-op after the first successful run, the same idiom as 046.
-    name: '053-wallbox-1min-energy-wh-rebuild',
+    // Drop only if the old formula is still in place AND the raw table still
+    // reaches back at least as far as this aggregate does; otherwise the
+    // rebuild would silently discard buckets it cannot recompute. An empty
+    // aggregate compares as +infinity (nothing to lose -> rebuild); an empty
+    // raw table compares as +infinity on the other side (nothing to rebuild
+    // from -> keep what is there).
+    name: '053-wallbox-1min-drop-old-formula',
     sql: `DO $$
           BEGIN
             IF EXISTS (
@@ -612,29 +635,161 @@ const MIGRATIONS: { name: string; sql: string }[] = [
                WHERE view_schema = 'public' AND view_name = 'wallbox_1min'
                  AND view_definition LIKE '%120000%'
             ) THEN
-              PERFORM remove_retention_policy('wallbox_1min', if_exists => TRUE);
-              EXECUTE 'DROP MATERIALIZED VIEW wallbox_1min';
-              EXECUTE $sql$
-                CREATE MATERIALIZED VIEW wallbox_1min
-                WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
-                SELECT
-                  device_sn,
-                  time_bucket('1 minute', time)                      AS bucket,
-                  avg(active_power_w)                                AS avg_power_w,
-                  max(active_power_w)                                AS max_power_w,
-                  sum(energy_wh) FILTER (WHERE status = 2) / 1000.0  AS charged_kwh
-                FROM wallbox_reading
-                GROUP BY device_sn, bucket
-                WITH NO DATA
-              $sql$;
-              PERFORM add_continuous_aggregate_policy('wallbox_1min',
-                start_offset      => INTERVAL '3 days',
-                end_offset        => INTERVAL '1 minute',
-                schedule_interval => INTERVAL '1 minute',
-                if_not_exists     => TRUE);
-              PERFORM add_retention_policy('wallbox_1min', INTERVAL '90 days', if_not_exists => TRUE);
+              IF COALESCE((SELECT min(bucket) FROM wallbox_1min), 'infinity'::timestamptz)
+                 >= COALESCE((SELECT time_bucket('1 minute', time) FROM wallbox_reading
+                               ORDER BY time LIMIT 1), 'infinity'::timestamptz) THEN
+                PERFORM remove_retention_policy('wallbox_1min', if_exists => TRUE);
+                EXECUTE 'DROP MATERIALIZED VIEW wallbox_1min';
+              ELSE
+                RAISE WARNING 'wallbox_1min: raw data no longer covers this aggregate - '
+                              'keeping the old charged_kwh formula. Rebuild by hand '
+                              'from a backup if the figures matter.';
+              END IF;
             END IF;
           END $$`,
+  },
+  {
+    // Must be its own statement: CREATE MATERIALIZED VIEW ... WITH DATA is
+    // rejected inside a transaction block (and inside DO). WITH DATA rather
+    // than WITH NO DATA so the whole history is materialized here, instead of
+    // leaving every query before the policy's 3 days start_offset to fall
+    // through to a live aggregate over raw for the rest of the retention.
+    // IF NOT EXISTS makes it a no-op once built.
+    name: '054-wallbox-1min-rebuild',
+    sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1min
+          WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+          SELECT
+            device_sn,
+            time_bucket('1 minute', time) AS bucket,
+            avg(active_power_w)                                AS avg_power_w,
+            max(active_power_w)                                AS max_power_w,
+            sum(energy_wh) FILTER (WHERE status = 2) / 1000.0  AS charged_kwh
+          FROM wallbox_reading
+          GROUP BY device_sn, bucket
+          WITH DATA`,
+  },
+  {
+    name: '055-wallbox-1min-policies',
+    sql: `SELECT add_continuous_aggregate_policy('wallbox_1min',
+            start_offset      => INTERVAL '3 days',
+            end_offset        => INTERVAL '1 minute',
+            schedule_interval => INTERVAL '1 minute',
+            if_not_exists     => TRUE);
+          SELECT add_retention_policy('wallbox_1min', INTERVAL '90 days', if_not_exists => TRUE)`,
+  },
+  {
+    // Drop only if the old formula is still in place AND the raw table still
+    // reaches back at least as far as this aggregate does; otherwise the
+    // rebuild would silently discard buckets it cannot recompute. An empty
+    // aggregate compares as +infinity (nothing to lose -> rebuild); an empty
+    // raw table compares as +infinity on the other side (nothing to rebuild
+    // from -> keep what is there).
+    name: '056-wallbox-1hour-drop-old-formula',
+    sql: `DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM timescaledb_information.continuous_aggregates
+               WHERE view_schema = 'public' AND view_name = 'wallbox_1hour'
+                 AND view_definition LIKE '%120000%'
+            ) THEN
+              IF COALESCE((SELECT min(bucket) FROM wallbox_1hour), 'infinity'::timestamptz)
+                 >= COALESCE((SELECT time_bucket('1 hour', time) FROM wallbox_reading
+                               ORDER BY time LIMIT 1), 'infinity'::timestamptz) THEN
+                PERFORM remove_retention_policy('wallbox_1hour', if_exists => TRUE);
+                EXECUTE 'DROP MATERIALIZED VIEW wallbox_1hour';
+              ELSE
+                RAISE WARNING 'wallbox_1hour: raw data no longer covers this aggregate - '
+                              'keeping the old charged_kwh formula. Rebuild by hand '
+                              'from a backup if the figures matter.';
+              END IF;
+            END IF;
+          END $$`,
+  },
+  {
+    // Must be its own statement: CREATE MATERIALIZED VIEW ... WITH DATA is
+    // rejected inside a transaction block (and inside DO). WITH DATA rather
+    // than WITH NO DATA so the whole history is materialized here, instead of
+    // leaving every query before the policy's 90 days start_offset to fall
+    // through to a live aggregate over raw for the rest of the retention.
+    // IF NOT EXISTS makes it a no-op once built.
+    name: '057-wallbox-1hour-rebuild',
+    sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1hour
+          WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+          SELECT
+            device_sn,
+            time_bucket('1 hour', time) AS bucket,
+            avg(active_power_w)                                AS avg_power_w,
+            max(active_power_w)                                AS max_power_w,
+            sum(energy_wh) FILTER (WHERE status = 2) / 1000.0  AS charged_kwh
+          FROM wallbox_reading
+          GROUP BY device_sn, bucket
+          WITH DATA`,
+  },
+  {
+    name: '058-wallbox-1hour-policies',
+    sql: `SELECT add_continuous_aggregate_policy('wallbox_1hour',
+            start_offset      => INTERVAL '90 days',
+            end_offset        => INTERVAL '1 hour',
+            schedule_interval => INTERVAL '1 hour',
+            if_not_exists     => TRUE);
+          SELECT add_retention_policy('wallbox_1hour', INTERVAL '2 years', if_not_exists => TRUE)`,
+  },
+  {
+    // Drop only if the old formula is still in place AND the raw table still
+    // reaches back at least as far as this aggregate does; otherwise the
+    // rebuild would silently discard buckets it cannot recompute. An empty
+    // aggregate compares as +infinity (nothing to lose -> rebuild); an empty
+    // raw table compares as +infinity on the other side (nothing to rebuild
+    // from -> keep what is there).
+    name: '059-wallbox-1day-drop-old-formula',
+    sql: `DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM timescaledb_information.continuous_aggregates
+               WHERE view_schema = 'public' AND view_name = 'wallbox_1day'
+                 AND view_definition LIKE '%120000%'
+            ) THEN
+              IF COALESCE((SELECT min(bucket) FROM wallbox_1day), 'infinity'::timestamptz)
+                 >= COALESCE((SELECT time_bucket('1 day', time, 'Europe/Berlin') FROM wallbox_reading
+                               ORDER BY time LIMIT 1), 'infinity'::timestamptz) THEN
+                PERFORM remove_retention_policy('wallbox_1day', if_exists => TRUE);
+                EXECUTE 'DROP MATERIALIZED VIEW wallbox_1day';
+              ELSE
+                RAISE WARNING 'wallbox_1day: raw data no longer covers this aggregate - '
+                              'keeping the old charged_kwh formula. Rebuild by hand '
+                              'from a backup if the figures matter.';
+              END IF;
+            END IF;
+          END $$`,
+  },
+  {
+    // Must be its own statement: CREATE MATERIALIZED VIEW ... WITH DATA is
+    // rejected inside a transaction block (and inside DO). WITH DATA rather
+    // than WITH NO DATA so the whole history is materialized here, instead of
+    // leaving every query before the policy's 90 days start_offset to fall
+    // through to a live aggregate over raw for the rest of the retention.
+    // IF NOT EXISTS makes it a no-op once built.
+    name: '060-wallbox-1day-rebuild',
+    sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS wallbox_1day
+          WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+          SELECT
+            device_sn,
+            time_bucket('1 day', time, 'Europe/Berlin') AS bucket,
+            avg(active_power_w)                                AS avg_power_w,
+            max(active_power_w)                                AS max_power_w,
+            sum(energy_wh) FILTER (WHERE status = 2) / 1000.0  AS charged_kwh
+          FROM wallbox_reading
+          GROUP BY device_sn, bucket
+          WITH DATA`,
+  },
+  {
+    name: '061-wallbox-1day-policies',
+    sql: `SELECT add_continuous_aggregate_policy('wallbox_1day',
+            start_offset      => INTERVAL '90 days',
+            end_offset        => INTERVAL '1 day',
+            schedule_interval => INTERVAL '1 hour',
+            if_not_exists     => TRUE);
+          SELECT add_retention_policy('wallbox_1day', INTERVAL '10 years', if_not_exists => TRUE)`,
   },
 ];
 
@@ -643,8 +798,19 @@ export async function applyMigrations(
   logger: Logger = new Logger('Schema'),
 ): Promise<void> {
   let failed = 0;
+  let skipped = 0;
   for (const m of MIGRATIONS) {
     try {
+      if (m.skipIf) {
+        const { rows } = await pool.query(m.skipIf);
+        // Only a definitive `true` skips: an unexpected shape (no row, no
+        // column) means the guard could not answer, and running an idempotent
+        // statement needlessly is safer than skipping one that was needed.
+        if (rows.length && Object.values(rows[0])[0] === true) {
+          skipped++;
+          continue;
+        }
+      }
       await pool.query(m.sql);
     } catch (err) {
       failed++;
@@ -652,7 +818,9 @@ export async function applyMigrations(
     }
   }
   if (failed === 0) {
-    logger.log(`Schema up to date (${MIGRATIONS.length} idempotent steps)`);
+    logger.log(
+      `Schema up to date (${MIGRATIONS.length} idempotent steps, ${skipped} already satisfied)`,
+    );
   } else {
     logger.error(
       `Schema NOT fully applied: ${failed} of ${MIGRATIONS.length} migrations failed`,

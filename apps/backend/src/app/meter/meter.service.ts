@@ -10,7 +10,13 @@ import type {
   SeriesResponse,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
-import { MAX_RAW_ROWS, numOrNull, round3, toDataRange } from '../common/db-utils';
+import {
+  MAX_RAW_ROWS,
+  assertNotTruncated,
+  numOrNull,
+  round3,
+  toDataRange,
+} from '../common/db-utils';
 import type { HasLatest, HasRange } from '../common/device-capabilities';
 import { DbService } from '../database/db.service';
 import { rowToReading } from './meter.mapper';
@@ -90,9 +96,10 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
            FROM meter_reading
           WHERE time >= $1 AND time < $2
           ORDER BY time
-          LIMIT ${MAX_RAW_ROWS}`,
+          LIMIT ${MAX_RAW_ROWS + 1}`,
         [from, to],
       );
+      assertNotTruncated(rows.length, 'meter series');
       points = rows.map((r) => ({
         time: new Date(r['time'] as string).toISOString(),
         gridToHomePowerAvg: numOrNull(r['grid_to_home_power']),

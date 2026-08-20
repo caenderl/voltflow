@@ -88,8 +88,9 @@ async def insert_reading(pool: asyncpg.Pool, snapshot: dict) -> None:
 
 # --- Wallbox -------------------------------------------------------------
 
-# Numeric fields of a wallbox snapshot (in INSERT column order)
-_WALLBOX_FIELDS = (
+# Numeric fields of a wallbox snapshot (in INSERT column order), and the same
+# list without energy_wh for a DB whose backend has not added that column yet.
+_WALLBOX_FIELDS_LEGACY = (
     "status",
     "cp_signal",
     "active_power_w",
@@ -101,8 +102,8 @@ _WALLBOX_FIELDS = (
     "l1_voltage_v",
     "l2_voltage_v",
     "l3_voltage_v",
-    "energy_wh",
 )
+_WALLBOX_FIELDS = (*_WALLBOX_FIELDS_LEGACY, "energy_wh")
 
 
 async def read_wallbox_config(pool: asyncpg.Pool) -> dict | None:
@@ -124,19 +125,47 @@ async def read_wallbox_config(pool: asyncpg.Pool) -> dict | None:
     return dict(row)
 
 
+# Whether wallbox_reading.energy_wh exists, probed once per process.
+# The column is created by a BACKEND migration, and the two are deployed
+# independently (scripts/deploy.sh app / collector), so the collector cannot
+# assume it is there: writing to a missing column would fail every insert and
+# turn a routine deploy-order difference into a total loss of wallbox data.
+# Falling back drops only the energy integration, which the backend backfills
+# from the recorded timestamps once its own migration runs.
+_energy_wh_supported: bool | None = None
+
+
+async def _has_energy_wh(pool: asyncpg.Pool) -> bool:
+    global _energy_wh_supported
+    if _energy_wh_supported is None:
+        _energy_wh_supported = await pool.fetchval(
+            """
+            SELECT EXISTS (
+              SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'wallbox_reading' AND column_name = 'energy_wh'
+            )
+            """
+        )
+        if not _energy_wh_supported:
+            LOG.warning(
+                "wallbox_reading.energy_wh missing - deploy the backend to add it; "
+                "recording readings without per-sample energy until then"
+            )
+    return _energy_wh_supported
+
+
 async def insert_wallbox_reading(pool: asyncpg.Pool, snapshot: dict) -> None:
     """Store a wallbox snapshot as a measurement row."""
+    fields = _WALLBOX_FIELDS if await _has_energy_wh(pool) else _WALLBOX_FIELDS_LEGACY
+    columns = ", ".join(fields)
+    placeholders = ", ".join(f"${i}" for i in range(2, len(fields) + 2))
     await pool.execute(
-        """
-        INSERT INTO wallbox_reading (
-            device_sn, status, cp_signal, active_power_w,
-            session_energy_wh, session_duration_s,
-            l1_current_a, l2_current_a, l3_current_a,
-            l1_voltage_v, l2_voltage_v, l3_voltage_v, energy_wh
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        f"""
+        INSERT INTO wallbox_reading (device_sn, {columns})
+        VALUES ($1, {placeholders})
         """,
         snapshot.get("device_sn"),
-        *[snapshot.get(f) for f in _WALLBOX_FIELDS],
+        *[snapshot.get(f) for f in fields],
     )
 
 
