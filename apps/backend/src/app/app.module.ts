@@ -12,6 +12,7 @@ import { WallboxModule } from './wallbox/wallbox.module';
 import { SmaModule } from './sma/sma.module';
 import { LiveModule } from './live/live.module';
 import { SystemModule } from './system/system.module';
+import { DevicesModule } from './devices/devices.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { SystemModule } from './system/system.module';
     SmaModule,
     LiveModule,
     SystemModule,
+    DevicesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

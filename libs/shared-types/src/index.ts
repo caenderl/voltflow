@@ -1,6 +1,34 @@
 // Shared types between backend (NestJS) and frontend (Angular).
 // Single source of truth for the API / WebSocket contracts.
 
+/**
+ * What a device does in the energy balance — independent of who built it and
+ * of the protocol it is read with. The domain (house load, balance, statistics)
+ * only ever needs this, never the vendor.
+ *
+ * A device carries a *set* of roles, not one: a hybrid inverter produces and
+ * stores, a bidirectional wallbox consumes and produces.
+ */
+export type DeviceRole = 'grid-meter' | 'producer' | 'consumer' | 'storage';
+
+/** A device as the registry knows it (GET /api/devices). */
+export interface DeviceInfo {
+  /** Serial number — the identity every reading is tagged with. */
+  deviceSn: string;
+  /** Model / part number as reported by the device, when it reports one. */
+  devicePn: string | null;
+  /**
+   * Which collector registered it (`smartmeter` | `inverter` | `wallbox`).
+   * A driver fact, kept for diagnostics — prefer {@link roles} for anything
+   * that reasons about energy.
+   */
+  type: string | null;
+  alias: string | null;
+  roles: DeviceRole[];
+  /** When the device was first seen, ISO timestamp. */
+  firstSeen: string;
+}
+
 /** A live / raw reading from the smart meter. */
 export interface MeterReading {
   /** ISO timestamp of the measurement (ingestion time). */
@@ -763,8 +791,8 @@ export interface StandbyStatistics {
   shareOfConsumption: number | null;
 }
 
-/** One simulated battery size and what it would have achieved. */
-export interface BatteryCurvePoint {
+/** One simulated storage size and what it would have achieved. */
+export interface StorageSizingPoint {
   capacityKwh: number;
   /** Share of consumption covered without the grid (0..1). */
   autarky: number;
@@ -773,15 +801,19 @@ export interface BatteryCurvePoint {
 }
 
 /**
- * Battery sizing, simulated hour by hour over every fully covered day: grid
- * import is served from the battery first, feed-in charges it (losses applied
- * on the way in), and what the battery cannot cover stays grid import.
+ * Storage sizing, simulated hour by hour over every fully covered day: grid
+ * import is served from the store first, feed-in charges it (losses applied on
+ * the way in), and what it cannot cover stays grid import.
+ *
+ * This describes a *hypothetical* store ("how big would one have to be"), not
+ * an installed one - hence StorageSizing rather than Storage/Battery, which
+ * stay free for a device that actually exists.
  */
-export interface BatteryStatistics {
+export interface StorageSizing {
   /** Autarky actually measured, i.e. the curve's 0 kWh point (0..1). */
   baseAutarky: number | null;
   /** Autarky / self-consumption over a range of sizes, ascending. */
-  curve: BatteryCurvePoint[];
+  curve: StorageSizingPoint[];
   /**
    * Smallest simulated size that would have removed *all* grid import over the
    * measured period. Null when no size reaches it — with too little sun the
@@ -792,7 +824,7 @@ export interface BatteryStatistics {
   kneeKwh: number | null;
   /** Autarky at {@link kneeKwh} (0..1). */
   kneeAutarky: number | null;
-  /** Typical / worst dark-hours consumption a battery has to bridge, kWh. */
+  /** Typical / worst dark-hours consumption the store has to bridge, kWh. */
   medianNightKwh: number | null;
   maxNightKwh: number | null;
   /** Totals the simulation ran on, kWh. */
@@ -818,5 +850,5 @@ export interface StatisticsResponse {
   pv: PvStatistics;
   consumption: ConsumptionStatistics;
   standby: StandbyStatistics;
-  battery: BatteryStatistics;
+  storageSizing: StorageSizing;
 }

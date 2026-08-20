@@ -15,7 +15,7 @@
     <p class="hint-sm peak-note">{{ peakNote() }}</p>
   }
 
-  <app-statistics-battery [battery]="s.battery" [days]="s.days" />
+  <app-statistics-storage-sizing [sizing]="s.storageSizing" [days]="s.days" />
 } @else if (loading()) {
   <p class="hint">Lade Statistik …</p>
 } @else if (!error()) {

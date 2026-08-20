@@ -47,8 +47,8 @@ describe('computeStatistics', () => {
     expect(s.firstDay).toBeNull();
     expect(s.pv.bestDay).toBeNull();
     expect(s.consumption.avgDayKwh).toBeNull();
-    expect(s.battery.curve).toEqual([]);
-    expect(s.battery.fullAutarkyKwh).toBeNull();
+    expect(s.storageSizing.curve).toEqual([]);
+    expect(s.storageSizing.fullAutarkyKwh).toBeNull();
   });
 
   it('sums house load as PV + import - feed-in per day', () => {
@@ -166,7 +166,7 @@ describe('standby', () => {
   });
 });
 
-describe('battery sizing', () => {
+describe('storage sizing', () => {
   // Every week day the same: 6 kWh of sun, 5 kWh of it fed in around noon, and
   // 4 kWh imported through the night. Feeding in 5 kWh to get 4 kWh back out
   // covers the night exactly at 90 % efficiency, so a 4 kWh battery does it.
@@ -180,7 +180,7 @@ describe('battery sizing', () => {
   ).flat();
 
   it('reports the measured autarky as the 0 kWh point', () => {
-    const b = computeStatistics(input({ hours: CYCLE })).battery;
+    const b = computeStatistics(input({ hours: CYCLE })).storageSizing;
     // 5 kWh consumed a day (6 sun + 4 grid - 5 fed in), 4 kWh of it imported.
     expect(b.consumptionKwh).toBe(35);
     expect(b.productionKwh).toBe(42);
@@ -193,7 +193,7 @@ describe('battery sizing', () => {
   });
 
   it('finds the size that removes the last kWh of grid import', () => {
-    const b = computeStatistics(input({ hours: CYCLE })).battery;
+    const b = computeStatistics(input({ hours: CYCLE })).storageSizing;
     expect(b.fullAutarkyKwh).toBe(4);
     expect(b.curve.find((p) => p.capacityKwh === 4)?.autarky).toBe(1);
     // Half a night short of it, half the night's import is left.
@@ -201,7 +201,7 @@ describe('battery sizing', () => {
   });
 
   it('is monotonic and never exceeds full autarky', () => {
-    const b = computeStatistics(input({ hours: CYCLE })).battery;
+    const b = computeStatistics(input({ hours: CYCLE })).storageSizing;
     for (const [i, point] of b.curve.entries()) {
       expect(point.autarky).toBeLessThanOrEqual(1);
       expect(point.selfConsumption).toBeLessThanOrEqual(1);
@@ -210,14 +210,14 @@ describe('battery sizing', () => {
   });
 
   it('stops the recommendation where another kWh stops paying', () => {
-    const b = computeStatistics(input({ hours: CYCLE })).battery;
+    const b = computeStatistics(input({ hours: CYCLE })).storageSizing;
     expect(b.kneeKwh).toBe(4);
     expect(b.kneeAutarky).toBe(1);
   });
 
   it('gives up when the sun never covers the load', () => {
     // Consumption all night, no production at all: no size can help.
-    const b = computeStatistics(input({ hours: day('2026-01-01', 0, 0.5) })).battery;
+    const b = computeStatistics(input({ hours: day('2026-01-01', 0, 0.5) })).storageSizing;
     expect(b.fullAutarkyKwh).toBeNull();
     expect(b.kneeKwh).toBe(0);
     expect(b.baseAutarky).toBe(0);
@@ -231,7 +231,7 @@ describe('battery sizing', () => {
       ...day('2026-06-01', SUNNY, 0, [...SUNNY]),
       ...day('2026-06-03', 0, 0.25),
     ];
-    const b = computeStatistics(input({ hours })).battery;
+    const b = computeStatistics(input({ hours })).storageSizing;
     expect(b.fullAutarkyKwh).toBeNull();
   });
 
@@ -240,7 +240,7 @@ describe('battery sizing', () => {
       ...day('2026-06-01', SUNNY, Array.from({ length: 24 }, (_, h) => (h < 6 ? 1 : 0))),
       ...day('2026-06-02', SUNNY, Array.from({ length: 24 }, (_, h) => (h < 6 ? 2 : 0))),
     ];
-    const b = computeStatistics(input({ hours })).battery;
+    const b = computeStatistics(input({ hours })).storageSizing;
     expect(b.medianNightKwh).toBe(9);
     expect(b.maxNightKwh).toBe(12);
   });

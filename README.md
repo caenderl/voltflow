@@ -51,7 +51,7 @@ NX-Monorepo:
 | `apps/backend`   | NestJS: REST (`/api/meter`, `/api/wallbox`, `/api/sma`, `/api/tariff-periods`, `/api/system`) + WebSocket (Live) |
 | `apps/frontend`  | Angular-Dashboard (ngx-echarts) |
 | `libs/shared-types` | Geteilte TypeScript-Typen Backend ↔ Frontend |
-| `db/init.sql`    | Hypertables, Continuous Aggregates, NOTIFY-Trigger |
+| `db/init.sql`    | Geräte-Registry, Hypertables, Continuous Aggregates, NOTIFY-Trigger |
 
 > **SMA-Wechselrichter:** config-gesteuert (Name, IP, Intervall, an/aus in der UI), Passwort
 > aus `SMA_PASSWORD` (.env). Nachts schläft der Wechselrichter → wird als `asleep` (0 W)
@@ -212,6 +212,7 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET` / `POST` / `PUT` / `DELETE /api/tariff-periods` | Zeitraum-Tarife (Preise ct/kWh + Grundpreis €/Jahr, gültig ab Datum) |
 | `GET /api/billing?year=YYYY` | Abrechnung eines Kalenderjahres auf Basis der abgelesenen Zählerstände (Monate, Ableseperioden, Summen) |
 | `GET /api/statistics` | Rekorde über den gesamten Bestand: PV-/Verbrauchsspitzen, Grundlast, Speicher-Dimensionierung |
+| `GET /api/devices` | Geräte-Registry: alle je registrierten Geräte mit ihren Rollen (`grid-meter`/`producer`/`consumer`/`storage`) |
 | `GET` / `PUT /api/app-settings` | Globale Anzeige-Einstellungen (z. B. Kalibrierung auf den Zählerstand) |
 | `GET` / `PUT /api/wallbox/config` | Wallbox-Verbindung (Name, IP, Port, Unit-ID, Intervall, an/aus) |
 | `GET /api/wallbox/latest?deviceSn` | Letzter Wallbox-Messwert (ohne `deviceSn`: neuester über alle Wallboxen) |
