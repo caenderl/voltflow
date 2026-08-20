@@ -13,9 +13,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Full width, like the cards it introduces — a measure of its own would wrap
+   it well short of them and read as a stray short line. */
 .peak-note {
   margin: -0.75rem 0 0;
-  max-width: 68ch;
 }
 
 .hint {
