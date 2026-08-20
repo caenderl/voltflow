@@ -1,8 +1,14 @@
+// Flex, not block: the host is the grid item and stretches to the tallest cell,
+// but a block host would let the tile inside it stay at content height, so two
+// tiles in a row would no longer share one background height the way they did
+// when the tile itself was the grid item.
 :host {
-  display: block;
+  display: flex;
 }
 
 .metric-tile {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
