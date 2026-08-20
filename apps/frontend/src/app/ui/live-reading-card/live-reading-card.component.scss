@@ -1,5 +1,12 @@
+// This host sits between the consuming card component and the section below, so
+// it has to grow too: a flex item defaults to `flex: 0 1 auto` and would
+// otherwise shrink-wrap to its content, leaving the card narrower than the
+// track the layout gave it. `min-width: 0` lets a long device name wrap rather
+// than push the track past its max-width.
 :host {
-  display: flex; // fill the live-cards flex item so cards share one height
+  display: flex;
+  flex: 1;
+  min-width: 0;
 }
 
 .live-reading-card {
