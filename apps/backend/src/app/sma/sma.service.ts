@@ -77,7 +77,7 @@ export class SmaService
         WHERE ($1::text IS NULL OR device_sn = $1)
         ORDER BY time DESC
         LIMIT 1`,
-      [deviceSn ?? null],
+      [deviceSn || null],
     );
     return rows.length ? rowToSmaReading(rows[0]) : null;
   }

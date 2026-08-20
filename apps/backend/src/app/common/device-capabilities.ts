@@ -20,6 +20,12 @@ import type { DataRange } from '@org/shared-types';
  * all of them is returned. That default is only unambiguous while exactly one
  * device of a kind is installed - with two it alternates between them, so any
  * caller that means a particular device has to name it.
+ *
+ * Implementations bind an empty `deviceSn` as `|| null` (falling back to the
+ * "all devices" default), not `?? null`: a query string with the param present
+ * but empty (`?deviceSn=`) parses to `''`, which `??` would pass straight
+ * through to `device_sn = ''` and silently match no row. A serial number is
+ * never the empty string, so treating `''` the same as "not given" is safe.
  */
 export interface HasLatest<R> {
   latest(deviceSn?: string): Promise<R | null>;

@@ -34,13 +34,14 @@ export interface EnergyBalanceInputs {
  * `consumption = selfConsumed + import`. Rates are null when their
  * denominator is 0.
  *
- * selfConsumed is capped at consumption. Without storage that cap can never
- * bind (consumption = selfConsumed + import ≥ selfConsumed); with a battery
- * that ends the range fuller than it started, PV went into the battery
- * instead of into the load, and without the cap the rates would climb past
- * 100 %. Energy still sitting in the battery counts as self-consumed in the
- * period it is actually used — the same boundary effect the grid counter
- * deltas already have.
+ * selfConsumed is everything in consumption that is not grid import, i.e.
+ * `consumption − import` — never negative, since consumption already has the
+ * import term added in. That also folds in a battery correctly on both
+ * sides: energy discharged without a matching import counts as self-consumed
+ * (it must have come from PV, stored earlier), and energy that went into the
+ * battery but has not come back out yet is excluded from both consumption
+ * and selfConsumed until the period it is actually used — the same boundary
+ * effect the grid counter deltas already have.
  */
 export function computeEnergyBalance(
   {
@@ -60,7 +61,7 @@ export function computeEnergyBalance(
   const discharged = Math.max(0, Number(dischargedKwh ?? 0));
   const fromPv = Math.max(0, prod - exp);
   const consumption = Math.max(0, fromPv + imp + discharged - charged);
-  const selfConsumed = Math.min(fromPv, consumption);
+  const selfConsumed = Math.max(0, consumption - imp);
 
   return {
     from: from.toISOString(),

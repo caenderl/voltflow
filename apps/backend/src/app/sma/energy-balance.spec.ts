@@ -124,5 +124,21 @@ describe('computeEnergyBalance', () => {
       expect(b.autarkyRate).toBe(1);
       expect(b.selfConsumptionRate).toBe(0.6);
     });
+
+    it('counts discharge with no matching import as self-consumed', () => {
+      // No production, no grid import: the 5 kWh the house used can only have
+      // come out of the battery, so the house was fully autark this period -
+      // even though none of it was produced in the window itself.
+      const b = balance({
+        production: 0,
+        importKwh: 0,
+        exportKwh: 0,
+        chargedKwh: 0,
+        dischargedKwh: 5,
+      });
+      expect(b.consumptionKwh).toBe(5);
+      expect(b.selfConsumedKwh).toBe(5);
+      expect(b.autarkyRate).toBe(1);
+    });
   });
 });
