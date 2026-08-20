@@ -1,6 +1,6 @@
 import type {
-  BatteryCurvePoint,
-  BatteryStatistics,
+  StorageSizing,
+  StorageSizingPoint,
   StatDayRecord,
   StatPeak,
   StatisticsResponse,
@@ -118,7 +118,7 @@ interface SimResult {
  */
 export function computeStatistics(input: StatisticsInput): StatisticsResponse {
   const days = buildDays(fillDarkGaps(input.hours));
-  const battery = sizeBattery(days);
+  const storageSizing = sizeStorage(days);
 
   const avgDay = (pick: (d: DayEnergy) => number): number | null =>
     days.length ? round2(days.reduce((sum, d) => sum + pick(d), 0) / days.length) : null;
@@ -139,7 +139,7 @@ export function computeStatistics(input: StatisticsInput): StatisticsResponse {
       avgDayKwh: avgDay((d) => d.houseKwh),
     },
     standby: standby(input.nights, avgDay((d) => d.houseKwh)),
-    battery,
+    storageSizing,
   };
 }
 
@@ -288,7 +288,7 @@ function standby(
 }
 
 /**
- * How large a battery would have to be, simulated against what actually
+ * How large a store would have to be, simulated against what actually
  * happened: every kWh the meter imported is offered to the battery first, and
  * every kWh that went out as feed-in charges it instead.
  *
@@ -297,8 +297,8 @@ function standby(
  * about how load and production line up inside an hour beyond the usual
  * self-consumption priority.
  */
-function sizeBattery(days: DayEnergy[]): BatteryStatistics {
-  const empty: BatteryStatistics = {
+function sizeStorage(days: DayEnergy[]): StorageSizing {
+  const empty: StorageSizing = {
     baseAutarky: null,
     curve: [],
     fullAutarkyKwh: null,
@@ -346,7 +346,7 @@ function sizeBattery(days: DayEnergy[]): BatteryStatistics {
     CURVE_MAX_KWH,
     Math.max(CURVE_MIN_KWH, Math.ceil(fullAutarkyKwh ?? 0)),
   );
-  const curve: BatteryCurvePoint[] = [];
+  const curve: StorageSizingPoint[] = [];
   for (let capacityKwh = 0; capacityKwh <= curveMax; capacityKwh++) {
     const r = sim(capacityKwh);
     curve.push({
@@ -443,15 +443,15 @@ function runFlows(
   let soc = Math.min(startSoc, capacityKwh);
   for (const f of flows) {
     // Discharge first (self-consumption before storing anything).
-    const fromBattery = Math.min(f.importKwh, soc);
-    soc -= fromBattery;
+    const fromStore = Math.min(f.importKwh, soc);
+    soc -= fromStore;
     // Then charge with the surplus, as far as the free room allows. The losses
     // sit here, so `room` is the *grid-side* energy that still fits.
     const room = (capacityKwh - soc) / BATTERY_EFFICIENCY;
     const charged = Math.min(f.exportKwh, room);
     soc += charged * BATTERY_EFFICIENCY;
     if (out) {
-      out.gridKwh += f.importKwh - fromBattery;
+      out.gridKwh += f.importKwh - fromStore;
       out.feedInKwh += f.exportKwh - charged;
     }
   }

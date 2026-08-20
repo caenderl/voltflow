@@ -6,7 +6,7 @@ import { StatisticsService } from './statistics.service';
 export class StatisticsController {
   constructor(private readonly statistics: StatisticsService) {}
 
-  /** All-time records, base load and battery sizing. No parameters: the page
+  /** All-time records, base load and storage sizing. No parameters: the page
    *  is about everything that was ever measured, not about a period. */
   @Get()
   all(): Promise<StatisticsResponse> {

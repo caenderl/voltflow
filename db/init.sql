@@ -11,8 +11,15 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 CREATE TABLE IF NOT EXISTS device (
     device_sn   TEXT PRIMARY KEY,
     device_pn   TEXT,
+    -- Which collector registered the device (smartmeter/inverter/wallbox) - a
+    -- driver fact, kept for diagnostics.
     type        TEXT,
     alias       TEXT,
+    -- What the device does in the energy balance: grid-meter | producer |
+    -- consumer | storage. An array because the two are not one-to-one (a
+    -- hybrid inverter is producer AND storage). No CHECK: adding a role later
+    -- must not require a migration.
+    roles       TEXT[],
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

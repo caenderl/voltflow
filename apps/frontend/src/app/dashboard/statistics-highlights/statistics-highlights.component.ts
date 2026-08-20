@@ -20,7 +20,7 @@ import { StatRowsComponent, type StatRow } from '../../ui/stat-rows/stat-rows.co
  *
  * The two records put the *peak power* in the headline and the energy records
  * in the rows below — the peak is what sizes an inverter or a fuse, the kWh
- * are what size a battery.
+ * are what size a store.
  */
 @Component({
   selector: 'app-statistics-highlights',

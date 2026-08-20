@@ -35,21 +35,40 @@ async def create_pool() -> asyncpg.Pool:
     return await asyncpg.create_pool(dsn, min_size=1, max_size=4)
 
 
+# What each collector's devices do in the energy balance. `type` says which
+# collector registered a device; `roles` says what the domain should make of it,
+# and the two are not one-to-one (a hybrid inverter would be producer+storage).
+# Only used to seed a device the first time - see register_device.
+_ROLES_BY_TYPE = {
+    "smartmeter": ["grid-meter"],
+    "inverter": ["producer"],
+    "wallbox": ["consumer"],
+}
+
+
 async def register_device(pool: asyncpg.Pool, snapshot: dict, device_type: str | None = None) -> None:
-    """Register a device in the device registry (idempotent, any device type)."""
+    """Register a device in the device registry (idempotent, any device type).
+
+    `roles` is only ever *seeded* here (COALESCE keeps whatever is already
+    stored): the collector knows which stream it opened, not how the household
+    classifies the device, so a role corrected later must survive the next
+    registration.
+    """
     await pool.execute(
         """
-        INSERT INTO device (device_sn, device_pn, type, alias)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO device (device_sn, device_pn, type, alias, roles)
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (device_sn) DO UPDATE
             SET device_pn = EXCLUDED.device_pn,
                 type      = EXCLUDED.type,
-                alias     = EXCLUDED.alias
+                alias     = EXCLUDED.alias,
+                roles     = COALESCE(device.roles, EXCLUDED.roles)
         """,
         snapshot.get("device_sn"),
         snapshot.get("device_pn"),
         device_type,
         snapshot.get("alias") or snapshot.get("device_pn"),
+        _ROLES_BY_TYPE.get(device_type or "", []),
     )
 
 

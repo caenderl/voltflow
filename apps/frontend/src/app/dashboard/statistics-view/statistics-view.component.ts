@@ -1,18 +1,18 @@
 import { Component, computed, input } from '@angular/core';
 import type { StatisticsResponse } from '@org/shared-types';
 import { formatDay } from '../../core/stat-format';
-import { StatisticsBatteryComponent } from '../statistics-battery/statistics-battery.component';
+import { StatisticsStorageSizingComponent } from '../statistics-storage-sizing/statistics-storage-sizing.component';
 import { StatisticsHighlightsComponent } from '../statistics-highlights/statistics-highlights.component';
 
 /**
  * Presentational shell of the statistics view: the period the figures rest on,
- * the record cards and the battery sizing. Holds no state — the container owns
+ * the record cards and the storage sizing. Holds no state — the container owns
  * the loading.
  */
 @Component({
   selector: 'app-statistics-view',
   standalone: true,
-  imports: [StatisticsHighlightsComponent, StatisticsBatteryComponent],
+  imports: [StatisticsHighlightsComponent, StatisticsStorageSizingComponent],
   templateUrl: './statistics-view.component.html',
   styleUrl: './statistics-view.component.scss',
 })

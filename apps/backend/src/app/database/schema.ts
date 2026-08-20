@@ -523,6 +523,33 @@ const MIGRATIONS: { name: string; sql: string }[] = [
           FROM grid g
           LEFT JOIN pv p ON p.bucket = g.bucket`,
   },
+  // ---------------------------------------------------------------------------
+  // Device roles. `device` has been written by the collector since the first
+  // release but never read; `type` records which collector registered a device
+  // (smartmeter/inverter/wallbox), which is a driver fact, not a domain one.
+  // `roles` is what the energy balance actually cares about, and it is an ARRAY
+  // because the two are not one-to-one: a hybrid inverter is producer *and*
+  // storage, a bidirectional wallbox is consumer *and* producer. Deliberately
+  // no CHECK constraint - a role added later (storage) must not need a
+  // migration to widen an enum.
+  // ---------------------------------------------------------------------------
+  {
+    name: '049-device-roles',
+    sql: `ALTER TABLE device ADD COLUMN IF NOT EXISTS roles TEXT[]`,
+  },
+  {
+    // Seed from the collector's `type`. Touches only NULLs, so re-running never
+    // overwrites a role somebody assigned by hand later.
+    name: '050-device-roles-backfill',
+    sql: `UPDATE device
+             SET roles = CASE type
+                           WHEN 'smartmeter' THEN ARRAY['grid-meter']
+                           WHEN 'inverter'   THEN ARRAY['producer']
+                           WHEN 'wallbox'    THEN ARRAY['consumer']
+                           ELSE ARRAY[]::TEXT[]
+                         END
+           WHERE roles IS NULL`,
+  },
 ];
 
 export async function applyMigrations(
