@@ -24,6 +24,7 @@ import { type View, rangeFor, startOfDay } from '../core/date-utils';
 import { LiveService } from '../core/live.service';
 import { MeterApiService } from '../core/meter-api.service';
 import { SettingsApiService } from '../core/settings-api.service';
+import { EnergyApiService } from '../core/energy-api.service';
 import { SmaApiService } from '../core/sma-api.service';
 import { WallboxApiService } from '../core/wallbox-api.service';
 import type {
@@ -60,6 +61,7 @@ export class DashboardDataService {
   private readonly meterApi = inject(MeterApiService);
   private readonly wallboxApi = inject(WallboxApiService);
   private readonly smaApi = inject(SmaApiService);
+  private readonly energyApi = inject(EnergyApiService);
   private readonly settingsApi = inject(SettingsApiService);
 
   // Live readings (WebSocket)
@@ -173,7 +175,7 @@ export class DashboardDataService {
     this.wallboxHistory.set([]);
     this.smaDailyEnergy.set([]);
     this.smaMinutePower.set([]);
-    this.smaApi.balance(from, to).subscribe({
+    this.energyApi.balance(from, to).subscribe({
       next: (b) => current() && this.periodBalance.set(b),
       error: () => current() && this.periodBalance.set(null),
     });
@@ -376,7 +378,7 @@ export class DashboardDataService {
   private loadToday(): void {
     this.loadInto(this.meterApi.energy('day', new Date()), (e) => this.today.set(e));
     // Today's energy balance (self-consumption / autarky) for the live SMA card.
-    this.loadInto(this.smaApi.balance(startOfDay(new Date()), new Date()), (b) =>
+    this.loadInto(this.energyApi.balance(startOfDay(new Date()), new Date()), (b) =>
       this.balance.set(b),
     );
   }

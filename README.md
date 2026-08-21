@@ -233,8 +233,8 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/sma/history?from&to` | Rohe SMA-Messwerte |
 | `GET /api/sma/energy/daily?from&to` | PV-Ertrag pro Tag (kWh) |
 | `GET /api/sma/power/minute?from&to` | PV-Leistung pro Minute (W, Tagesansicht) |
-| `GET /api/sma/house-load?from&to` | Abgeleitete Hauslast-Zeitreihe (W) |
-| `GET /api/sma/balance?from&to` | Energiebilanz: Eigenverbrauch & Autarkie |
+| `GET /api/energy/balance?from&to` | Energiebilanz des Haushalts: Eigenverbrauch & Autarkie (rollenbasiert, unabhängig vom Gerätehersteller) |
+| `GET /api/sma/balance?from&to` | **Veraltet** — Alias auf `/api/energy/balance`, entfällt mit der nächsten Version |
 | `GET /api/system/health` | Host-Health (Load/RAM/Disk) + Container-Liste (Admin-Tab „System", nicht persistiert) |
 | `GET /api/system/backups` | Backup-Status: lokale Dumps (Alter, Größe) + Off-Site-Repo aus `backups/status.json` |
 | WS-Event `reading` | Live-Messwert Smart Meter (~alle 5 s) |

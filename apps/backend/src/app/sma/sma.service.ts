@@ -1,15 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import type {
   DataRange,
-  EnergyBalance,
-  HouseLoadPoint,
   SmaConfig,
   SmaDailySummary,
   SmaMinutePower,
   SmaReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
-import { MAX_RAW_ROWS, assertNotTruncated, numOrNull, toDataRange } from '../common/db-utils';
+import { MAX_RAW_ROWS, assertNotTruncated, toDataRange } from '../common/db-utils';
 import type {
   Configurable,
   HasHistory,
@@ -23,7 +21,6 @@ import {
   asStringOrNull,
 } from '../common/singleton-config';
 import { DbService } from '../database/db.service';
-import { computeEnergyBalance } from './energy-balance';
 import { rowToSmaReading } from './sma.mapper';
 
 const DEFAULT_CONFIG: SmaConfig = {
@@ -119,7 +116,7 @@ export class SmaService
          FROM (
            SELECT (bucket AT TIME ZONE $3)::date::text AS day, device_sn,
                   max(total_yield_kwh) - min(total_yield_kwh) AS dev_yield
-             FROM sma_1hour
+             FROM producer_1hour
             WHERE bucket >= $1 AND bucket < $2
             GROUP BY 1, 2
          ) d
@@ -149,7 +146,7 @@ export class SmaService
   async minutePower(from: Date, to: Date): Promise<SmaMinutePower[]> {
     const { rows } = await this.db.query(
       `SELECT bucket, sum(grid_power_avg) AS grid_power_avg
-         FROM sma_1min
+         FROM producer_1min
         WHERE bucket >= $1 AND bucket < $2
         GROUP BY bucket
         ORDER BY bucket`,
@@ -161,63 +158,4 @@ export class SmaService
     }));
   }
 
-  /** Derived house-load series on the common 1-min grid (meter + SMA). */
-  async houseLoad(from: Date, to: Date): Promise<HouseLoadPoint[]> {
-    const { rows } = await this.db.query(
-      `SELECT bucket, house_power, pv_power
-         FROM house_load_1min
-        WHERE bucket >= $1 AND bucket < $2
-        ORDER BY bucket`,
-      [from, to],
-    );
-    return rows.map((r) => ({
-      time: new Date(r['bucket'] as string).toISOString(),
-      housePower: numOrNull(r['house_power']),
-      pvPower: numOrNull(r['pv_power']),
-    }));
-  }
-
-  /**
-   * Energy balance over [from, to): PV production (SMA total_yield delta) vs.
-   * grid import/export (meter counter deltas), yielding self-consumption and
-   * self-sufficiency (autarky).
-   *
-   * Every counter delta is taken PER DEVICE and only then summed - the same
-   * shape dailyEnergy() uses. A plain max() - min() over all rows would, with
-   * two inverters, subtract the smaller device's counter from the larger one's
-   * and report a production figure belonging to neither.
-   */
-  async balance(from: Date, to: Date): Promise<EnergyBalance> {
-    const { rows: pv } = await this.db.query(
-      `SELECT sum(dev_yield) AS production_kwh
-         FROM (
-           SELECT max(total_yield_kwh) - min(total_yield_kwh) AS dev_yield
-             FROM sma_readings
-            WHERE time >= $1 AND time < $2
-            GROUP BY device_sn
-         ) d`,
-      [from, to],
-    );
-    const { rows: grid } = await this.db.query(
-      `SELECT sum(dev_import) AS import_kwh, sum(dev_export) AS export_kwh
-         FROM (
-           SELECT max(grid_import_energy) - min(grid_import_energy) AS dev_import,
-                  max(grid_export_energy) - min(grid_export_energy) AS dev_export
-             FROM meter_reading
-            WHERE time >= $1 AND time < $2
-            GROUP BY device_sn
-         ) d`,
-      [from, to],
-    );
-
-    return computeEnergyBalance(
-      {
-        production: pv[0]?.['production_kwh'],
-        importKwh: grid[0]?.['import_kwh'],
-        exportKwh: grid[0]?.['export_kwh'],
-      },
-      from,
-      to,
-    );
-  }
 }

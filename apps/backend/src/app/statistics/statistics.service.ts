@@ -73,7 +73,7 @@ export class StatisticsService {
            SELECT bucket,
                   total_yield_kwh - lag(total_yield_kwh) OVER w AS d,
                   bucket - lag(bucket) OVER w AS gap
-             FROM sma_1hour
+             FROM producer_1hour
             WHERE total_yield_kwh IS NOT NULL
            WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
          ) x
@@ -85,7 +85,7 @@ export class StatisticsService {
                   grid_import_energy - lag(grid_import_energy) OVER w AS di,
                   grid_export_energy - lag(grid_export_energy) OVER w AS de,
                   bucket - lag(bucket) OVER w AS gap
-             FROM meter_1hour
+             FROM grid_meter_1hour
             WHERE grid_import_energy IS NOT NULL AND grid_export_energy IS NOT NULL
            WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
          ) x
@@ -95,7 +95,7 @@ export class StatisticsService {
        SELECT (g.bucket AT TIME ZONE $1)::date::text        AS day,
               extract(hour FROM g.bucket AT TIME ZONE $1)   AS hour,
               p.pv_kwh, g.import_kwh, g.export_kwh,
-              EXISTS (SELECT 1 FROM sma_1hour) AS has_pv
+              EXISTS (SELECT 1 FROM producer_1hour) AS has_pv
          FROM grid g
          LEFT JOIN pv p ON p.bucket = g.bucket
         ORDER BY g.bucket`,
@@ -115,23 +115,24 @@ export class StatisticsService {
    * One base load per night, as a low percentile of the house load between
    * midnight and 05:00 local.
    *
-   * The wallbox's own draw is taken back out: a car charging overnight is the
+   * The consumers' own draw is taken back out: a car charging overnight is the
    * opposite of standby, and at ~2.5 kW it would bury the few hundred watts
-   * this figure is about. Nights the collector only half covered are dropped
-   * rather than averaged over a shorter window.
+   * this figure is about. Every device carrying the `consumer` role counts,
+   * so a second wallbox needs no change here. Nights the collector only half
+   * covered are dropped rather than averaged over a shorter window.
    */
   private async nightBaselines(): Promise<NightBaseline[]> {
     const { rows } = await this.db.query(
-      `WITH wb AS (
+      `WITH consumers AS (
          SELECT bucket, sum(avg_power_w) AS power_w
-           FROM wallbox_1min
+           FROM consumer_1min
           WHERE extract(hour FROM bucket AT TIME ZONE $1) < $2
           GROUP BY bucket
        ), n AS (
          SELECT (h.bucket AT TIME ZONE $1)::date::text AS day,
-                GREATEST(h.house_power - COALESCE(w.power_w, 0), 0) AS load_w
+                GREATEST(h.house_power - COALESCE(c.power_w, 0), 0) AS load_w
            FROM house_load_1min h
-           LEFT JOIN wb w ON w.bucket = h.bucket
+           LEFT JOIN consumers c ON c.bucket = h.bucket
           WHERE h.house_power IS NOT NULL
             AND extract(hour FROM h.bucket AT TIME ZONE $1) < $2
        )
@@ -155,14 +156,14 @@ export class StatisticsService {
     const { rows } = await this.db.query(
       `WITH d AS (
          SELECT bucket AS day, grid_power_max AS power_w
-           FROM sma_1day
+           FROM producer_1day
           WHERE grid_power_max IS NOT NULL
           ORDER BY grid_power_max DESC
           LIMIT 1
        )
        SELECT d.power_w,
               COALESCE((SELECT h.bucket
-                          FROM sma_1hour h
+                          FROM producer_1hour h
                          WHERE h.bucket >= d.day
                            AND h.bucket < d.day + INTERVAL '1 day'
                            AND h.grid_power_max IS NOT NULL
@@ -195,7 +196,7 @@ export class StatisticsService {
           LIMIT 1`,
       ),
       this.db.query(
-        `SELECT extract(day FROM now() - min(bucket)) AS days FROM meter_1min`,
+        `SELECT extract(day FROM now() - min(bucket)) AS days FROM grid_meter_1min`,
       ),
     ]);
     return {

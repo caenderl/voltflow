@@ -2,7 +2,6 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import type {
-  EnergyBalance,
   SmaConfig,
   SmaDailySummary,
   SmaMinutePower,
@@ -25,14 +24,6 @@ export class SmaApiService {
 
   latest(): Observable<SmaReading | null> {
     return this.http.get<SmaReading | null>(`${this.base}/latest`);
-  }
-
-  /** Energy balance (self-consumption / autarky) over [from, to). */
-  balance(from: Date, to: Date): Observable<EnergyBalance> {
-    const params = new HttpParams()
-      .set('from', from.toISOString())
-      .set('to', to.toISOString());
-    return this.http.get<EnergyBalance>(`${this.base}/balance`, { params });
   }
 
   /** Daily PV yield over [from, to). */
