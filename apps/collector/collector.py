@@ -179,18 +179,23 @@ async def _bind_config(pool, cfg: dict, snap: dict) -> None:
 
     Skipped when the row is already bound, so this stays a first-contact event:
     re-binding on every restart would let a config row silently change which
-    physical device it means. Never fatal - a failed binding costs a link in the
-    UI, not a reading.
+    physical device it means.
+
+    Deliberately does NOT catch its own errors, unlike most of this module: the
+    caller only sets `device_registered = True` (which gates this function from
+    running again) after this returns, so a swallowed exception here would mean
+    a binding that fails once - a transient pool hiccup, the same class of
+    failure register_device already tolerates - never gets attempted again for
+    the task's entire lifetime, which spans every future reconnect. Propagating
+    lets the existing on_reading-level handler drop just that one reading and
+    retry the whole block, register_device included, on the next one; the extra
+    upsert is harmless.
     """
     device_sn = snap.get("device_sn")
     if not device_sn or cfg.get("device_sn") or cfg.get("id") is None:
         return
-    try:
-        await bind_device_sn(pool, cfg["id"], device_sn)
-        cfg["device_sn"] = device_sn  # do not try again this run
-    except Exception as err:  # noqa: BLE001 - binding must never stop collecting
-        LOG.warning("could not bind config #%s to %s (%s: %s)",
-                    cfg.get("id"), device_sn, type(err).__name__, err)
+    await bind_device_sn(pool, cfg["id"], device_sn)
+    cfg["device_sn"] = device_sn  # do not try again this run
 
 
 async def _run_wallbox(pool, cfg: dict) -> None:
