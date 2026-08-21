@@ -54,6 +54,27 @@ export interface DeviceConfig {
   deviceSn: string | null;
 }
 
+/**
+ * Body for `PUT /api/device-configs/:id`. Everything about a `DeviceConfig`
+ * except its server-assigned identity: `id` (the URL already names it) and
+ * `driver`, which is immutable after creation — rebinding a row to a
+ * different protocol would leave its `deviceSn` pointing at a device that was
+ * never seen over the new one.
+ */
+export interface DeviceConfigInput {
+  name: string | null;
+  enabled: boolean;
+  host: string | null;
+  port: number | null;
+  unitId: number | null;
+  pollIntervalS: number;
+}
+
+/** Body for `POST /api/device-configs` — the one call that gets to set the driver. */
+export interface DeviceConfigCreateInput extends DeviceConfigInput {
+  driver: DeviceDriver;
+}
+
 /** A device as the registry knows it (GET /api/devices). */
 export interface DeviceInfo {
   /** Serial number — the identity every reading is tagged with. */
@@ -433,25 +454,6 @@ export const METER_READING_EVENT = 'reading';
 // Wallbox (Anker SOLIX V1 / A5191, Modbus TCP)
 // ---------------------------------------------------------------------------
 
-/**
- * Connection parameters for the wallbox, stored as a single config row and
- * edited via the settings UI. The collector only polls the wallbox when this
- * is `enabled` and a `host` is set.
- */
-export interface WallboxConfig {
-  enabled: boolean;
-  /** Display name for the wallbox (shown in the UI). */
-  name: string | null;
-  /** IP / hostname of the wallbox on the LAN (Modbus TCP). */
-  host: string | null;
-  /** Modbus TCP port (default 502). */
-  port: number;
-  /** Modbus unit / device id (default 1). */
-  unitId: number;
-  /** Polling interval in seconds. */
-  pollIntervalS: number;
-}
-
 /** Charging status (Anker register 20097). */
 export type WallboxStatus =
   | 0 // Idle
@@ -531,22 +533,6 @@ export interface WallboxHourlySummary {
 // ---------------------------------------------------------------------------
 // SMA PV inverter (STP 6000TL-20, Speedwire via pysma-plus)
 // ---------------------------------------------------------------------------
-
-/**
- * Connection parameters for the SMA inverter, stored as a single config row
- * and edited via the settings UI. The password is NOT stored here — it is read
- * from the SMA_PASSWORD env var by the collector. The collector only polls when
- * this is `enabled` and a `host` is set.
- */
-export interface SmaConfig {
-  enabled: boolean;
-  /** Display name for the inverter (shown in the UI). */
-  name: string | null;
-  /** IP / hostname of the inverter on the LAN (Speedwire). */
-  host: string | null;
-  /** Polling interval in seconds. */
-  pollIntervalS: number;
-}
 
 /** A live / raw reading from the SMA inverter. */
 export interface SmaReading {

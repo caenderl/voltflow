@@ -1,0 +1,9 @@
+:host {
+  display: block;
+}
+
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}

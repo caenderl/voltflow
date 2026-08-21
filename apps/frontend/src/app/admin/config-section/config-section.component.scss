@@ -8,12 +8,6 @@
   gap: 1.25rem;
 }
 
-.field-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
 .factor-readout {
   display: flex;
   flex-wrap: wrap;

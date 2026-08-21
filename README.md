@@ -222,13 +222,12 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/billing?year=YYYY` | Abrechnung eines Kalenderjahres auf Basis der abgelesenen Zählerstände (Monate, Ableseperioden, Summen) |
 | `GET /api/statistics` | Rekorde über den gesamten Bestand: PV-/Verbrauchsspitzen, Grundlast, Speicher-Dimensionierung |
 | `GET /api/devices` | Geräte-Registry: alle je registrierten Geräte mit ihren Rollen (`grid-meter`/`producer`/`consumer`/`storage`) |
+| `GET` / `POST` / `PUT` / `DELETE /api/device-configs` | Konfigurierte Geräte-Instanzen (Treiber, Name, IP, Port/Unit-ID, Intervall, an/aus) — eine Zeile pro Wallbox/Wechselrichter, nicht mehr je eine Singleton-Config |
 | `GET` / `PUT /api/app-settings` | Globale Anzeige-Einstellungen (z. B. Kalibrierung auf den Zählerstand) |
-| `GET` / `PUT /api/wallbox/config` | Wallbox-Verbindung (Name, IP, Port, Unit-ID, Intervall, an/aus) |
 | `GET /api/wallbox/latest?deviceSn` | Letzter Wallbox-Messwert (ohne `deviceSn`: neuester über alle Wallboxen) |
 | `GET /api/wallbox/history?from&to` | Rohe Wallbox-Messwerte |
 | `GET /api/wallbox/energy/daily?from&to` | Geladene Energie pro Tag (kWh) |
 | `GET /api/wallbox/energy/hourly?from&to` | Geladene Energie pro Stunde (kWh, Tagesansicht) |
-| `GET` / `PUT /api/sma/config` | SMA-Verbindung (Name, IP, Intervall, an/aus) |
 | `GET /api/sma/latest?deviceSn` | Letzter SMA-Messwert (ohne `deviceSn`: neuester über alle Wechselrichter) |
 | `GET /api/sma/history?from&to` | Rohe SMA-Messwerte |
 | `GET /api/sma/energy/daily?from&to` | PV-Ertrag pro Tag (kWh) |

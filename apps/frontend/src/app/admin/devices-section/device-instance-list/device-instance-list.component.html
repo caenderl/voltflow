@@ -1,0 +1,111 @@
+<app-settings-card
+  [heading]="formEditingId() !== null ? (heading() + ' bearbeiten') : ('Neu: ' + heading())"
+  [subtitle]="subtitle()"
+>
+  <app-toggle-switch
+    card-actions
+    [checked]="formEnabled()"
+    (checkedChange)="formEnabled.set($event)"
+  />
+  <div class="field-grid">
+    <app-text-field
+      label="Name"
+      placeholder="z. B. Garage"
+      [value]="formName()"
+      (valueChange)="formName.set($event)"
+    />
+    <app-text-field
+      label="IP-Adresse"
+      placeholder="z. B. 192.168.0.206"
+      [value]="formHost()"
+      (valueChange)="formHost.set($event)"
+    />
+    @if (isModbus()) {
+      <app-number-field
+        label="Port"
+        [min]="1"
+        [max]="65535"
+        placeholder="502"
+        [value]="formPort()"
+        (valueChange)="formPort.set($event)"
+      />
+      <app-number-field
+        label="Unit-ID"
+        [min]="0"
+        [max]="255"
+        placeholder="1"
+        [value]="formUnitId()"
+        (valueChange)="formUnitId.set($event)"
+      />
+    }
+    <app-number-field
+      label="Intervall (s)"
+      [min]="5"
+      [max]="3600"
+      [placeholder]="isModbus() ? '30' : '60'"
+      [value]="formInterval()"
+      (valueChange)="formInterval.set($event)"
+    />
+  </div>
+  <div class="device-form-actions">
+    @if (formEditingId() !== null) {
+      <button type="button" class="btn-text" (click)="resetForm()">Abbrechen</button>
+    }
+    <button type="button" class="btn-filled" (click)="save()">
+      {{ formEditingId() !== null ? 'Speichern' : 'Hinzufügen' }}
+    </button>
+  </div>
+
+  @if (formError(); as e) {
+    <p class="device-error">{{ e }}</p>
+  }
+</app-settings-card>
+
+<app-settings-card [heading]="'Erfasste ' + heading()">
+  @if (devices().length) {
+    <table class="device-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Status</th>
+          <th>IP-Adresse</th>
+          @if (isModbus()) {
+            <th>Port / Unit</th>
+          }
+          <th class="num">Intervall</th>
+          <th>Seriennummer</th>
+          <th class="actions-col"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (d of devices(); track d.id) {
+          <tr [class.editing]="formEditingId() === d.id">
+            <td>{{ d.name || '–' }}</td>
+            <td>
+              <span class="status-dot" [class.active]="d.enabled"></span>
+              {{ d.enabled ? 'Aktiv' : 'Inaktiv' }}
+            </td>
+            <td>{{ d.host || '–' }}</td>
+            @if (isModbus()) {
+              <td>{{ d.port }} / {{ d.unitId }}</td>
+            }
+            <td class="num">{{ d.pollIntervalS }} s</td>
+            <td>
+              @if (d.deviceSn) {
+                <span class="device-sn">{{ d.deviceSn }}</span>
+              } @else {
+                <span class="hint-sm">noch nicht verbunden</span>
+              }
+            </td>
+            <td class="actions-col">
+              <button type="button" class="icon-btn" title="Bearbeiten" (click)="edit(d)">✎</button>
+              <button type="button" class="icon-btn" title="Löschen" (click)="remove(d)">🗑</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    <p class="hint-sm">Noch kein Gerät erfasst.</p>
+  }
+</app-settings-card>

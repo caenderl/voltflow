@@ -20,6 +20,18 @@
       </button>
       <button
         type="button"
+        id="tab-devices"
+        class="nav-item"
+        role="tab"
+        [attr.aria-selected]="activeTab() === 'devices'"
+        aria-controls="panel-admin"
+        [class.active]="activeTab() === 'devices'"
+        (click)="activeTab.set('devices')"
+      >
+        Geräte
+      </button>
+      <button
+        type="button"
         id="tab-tariffs"
         class="nav-item"
         role="tab"
@@ -70,6 +82,9 @@
     @switch (activeTab()) {
       @case ('config') {
         <app-config-section />
+      }
+      @case ('devices') {
+        <app-devices-section />
       }
       @case ('tariffs') {
         <app-tariffs-section />
