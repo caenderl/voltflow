@@ -110,25 +110,6 @@ _WALLBOX_FIELDS_LEGACY = (
 _WALLBOX_FIELDS = (*_WALLBOX_FIELDS_LEGACY, "energy_wh")
 
 
-async def read_wallbox_config(pool: asyncpg.Pool) -> dict | None:
-    """Return the wallbox config row, or None if not configured / table missing.
-
-    The collector reads this once at startup to decide whether to poll the
-    wallbox at all.
-    """
-    try:
-        row = await pool.fetchrow(
-            "SELECT enabled, host, port, unit_id, poll_interval_s "
-            "FROM wallbox_config WHERE id = 1"
-        )
-    except asyncpg.UndefinedTableError:
-        # Backend has not applied migrations yet -> treat as not configured.
-        return None
-    if row is None:
-        return None
-    return dict(row)
-
-
 # Whether wallbox_reading.energy_wh exists, probed once per process.
 # The column is created by a BACKEND migration, and the two are deployed
 # independently (scripts/deploy.sh app / collector), so the collector cannot
@@ -198,17 +179,58 @@ _SMA_FIELDS = (
 )
 
 
-async def read_sma_config(pool: asyncpg.Pool) -> dict | None:
-    """Return the SMA config row, or None if not configured / table missing."""
+async def read_device_configs(pool: asyncpg.Pool, drivers: list[str]) -> list[dict] | None:
+    """Return the enabled `device_config` rows for these drivers, lowest id first.
+
+    Returns None (not []) when the table is missing, so the caller can tell
+    "backend has not migrated yet" from "nothing is enabled" - the two look the
+    same to a supervisor but only one of them is worth warning about. The
+    collector and backend deploy independently (scripts/deploy.sh app vs
+    collector), so the table genuinely can be absent for a while.
+    """
     try:
-        row = await pool.fetchrow(
-            "SELECT enabled, host, poll_interval_s FROM sma_config WHERE id = 1"
+        rows = await pool.fetch(
+            "SELECT id, driver, name, enabled, host, port, unit_id, "
+            "       poll_interval_s, device_sn "
+            "  FROM device_config "
+            " WHERE enabled AND driver = ANY($1::TEXT[]) "
+            " ORDER BY id",
+            drivers,
         )
     except asyncpg.UndefinedTableError:
         return None
-    if row is None:
-        return None
-    return dict(row)
+    return [dict(r) for r in rows]
+
+
+async def bind_device_sn(pool: asyncpg.Pool, config_id: int, device_sn: str) -> None:
+    """Bind a config row to the serial the collector just saw on it.
+
+    This is where the two tables meet: `device_config` is what the user
+    configured, `device` is what was actually found at that address. Binding
+    only happens when the row is still unbound - a row already pointing at a
+    serial keeps it, so replacing the hardware behind an address is a
+    deliberate act (clear the binding) rather than a silent rebind that would
+    move the row's identity out from under the history.
+
+    A serial can only be bound once (partial unique index), so two config rows
+    aimed at the same physical device lose the race for the second one. That is
+    a misconfiguration, not a crash: log it and carry on collecting.
+    """
+    try:
+        await pool.execute(
+            "UPDATE device_config SET device_sn = $2, updated_at = now() "
+            " WHERE id = $1 AND device_sn IS NULL",
+            config_id,
+            device_sn,
+        )
+    except asyncpg.UniqueViolationError:
+        LOG.warning(
+            "device_config #%s: serial %s is already bound to another config row "
+            "- two rows are pointing at the same device",
+            config_id, device_sn,
+        )
+    except asyncpg.UndefinedTableError:
+        pass  # backend has not migrated yet; nothing to bind to
 
 
 async def last_sma_reading(pool: asyncpg.Pool) -> dict | None:
