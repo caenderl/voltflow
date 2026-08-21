@@ -51,17 +51,28 @@ function roleView(view: string, source: string, role: DeviceRole): string {
 }
 
 /**
- * Seeds one `device_config` row from a legacy singleton config table.
+ * Guarantees exactly one `device_config` row for a driver, carrying over the
+ * legacy singleton's values when it has any.
  *
- * Runs on every boot like every other step here, so it has to be a no-op once
- * the row exists: the guard is "no row for this driver yet". That means a row
- * the user deletes in the UI comes back on the next restart - deliberate, and
- * bounded: the singleton tables are the seed source only until step 3 of this
- * stage drops them, after which there is nothing left to re-seed from.
+ * The LEFT JOIN against a one-row dummy is what makes this "always", not "only
+ * if the singleton has a row": on a fresh database `db/init.sql` creates the
+ * singleton tables but inserts nothing, so a plain `FROM <source> WHERE id = 1`
+ * would seed nothing and leave the table empty. That emptiness is not cosmetic
+ * - it is the only way DriverConfigStore.save() can ever reach an INSERT, and
+ * two concurrent first-saves (the settings form has no submit guard) then both
+ * insert, because `driver` is deliberately not unique. Seeding unconditionally
+ * removes the window rather than locking around it: the row always exists, so
+ * save() is a pure UPDATE.
  *
  * `cols` maps device_config columns to expressions over the source row, so the
  * two shapes (Speedwire has no port/unit) stay in one place instead of two
- * near-identical INSERTs.
+ * near-identical INSERTs. Wrap anything NOT NULL in COALESCE - `s.*` is all
+ * NULL when the singleton is empty.
+ *
+ * Still guarded on "no row for this driver yet", so a user's later edit
+ * survives every reboot. A row deleted in the UI does come back - deliberate,
+ * and bounded: step 3 of this stage drops the singletons and takes this with
+ * them.
  */
 function seedDeviceConfig(
   driver: DeviceDriver,
@@ -72,11 +83,11 @@ function seedDeviceConfig(
   const values = [`'${driver}'`, ...Object.values(cols)].join(', ');
   return `INSERT INTO device_config (${names})
           SELECT ${values}
-            FROM ${source} s
-           WHERE s.id = 1
-             AND NOT EXISTS (
-               SELECT 1 FROM device_config WHERE driver = '${driver}'
-             )`;
+            FROM (SELECT 1) AS always
+            LEFT JOIN ${source} s ON s.id = 1
+           WHERE NOT EXISTS (
+             SELECT 1 FROM device_config WHERE driver = '${driver}'
+           )`;
 }
 
 /**
@@ -960,20 +971,20 @@ const MIGRATIONS: Migration[] = [
     name: '075-device-config-seed-sma',
     sql: seedDeviceConfig('sma-speedwire', 'sma_config', {
       name: 's.name',
-      enabled: 's.enabled',
+      enabled: 'COALESCE(s.enabled, false)',
       host: 's.host',
-      poll_interval_s: 's.poll_interval_s',
+      poll_interval_s: 'COALESCE(s.poll_interval_s, 60)',
     }),
   },
   {
     name: '076-device-config-seed-wallbox',
     sql: seedDeviceConfig('anker-v1-modbus', 'wallbox_config', {
       name: 's.name',
-      enabled: 's.enabled',
+      enabled: 'COALESCE(s.enabled, false)',
       host: 's.host',
-      port: 's.port',
-      unit_id: 's.unit_id',
-      poll_interval_s: 's.poll_interval_s',
+      port: 'COALESCE(s.port, 502)',
+      unit_id: 'COALESCE(s.unit_id, 1)',
+      poll_interval_s: 'COALESCE(s.poll_interval_s, 30)',
     }),
   },
 ];

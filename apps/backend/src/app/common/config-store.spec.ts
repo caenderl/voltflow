@@ -107,21 +107,21 @@ describe('DriverConfigStore', () => {
 
   it('get: returns defaults when the driver has no row yet', async () => {
     const { db } = fakeDbSeq([[]]);
-    const store = new DriverConfigStore(db, 'test-driver', COLUMNS, DEFAULTS);
+    const store = new DriverConfigStore(db, 'sma-speedwire', COLUMNS, DEFAULTS);
     expect(await store.get()).toEqual(DEFAULTS);
   });
 
   it('get: selects by driver and maps through the converters', async () => {
     const { db, calls } = fakeDbSeq([[ROW]]);
-    const store = new DriverConfigStore(db, 'test-driver', COLUMNS, DEFAULTS);
+    const store = new DriverConfigStore(db, 'sma-speedwire', COLUMNS, DEFAULTS);
     expect(await store.get()).toEqual(CONFIG);
     expect(calls[0].text).toContain('FROM device_config WHERE driver = $1');
-    expect(calls[0].params).toEqual(['test-driver']);
+    expect(calls[0].params).toEqual(['sma-speedwire']);
   });
 
   it('get: takes the lowest id, so the read is stable with several rows', async () => {
     const { db, calls } = fakeDbSeq([[ROW]]);
-    const store = new DriverConfigStore(db, 'test-driver', COLUMNS, DEFAULTS);
+    const store = new DriverConfigStore(db, 'sma-speedwire', COLUMNS, DEFAULTS);
     await store.get();
     expect(calls[0].text).toContain('ORDER BY id LIMIT 1');
   });
@@ -129,38 +129,37 @@ describe('DriverConfigStore', () => {
   it('save: updates the existing row and does not insert', async () => {
     // UPDATE ... RETURNING id hits, then the re-read.
     const { db, calls } = fakeDbSeq([[{ id: 7 }], [ROW]]);
-    const store = new DriverConfigStore(db, 'test-driver', COLUMNS, DEFAULTS);
+    const store = new DriverConfigStore(db, 'sma-speedwire', COLUMNS, DEFAULTS);
     const saved = await store.save(CONFIG);
 
     expect(calls).toHaveLength(2);
     expect(calls[0].text).toContain('UPDATE device_config');
     expect(calls[0].text).toContain('RETURNING id');
-    expect(calls[0].params).toEqual([true, 'device.local', 30, 'test-driver']);
+    expect(calls[0].params).toEqual([true, 'device.local', 30, 'sma-speedwire']);
     expect(calls.some((c) => c.text.includes('INSERT'))).toBe(false);
     expect(saved).toEqual(CONFIG);
   });
 
-  it('save: inserts with the driver when the UPDATE matched nothing', async () => {
-    // UPDATE returns no row -> INSERT -> re-read.
-    const { db, calls } = fakeDbSeq([[], [], [ROW]]);
-    const store = new DriverConfigStore(db, 'test-driver', COLUMNS, DEFAULTS);
-    const saved = await store.save(CONFIG);
+  it('save: throws instead of inserting when no row matched', async () => {
+    // The seed migrations guarantee a row per driver, so "no row" is a bug,
+    // not a case to paper over with an INSERT that a concurrent save could
+    // duplicate (driver is not unique, so nothing would catch the duplicate).
+    const { db, calls } = fakeDbSeq([[]]);
+    const store = new DriverConfigStore(db, 'sma-speedwire', COLUMNS, DEFAULTS);
 
-    expect(calls).toHaveLength(3);
-    const insert = calls[1];
-    expect(insert.text).toContain(
-      'INSERT INTO device_config (enabled, host, poll_interval_s, driver, updated_at)',
+    await expect(store.save(CONFIG)).rejects.toThrow(
+      /no device_config row for driver "sma-speedwire"/,
     );
-    expect(insert.text).toContain('VALUES ($1, $2, $3, $4, now())');
-    // driver is the last parameter, after the mapped columns
-    expect(insert.params).toEqual([true, 'device.local', 30, 'test-driver']);
-    expect(saved).toEqual(CONFIG);
+    // one UPDATE attempt, nothing else - in particular no write
+    expect(calls).toHaveLength(1);
+    expect(calls.some((c) => c.text.includes('INSERT'))).toBe(false);
   });
 
-  it('save: never upserts on driver, which is not unique (two wallboxes)', async () => {
-    const { db, calls } = fakeDbSeq([[], [], [ROW]]);
-    const store = new DriverConfigStore(db, 'test-driver', COLUMNS, DEFAULTS);
+  it('save: has no write path other than the UPDATE', async () => {
+    const { db, calls } = fakeDbSeq([[{ id: 7 }], [ROW]]);
+    const store = new DriverConfigStore(db, 'sma-speedwire', COLUMNS, DEFAULTS);
     await store.save(CONFIG);
+    expect(calls.some((c) => c.text.includes('INSERT'))).toBe(false);
     expect(calls.some((c) => c.text.includes('ON CONFLICT'))).toBe(false);
   });
 });

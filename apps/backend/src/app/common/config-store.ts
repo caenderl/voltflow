@@ -1,3 +1,4 @@
+import type { DeviceDriver } from '@org/shared-types';
 import { DbService } from '../database/db.service';
 
 /**
@@ -81,7 +82,7 @@ export class SingletonConfigStore<T extends object> {
 export class DriverConfigStore<T extends object> {
   constructor(
     private readonly db: DbService,
-    private readonly driver: string,
+    private readonly driver: DeviceDriver,
     private readonly columns: ConfigColumn<T>[],
     private readonly defaults: T,
   ) {}
@@ -102,13 +103,21 @@ export class DriverConfigStore<T extends object> {
   }
 
   /**
-   * Updates the driver's row, inserting it when there is none yet.
+   * Updates the driver's row. Deliberately UPDATE-only: there is no INSERT
+   * path, and that is the whole defence against duplicate rows.
    *
-   * Not an ON CONFLICT upsert: the conflict target would have to be `driver`,
-   * and `driver` is deliberately not unique - two wallboxes are two rows with
-   * the same driver. The UPDATE ... RETURNING / INSERT pair below expresses
-   * "the one row this driver has, if any" without promising uniqueness the
-   * schema does not have.
+   * An "update, else insert" pair cannot be made safe here. `driver` is not
+   * unique (two wallboxes are two rows with the same driver), so there is no
+   * conflict target for an upsert and no constraint to catch a double insert;
+   * two concurrent first-saves would each find no row and each create one.
+   * That is reachable - the settings form's submit button has no pending
+   * guard, so a double click is two requests. The migrations therefore
+   * guarantee a row per known driver at boot (see seedDeviceConfig), which
+   * leaves nothing for save() to create.
+   *
+   * Throwing when no row matched is the point: with the seed in place it can
+   * only mean a driver nobody seeded, and failing loudly beats silently
+   * writing a row that a second caller could duplicate.
    */
   async save(value: T): Promise<T> {
     const cols = this.columns.map((c) => c.column);
@@ -127,11 +136,9 @@ export class DriverConfigStore<T extends object> {
     );
 
     if (!updated.length) {
-      const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
-      await this.db.query(
-        `INSERT INTO device_config (${cols.join(', ')}, driver, updated_at)
-         VALUES (${placeholders}, $${cols.length + 1}, now())`,
-        [...params, this.driver],
+      throw new Error(
+        `no device_config row for driver "${this.driver}" - it should have ` +
+          `been seeded at startup`,
       );
     }
     return this.get();
