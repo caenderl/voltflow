@@ -21,11 +21,18 @@ import type { HasLatest, HasRange } from '../common/device-capabilities';
 import { DbService } from '../database/db.service';
 import { rowToReading } from './meter.mapper';
 
-/** Aggregate view per resolution. */
+/**
+ * Aggregate view per resolution — the role views, not the raw caggs.
+ *
+ * "What did the house draw from the grid" is the `grid-meter` role's question,
+ * not this vendor's, so a device that does not carry the role must not appear
+ * here. latest()/range() below stay on the raw table on purpose: those describe
+ * one device, and latest() even names it.
+ */
 const VIEW_BY_RESOLUTION: Record<Exclude<SeriesResolution, 'raw'>, string> = {
-  '1min': 'meter_1min',
-  '1hour': 'meter_1hour',
-  '1day': 'meter_1day',
+  '1min': 'grid_meter_1min',
+  '1hour': 'grid_meter_1hour',
+  '1day': 'grid_meter_1day',
 };
 
 /** Postgres date_trunc field + matching interval for one energy period. */
@@ -91,6 +98,11 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
     let points: SeriesPoint[];
 
     if (resolution === 'raw') {
+      // Deliberately not grouped, unlike the aggregated branches below: raw
+      // rows carry the microsecond `now()` of their own insert, so two devices
+      // never share a timestamp and there is nothing for a GROUP BY to combine.
+      // Raw is a single device's trace by nature - the 1-minute resolution is
+      // what puts several of them on a common grid.
       const { rows } = await this.db.query(
         `SELECT time, grid_to_home_power, pv_to_grid_power
            FROM meter_reading
@@ -159,7 +171,7 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
            SELECT time_bucket($1::interval, time, $4) AS bucket, device_sn,
                   max(grid_import_energy) - min(grid_import_energy) AS dev_import,
                   max(grid_export_energy) - min(grid_export_energy) AS dev_export
-             FROM meter_reading
+             FROM grid_meter_readings
             WHERE time >= $2 AND time < $3
             GROUP BY bucket, device_sn
          ) d
@@ -181,7 +193,7 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
          FROM (
            SELECT max(grid_import_energy) - min(grid_import_energy) AS dev_import,
                   max(grid_export_energy) - min(grid_export_energy) AS dev_export
-             FROM meter_reading
+             FROM grid_meter_readings
             WHERE time >= $1 AND time < $2
             GROUP BY device_sn
          ) d`,

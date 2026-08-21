@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import type { DeviceRole } from '@org/shared-types';
 import type { Pool } from 'pg';
 
 /**
@@ -28,6 +29,42 @@ interface Migration {
   /** Single-row, single-column boolean query; `true` skips `sql`. */
   skipIf?: string;
 }
+
+/**
+ * One role view: the same rows as `source`, minus every device that does not
+ * carry `role`. Thin on purpose - same columns, same grain, `device_sn` kept -
+ * so the callers keep their own windows and counter deltas.
+ *
+ * Generated rather than hand-written because the role is a string literal
+ * inside raw SQL: a typo is invisible to TypeScript *and* to Postgres (the view
+ * is created happily, its WHERE just never matches), so the view would return
+ * zero rows forever and surface as wrong dashboard numbers, never as an error.
+ * Typing the role as DeviceRole moves that failure to compile time, and writing
+ * each literal once instead of eight times removes most of the chance to make
+ * it in the first place.
+ */
+function roleView(view: string, source: string, role: DeviceRole): string {
+  return `CREATE OR REPLACE VIEW ${view} AS
+            SELECT a.* FROM ${source} a
+              JOIN device d ON d.device_sn = a.device_sn
+             WHERE d.roles @> ARRAY['${role}']::TEXT[]`;
+}
+
+/**
+ * [migration number, view, source relation, role]. One migration per view, so a
+ * failure names the view that broke rather than a bundle it was part of.
+ */
+const ROLE_VIEWS: readonly (readonly [string, string, string, DeviceRole])[] = [
+  ['063', 'producer_readings', 'sma_readings', 'producer'],
+  ['064', 'producer_1min', 'sma_1min', 'producer'],
+  ['065', 'producer_1hour', 'sma_1hour', 'producer'],
+  ['066', 'producer_1day', 'sma_1day', 'producer'],
+  ['067', 'grid_meter_readings', 'meter_reading', 'grid-meter'],
+  ['068', 'grid_meter_1min', 'meter_1min', 'grid-meter'],
+  ['069', 'grid_meter_1hour', 'meter_1hour', 'grid-meter'],
+  ['070', 'grid_meter_1day', 'meter_1day', 'grid-meter'],
+  ['071', 'consumer_1min', 'wallbox_1min', 'consumer'],
+];
 
 const MIGRATIONS: Migration[] = [
   {
@@ -817,47 +854,10 @@ const MIGRATIONS: Migration[] = [
     name: '062-device-roles-empty-to-null',
     sql: `UPDATE device SET roles = NULL WHERE roles = '{}'::TEXT[]`,
   },
-  {
-    name: '063-producer-views',
-    sql: `CREATE OR REPLACE VIEW producer_readings AS
-            SELECT r.* FROM sma_readings r
-              JOIN device d ON d.device_sn = r.device_sn
-             WHERE d.roles @> ARRAY['producer']::TEXT[];
-          CREATE OR REPLACE VIEW producer_1min AS
-            SELECT a.* FROM sma_1min a
-              JOIN device d ON d.device_sn = a.device_sn
-             WHERE d.roles @> ARRAY['producer']::TEXT[];
-          CREATE OR REPLACE VIEW producer_1hour AS
-            SELECT a.* FROM sma_1hour a
-              JOIN device d ON d.device_sn = a.device_sn
-             WHERE d.roles @> ARRAY['producer']::TEXT[];
-          CREATE OR REPLACE VIEW producer_1day AS
-            SELECT a.* FROM sma_1day a
-              JOIN device d ON d.device_sn = a.device_sn
-             WHERE d.roles @> ARRAY['producer']::TEXT[]`,
-  },
-  {
-    name: '064-grid-meter-views',
-    sql: `CREATE OR REPLACE VIEW grid_meter_readings AS
-            SELECT r.* FROM meter_reading r
-              JOIN device d ON d.device_sn = r.device_sn
-             WHERE d.roles @> ARRAY['grid-meter']::TEXT[];
-          CREATE OR REPLACE VIEW grid_meter_1min AS
-            SELECT a.* FROM meter_1min a
-              JOIN device d ON d.device_sn = a.device_sn
-             WHERE d.roles @> ARRAY['grid-meter']::TEXT[];
-          CREATE OR REPLACE VIEW grid_meter_1hour AS
-            SELECT a.* FROM meter_1hour a
-              JOIN device d ON d.device_sn = a.device_sn
-             WHERE d.roles @> ARRAY['grid-meter']::TEXT[]`,
-  },
-  {
-    name: '065-consumer-views',
-    sql: `CREATE OR REPLACE VIEW consumer_1min AS
-            SELECT a.* FROM wallbox_1min a
-              JOIN device d ON d.device_sn = a.device_sn
-             WHERE d.roles @> ARRAY['consumer']::TEXT[]`,
-  },
+  ...ROLE_VIEWS.map(([name, view, source, role]) => ({
+    name: `${name}-role-view-${view.replace(/_/g, '-')}`,
+    sql: roleView(view, source, role),
+  })),
   {
     // Same arithmetic as 048, one level up: the sources are now "every grid
     // meter" and "every producer" rather than two vendor aggregates. Column
@@ -865,7 +865,7 @@ const MIGRATIONS: Migration[] = [
     //
     // Storage extends the same shape - one more CTE over a consumer/storage
     // view, folded into house_power as `+ discharge - charge`.
-    name: '066-house-load-view-roles',
+    name: '072-house-load-view-roles',
     sql: `CREATE OR REPLACE VIEW house_load_1min AS
           WITH grid AS (
             SELECT bucket,

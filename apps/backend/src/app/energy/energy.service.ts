@@ -27,27 +27,30 @@ export class EnergyService {
    * another's and report a figure belonging to neither.
    */
   async balance(from: Date, to: Date): Promise<EnergyBalance> {
-    const { rows: pv } = await this.db.query(
-      `SELECT sum(dev_yield) AS production_kwh
-         FROM (
-           SELECT max(total_yield_kwh) - min(total_yield_kwh) AS dev_yield
-             FROM producer_readings
-            WHERE time >= $1 AND time < $2
-            GROUP BY device_sn
-         ) d`,
-      [from, to],
-    );
-    const { rows: grid } = await this.db.query(
-      `SELECT sum(dev_import) AS import_kwh, sum(dev_export) AS export_kwh
-         FROM (
-           SELECT max(grid_import_energy) - min(grid_import_energy) AS dev_import,
-                  max(grid_export_energy) - min(grid_export_energy) AS dev_export
-             FROM grid_meter_readings
-            WHERE time >= $1 AND time < $2
-            GROUP BY device_sn
-         ) d`,
-      [from, to],
-    );
+    // Two independent relations, so one round trip each, in parallel.
+    const [{ rows: pv }, { rows: grid }] = await Promise.all([
+      this.db.query(
+        `SELECT sum(dev_yield) AS production_kwh
+           FROM (
+             SELECT max(total_yield_kwh) - min(total_yield_kwh) AS dev_yield
+               FROM producer_readings
+              WHERE time >= $1 AND time < $2
+              GROUP BY device_sn
+           ) d`,
+        [from, to],
+      ),
+      this.db.query(
+        `SELECT sum(dev_import) AS import_kwh, sum(dev_export) AS export_kwh
+           FROM (
+             SELECT max(grid_import_energy) - min(grid_import_energy) AS dev_import,
+                    max(grid_export_energy) - min(grid_export_energy) AS dev_export
+               FROM grid_meter_readings
+              WHERE time >= $1 AND time < $2
+              GROUP BY device_sn
+           ) d`,
+        [from, to],
+      ),
+    ]);
 
     return computeEnergyBalance(
       {
