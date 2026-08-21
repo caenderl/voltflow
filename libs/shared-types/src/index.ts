@@ -11,6 +11,49 @@
  */
 export type DeviceRole = 'grid-meter' | 'producer' | 'consumer' | 'storage';
 
+/**
+ * How a device is talked to — protocol plus the shape of the values it reports.
+ * Orthogonal to {@link DeviceRole}: the same role can be served by any driver
+ * (a producer might be an SMA inverter today and something else tomorrow), and
+ * one driver can serve several roles (a hybrid inverter produces and stores).
+ *
+ * This is the value stored in `device_config.driver`, so it decides which
+ * stream module the collector starts for a configured instance.
+ */
+export type DeviceDriver =
+  | 'sma-speedwire'
+  | 'anker-v1-modbus'
+  | 'anker-solix-mqtt';
+
+/**
+ * One configured device instance — a row the user created in the settings UI,
+ * as opposed to {@link DeviceInfo}, which is a device the collector has
+ * actually seen. The two meet at {@link deviceSn}: it is null until the
+ * collector connects for the first time and learns the serial, then stays
+ * bound. That indirection is what lets hardware be swapped (new box, same
+ * config row, same role) without orphaning the measurement history.
+ *
+ * `port` / `unitId` are driver-specific and null where they mean nothing —
+ * Modbus has both, Speedwire neither.
+ */
+export interface DeviceConfig {
+  id: number;
+  driver: DeviceDriver;
+  /** Display name, shown in the UI. */
+  name: string | null;
+  enabled: boolean;
+  /** IP / hostname on the LAN. */
+  host: string | null;
+  /** Modbus TCP port — null for drivers that do not use one. */
+  port: number | null;
+  /** Modbus unit / device id — null for drivers that do not use one. */
+  unitId: number | null;
+  /** Polling interval in seconds. */
+  pollIntervalS: number;
+  /** Serial of the device this row is bound to; null until first contact. */
+  deviceSn: string | null;
+}
+
 /** A device as the registry knows it (GET /api/devices). */
 export interface DeviceInfo {
   /** Serial number — the identity every reading is tagged with. */

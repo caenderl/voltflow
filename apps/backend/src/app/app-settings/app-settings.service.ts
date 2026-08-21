@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { AppSettings } from '@org/shared-types';
-import { SingletonConfigStore, asBool } from '../common/singleton-config';
+import { SingletonConfigStore, asBool } from '../common/config-store';
 import { DbService } from '../database/db.service';
 
 const DEFAULTS: AppSettings = { calibrationEnabled: false };
