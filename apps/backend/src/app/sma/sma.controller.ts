@@ -8,22 +8,17 @@ import {
 } from '@nestjs/common';
 import type {
   DataRange,
-  EnergyBalance,
   SmaConfig,
   SmaDailySummary,
   SmaMinutePower,
   SmaReading,
 } from '@org/shared-types';
 import { parseConfig, parseRange } from '../common/query-params';
-import { EnergyService } from '../energy/energy.service';
 import { SmaService } from './sma.service';
 
 @Controller('sma')
 export class SmaController {
-  constructor(
-    private readonly sma: SmaService,
-    private readonly energy: EnergyService,
-  ) {}
+  constructor(private readonly sma: SmaService) {}
 
   @Get('config')
   getConfig(): Promise<SmaConfig> {
@@ -84,19 +79,5 @@ export class SmaController {
   ): Promise<SmaMinutePower[]> {
     const { from, to } = parseRange(fromStr, toStr);
     return this.sma.minutePower(from, to);
-  }
-
-  /**
-   * @deprecated Moved to `GET /api/energy/balance` - the balance is a property
-   * of the house, not of the inverter. Kept for one release so a frontend
-   * still served from the service worker's cache does not break on deploy.
-   */
-  @Get('balance')
-  balance(
-    @Query('from') fromStr?: string,
-    @Query('to') toStr?: string,
-  ): Promise<EnergyBalance> {
-    const { from, to } = parseRange(fromStr, toStr);
-    return this.energy.balance(from, to);
   }
 }
