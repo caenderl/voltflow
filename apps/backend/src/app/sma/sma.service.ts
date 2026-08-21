@@ -15,11 +15,11 @@ import type {
   HasRange,
 } from '../common/device-capabilities';
 import {
-  SingletonConfigStore,
+  DriverConfigStore,
   asBool,
   asNumber,
   asStringOrNull,
-} from '../common/singleton-config';
+} from '../common/config-store';
 import { DbService } from '../database/db.service';
 import { rowToSmaReading } from './sma.mapper';
 
@@ -43,12 +43,12 @@ export class SmaService
     HasHistory<SmaReading>,
     Configurable<SmaConfig>
 {
-  private readonly config: SingletonConfigStore<SmaConfig>;
+  private readonly config: DriverConfigStore<SmaConfig>;
 
   constructor(private readonly db: DbService) {
-    this.config = new SingletonConfigStore<SmaConfig>(
+    this.config = new DriverConfigStore<SmaConfig>(
       db,
-      'sma_config',
+      'sma-speedwire',
       [
         { column: 'enabled', key: 'enabled', fromDb: asBool },
         { column: 'name', key: 'name', fromDb: asStringOrNull },

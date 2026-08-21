@@ -15,11 +15,11 @@ import type {
   HasRange,
 } from '../common/device-capabilities';
 import {
-  SingletonConfigStore,
+  DriverConfigStore,
   asBool,
   asNumber,
   asStringOrNull,
-} from '../common/singleton-config';
+} from '../common/config-store';
 import { DbService } from '../database/db.service';
 import { rowToWallboxReading } from './wallbox.mapper';
 
@@ -45,12 +45,12 @@ export class WallboxService
     HasHistory<WallboxReading>,
     Configurable<WallboxConfig>
 {
-  private readonly config: SingletonConfigStore<WallboxConfig>;
+  private readonly config: DriverConfigStore<WallboxConfig>;
 
   constructor(private readonly db: DbService) {
-    this.config = new SingletonConfigStore<WallboxConfig>(
+    this.config = new DriverConfigStore<WallboxConfig>(
       db,
-      'wallbox_config',
+      'anker-v1-modbus',
       [
         { column: 'enabled', key: 'enabled', fromDb: asBool },
         { column: 'name', key: 'name', fromDb: asStringOrNull },

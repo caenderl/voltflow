@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import type { DeviceRole } from '@org/shared-types';
+import type { DeviceDriver, DeviceRole } from '@org/shared-types';
 import type { Pool } from 'pg';
 
 /**
@@ -48,6 +48,46 @@ function roleView(view: string, source: string, role: DeviceRole): string {
             SELECT a.* FROM ${source} a
               JOIN device d ON d.device_sn = a.device_sn
              WHERE d.roles @> ARRAY['${role}']::TEXT[]`;
+}
+
+/**
+ * Guarantees exactly one `device_config` row for a driver, carrying over the
+ * legacy singleton's values when it has any.
+ *
+ * The LEFT JOIN against a one-row dummy is what makes this "always", not "only
+ * if the singleton has a row": on a fresh database `db/init.sql` creates the
+ * singleton tables but inserts nothing, so a plain `FROM <source> WHERE id = 1`
+ * would seed nothing and leave the table empty. That emptiness is not cosmetic
+ * - it is the only way DriverConfigStore.save() can ever reach an INSERT, and
+ * two concurrent first-saves (the settings form has no submit guard) then both
+ * insert, because `driver` is deliberately not unique. Seeding unconditionally
+ * removes the window rather than locking around it: the row always exists, so
+ * save() is a pure UPDATE.
+ *
+ * `cols` maps device_config columns to expressions over the source row, so the
+ * two shapes (Speedwire has no port/unit) stay in one place instead of two
+ * near-identical INSERTs. Wrap anything NOT NULL in COALESCE - `s.*` is all
+ * NULL when the singleton is empty.
+ *
+ * Still guarded on "no row for this driver yet", so a user's later edit
+ * survives every reboot. A row deleted in the UI does come back - deliberate,
+ * and bounded: step 3 of this stage drops the singletons and takes this with
+ * them.
+ */
+function seedDeviceConfig(
+  driver: DeviceDriver,
+  source: string,
+  cols: Record<string, string>,
+): string {
+  const names = ['driver', ...Object.keys(cols)].join(', ');
+  const values = [`'${driver}'`, ...Object.values(cols)].join(', ');
+  return `INSERT INTO device_config (${names})
+          SELECT ${values}
+            FROM (SELECT 1) AS always
+            LEFT JOIN ${source} s ON s.id = 1
+           WHERE NOT EXISTS (
+             SELECT 1 FROM device_config WHERE driver = '${driver}'
+           )`;
 }
 
 /**
@@ -888,6 +928,64 @@ const MIGRATIONS: Migration[] = [
               - COALESCE(g.grid_export, 0) AS house_power
           FROM grid g
           LEFT JOIN pv p ON p.bucket = g.bucket`,
+  },
+  // --- Stage 2: device instances --------------------------------------------
+  // Until now a device's connection settings lived in a singleton table per
+  // vendor (`sma_config`, `wallbox_config`, both `CHECK (id = 1)`), which made
+  // "one of each kind" a schema-level truth. `device_config` is one row per
+  // configured instance instead, so a second wallbox is a row rather than a
+  // migration.
+  //
+  // It is deliberately NOT the same thing as `device`: this table is what the
+  // user configured, `device` is what the collector has actually seen. They
+  // meet at device_sn, which stays NULL until first contact - that is what lets
+  // hardware be replaced without breaking the history the old serial carries.
+  //
+  // Roles are NOT stored here. The driver implies a default role set and
+  // `device.roles` remains the single place that can be overridden; splitting
+  // it would give a hybrid inverter (producer + storage) two sources of truth.
+  {
+    name: '073-device-config-table',
+    sql: `CREATE TABLE IF NOT EXISTS device_config (
+            id              SERIAL PRIMARY KEY,
+            driver          TEXT    NOT NULL,
+            name            TEXT,
+            enabled         BOOLEAN NOT NULL DEFAULT false,
+            host            TEXT,
+            port            INT,
+            unit_id         INT,
+            poll_interval_s INT     NOT NULL DEFAULT 60,
+            device_sn       TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+  },
+  {
+    // One config row per physical device. Partial, so the many not-yet-bound
+    // rows (device_sn NULL) do not collide with each other.
+    name: '074-device-config-sn-unique',
+    sql: `CREATE UNIQUE INDEX IF NOT EXISTS device_config_device_sn_idx
+            ON device_config (device_sn) WHERE device_sn IS NOT NULL`,
+  },
+  {
+    name: '075-device-config-seed-sma',
+    sql: seedDeviceConfig('sma-speedwire', 'sma_config', {
+      name: 's.name',
+      enabled: 'COALESCE(s.enabled, false)',
+      host: 's.host',
+      poll_interval_s: 'COALESCE(s.poll_interval_s, 60)',
+    }),
+  },
+  {
+    name: '076-device-config-seed-wallbox',
+    sql: seedDeviceConfig('anker-v1-modbus', 'wallbox_config', {
+      name: 's.name',
+      enabled: 'COALESCE(s.enabled, false)',
+      host: 's.host',
+      port: 'COALESCE(s.port, 502)',
+      unit_id: 'COALESCE(s.unit_id, 1)',
+      poll_interval_s: 'COALESCE(s.poll_interval_s, 30)',
+    }),
   },
 ];
 
