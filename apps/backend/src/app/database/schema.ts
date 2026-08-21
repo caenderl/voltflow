@@ -14,7 +14,11 @@ import type { Pool } from 'pg';
  *    column that has no nulls left). Tightening a constraint that way needs
  *    its backfill as a separate, earlier entry — see 040-042.
  *  - Never DROP / rewrite data here. For destructive or data-moving changes
- *    use a real versioned migration tool + a backup first.
+ *    use a real versioned migration tool + a backup first. The single
+ *    exception is 077, which drops the two singleton config tables after the
+ *    step immediately above has copied every column they hold into
+ *    `device_config` — a drop that carries no data with it. Anything that
+ *    would actually lose a value does not belong here.
  *
  * `skipIf` is an optional guard query returning a single boolean: true skips
  * the step. It exists for work that cannot express its own "already done" test
@@ -51,28 +55,19 @@ function roleView(view: string, source: string, role: DeviceRole): string {
 }
 
 /**
- * Guarantees exactly one `device_config` row for a driver, carrying over the
- * legacy singleton's values when it has any.
+ * Migrates one legacy singleton config row into `device_config`, once.
  *
- * The LEFT JOIN against a one-row dummy is what makes this "always", not "only
- * if the singleton has a row": on a fresh database `db/init.sql` creates the
- * singleton tables but inserts nothing, so a plain `FROM <source> WHERE id = 1`
- * would seed nothing and leave the table empty. That emptiness is not cosmetic
- * - it is the only way DriverConfigStore.save() can ever reach an INSERT, and
- * two concurrent first-saves (the settings form has no submit guard) then both
- * insert, because `driver` is deliberately not unique. Seeding unconditionally
- * removes the window rather than locking around it: the row always exists, so
- * save() is a pure UPDATE.
+ * Paired with the DROP that follows it: this can only run while the source
+ * table still exists, and the same boot removes it. That is what makes the
+ * migration one-way. An earlier version ran on every boot guarded only on
+ * "no row for this driver yet", which meant deleting your last wallbox in the
+ * UI brought it back on the next restart -- enabled, at its old address, with
+ * values frozen in a table nothing had written since the move.
  *
- * `cols` maps device_config columns to expressions over the source row, so the
- * two shapes (Speedwire has no port/unit) stay in one place instead of two
- * near-identical INSERTs. Wrap anything NOT NULL in COALESCE - `s.*` is all
- * NULL when the singleton is empty.
- *
- * Still guarded on "no row for this driver yet", so a user's later edit
- * survives every reboot. A row deleted in the UI does come back - deliberate,
- * and bounded: step 3 of this stage drops the singletons and takes this with
- * them.
+ * The LEFT JOIN against a one-row dummy keeps this working when the singleton
+ * table exists but is empty (a fresh `db/init.sql` database created one
+ * without inserting a row): `s.*` is all NULL, so anything NOT NULL needs a
+ * COALESCE default.
  */
 function seedDeviceConfig(
   driver: DeviceDriver,
@@ -115,18 +110,6 @@ const MIGRATIONS: Migration[] = [
             import_ct_kwh DOUBLE PRECISION,
             export_ct_kwh DOUBLE PRECISION,
             updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-          )`,
-  },
-  {
-    name: '002-wallbox-config-table',
-    sql: `CREATE TABLE IF NOT EXISTS wallbox_config (
-            id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-            enabled         BOOLEAN NOT NULL DEFAULT false,
-            host            TEXT,
-            port            INT     NOT NULL DEFAULT 502,
-            unit_id         INT     NOT NULL DEFAULT 1,
-            poll_interval_s INT     NOT NULL DEFAULT 30,
-            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
           )`,
   },
   {
@@ -176,10 +159,6 @@ const MIGRATIONS: Migration[] = [
           CREATE TRIGGER wallbox_reading_notify
             AFTER INSERT ON wallbox_reading
             FOR EACH ROW EXECUTE FUNCTION notify_wallbox_reading()`,
-  },
-  {
-    name: '009-wallbox-config-name',
-    sql: `ALTER TABLE wallbox_config ADD COLUMN IF NOT EXISTS name TEXT`,
   },
   // ---------------------------------------------------------------------------
   // Wallbox continuous aggregates (added after initial release).
@@ -281,17 +260,6 @@ const MIGRATIONS: Migration[] = [
           ALTER MATERIALIZED VIEW wallbox_1day  SET (timescaledb.materialized_only = false)`,
   },
   // --- SMA PV inverter ------------------------------------------------------
-  {
-    name: '020-sma-config-table',
-    sql: `CREATE TABLE IF NOT EXISTS sma_config (
-            id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-            enabled         BOOLEAN NOT NULL DEFAULT false,
-            name            TEXT,
-            host            TEXT,
-            poll_interval_s INT     NOT NULL DEFAULT 60,
-            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-          )`,
-  },
   {
     name: '021-sma-readings-table',
     sql: `CREATE TABLE IF NOT EXISTS sma_readings (
@@ -679,6 +647,14 @@ const MIGRATIONS: Migration[] = [
     // sort on every backend start), so the guard skips the statement outright
     // once no NULLs remain. It re-arms itself if an older collector writes
     // NULL rows again, which is what makes a backend-first deploy self-heal.
+    //
+    // Reads the interval from `device_config` (created further down, at 073)
+    // rather than the long-gone `wallbox_config`. Safe despite the ordering:
+    // the guard only lets this fire when wallbox_reading already holds rows
+    // without energy_wh, which means a collector has been running, which means
+    // an earlier boot already created device_config. On a fresh database the
+    // table is empty, the guard skips, and the forward reference is never
+    // evaluated.
     name: '052-wallbox-energy-wh-backfill',
     skipIf: `SELECT NOT EXISTS (SELECT 1 FROM wallbox_reading WHERE energy_wh IS NULL)`,
     sql: `UPDATE wallbox_reading wr
@@ -689,7 +665,9 @@ const MIGRATIONS: Migration[] = [
                      wr2.active_power_w * COALESCE(LEAST(
                        EXTRACT(EPOCH FROM (wr2.time - LAG(wr2.time)
                          OVER (PARTITION BY wr2.device_sn ORDER BY wr2.time))),
-                       2 * COALESCE((SELECT poll_interval_s FROM wallbox_config WHERE id = 1), 30)
+                       2 * COALESCE((SELECT poll_interval_s FROM device_config
+                                       WHERE driver = 'anker-v1-modbus'
+                                       ORDER BY id LIMIT 1), 30)
                      ), 0) / 3600
                    ELSE 0 END AS computed_energy_wh
               FROM wallbox_reading wr2
@@ -967,8 +945,13 @@ const MIGRATIONS: Migration[] = [
     sql: `CREATE UNIQUE INDEX IF NOT EXISTS device_config_device_sn_idx
             ON device_config (device_sn) WHERE device_sn IS NOT NULL`,
   },
+  // 075-077 are one boot's worth of work: carry the two singleton configs over
+  // and then remove them. `skipIf` makes 075/076 no-ops from the second boot
+  // onwards - the table they read is gone by then - so the pair is a one-way
+  // move rather than a rule that keeps reasserting itself.
   {
     name: '075-device-config-seed-sma',
+    skipIf: `SELECT to_regclass('sma_config') IS NULL`,
     sql: seedDeviceConfig('sma-speedwire', 'sma_config', {
       name: 's.name',
       enabled: 'COALESCE(s.enabled, false)',
@@ -978,6 +961,7 @@ const MIGRATIONS: Migration[] = [
   },
   {
     name: '076-device-config-seed-wallbox',
+    skipIf: `SELECT to_regclass('wallbox_config') IS NULL`,
     sql: seedDeviceConfig('anker-v1-modbus', 'wallbox_config', {
       name: 's.name',
       enabled: 'COALESCE(s.enabled, false)',
@@ -986,6 +970,18 @@ const MIGRATIONS: Migration[] = [
       unit_id: 'COALESCE(s.unit_id, 1)',
       poll_interval_s: 'COALESCE(s.poll_interval_s, 30)',
     }),
+  },
+  {
+    // The one deliberate exception to the "never DROP here" rule at the top of
+    // this file. It is safe precisely because it is not a data-carrying drop:
+    // 075/076 immediately above copy every column these tables have into
+    // device_config first, and nothing has written them since that move (the
+    // config endpoints and DriverConfigStore are gone). Leaving them would
+    // keep a second, stale, invisible copy of the connection settings around
+    // and leave the resurrection bug one re-added seed away.
+    name: '077-drop-singleton-device-configs',
+    sql: `DROP TABLE IF EXISTS sma_config;
+          DROP TABLE IF EXISTS wallbox_config`,
   },
 ];
 

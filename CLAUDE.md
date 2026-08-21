@@ -45,7 +45,10 @@ npm run typecheck   # tsc --build over the whole workspace
   with all measurement data.
 - **Schema changes belong in `apps/backend/src/app/database/schema.ts`**
   (idempotent, `… IF NOT EXISTS` only) so existing DBs get them without data loss.
-  `db/init.sql` runs only on the very first start (empty volume).
+  `db/init.sql` runs only on the very first start (empty volume). Migrations run
+  **in order on every boot**, so a step that keeps reasserting a state is a
+  standing rule, not a one-off — to move something once, pair it with a guard
+  (`skipIf`) that stops it firing again.
 - **Continuous aggregates:** when deriving house load (PV + grid import − feed-in),
   reconcile the sources' sampling mismatch over shared time buckets — do not join
   raw values.

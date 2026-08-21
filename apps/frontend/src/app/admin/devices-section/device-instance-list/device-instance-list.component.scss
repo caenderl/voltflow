@@ -1,0 +1,102 @@
+:host {
+  display: block;
+}
+
+app-settings-card + app-settings-card {
+  display: block;
+  margin-top: 1.25rem;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.device-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.device-error {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  color: var(--import);
+}
+
+.device-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+
+  th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    padding: 0 0.75rem 0.6rem;
+    border-bottom: 1px solid var(--outline);
+  }
+
+  td {
+    padding: 0.7rem 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--outline) 60%, transparent);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  tbody tr.editing {
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .actions-col {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+  }
+}
+
+.status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  background: var(--muted);
+
+  &.active {
+    background: var(--export);
+  }
+}
+
+.device-sn {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: var(--on-surface-var);
+
+  &:hover {
+    background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+    color: var(--on-surface);
+  }
+}

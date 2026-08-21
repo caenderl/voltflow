@@ -1,10 +1,19 @@
-import type { AppSettings, SmaConfig, WallboxConfig } from '@org/shared-types';
+import type { DeviceDriver } from '@org/shared-types';
 
-/** Emitted by the admin page to persist the display + device configs together. */
-export interface ConfigSaveEvent {
-  appSettings: AppSettings;
-  wallbox: WallboxConfig;
-  sma: SmaConfig;
+/**
+ * Emitted to create (id undefined) or update (id set) a device instance.
+ * `driver` only matters on create — an update targets an existing row by id
+ * and never changes what it is.
+ */
+export interface DeviceConfigSaveEvent {
+  id?: number;
+  driver: DeviceDriver;
+  name: string | null;
+  enabled: boolean;
+  host: string | null;
+  port: number | null;
+  unitId: number | null;
+  pollIntervalS: number;
 }
 
 /** Emitted to create (id undefined) or update (id set) a meter checkpoint. */
@@ -28,4 +37,4 @@ export interface TariffPeriodSaveEvent {
 }
 
 /** Top-level sections of the admin page. */
-export type AdminSection = 'config' | 'tariffs' | 'checkpoints' | 'system';
+export type AdminSection = 'config' | 'devices' | 'tariffs' | 'checkpoints' | 'system';

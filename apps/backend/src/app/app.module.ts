@@ -13,6 +13,7 @@ import { SmaModule } from './sma/sma.module';
 import { LiveModule } from './live/live.module';
 import { SystemModule } from './system/system.module';
 import { DevicesModule } from './devices/devices.module';
+import { DeviceConfigModule } from './device-config/device-config.module';
 import { EnergyModule } from './energy/energy.module';
 
 @Module({
@@ -29,6 +30,7 @@ import { EnergyModule } from './energy/energy.module';
     LiveModule,
     SystemModule,
     DevicesModule,
+    DeviceConfigModule,
     EnergyModule,
   ],
   controllers: [AppController],

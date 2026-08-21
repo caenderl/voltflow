@@ -35,21 +35,6 @@ CREATE TABLE IF NOT EXISTS tariff (
 );
 
 -- ---------------------------------------------------------------------------
--- Single-row wallbox connection config (Anker SOLIX V1 / A5191, Modbus TCP).
--- The collector only polls the wallbox when enabled = true and host is set.
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS wallbox_config (
-    id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-    enabled         BOOLEAN NOT NULL DEFAULT false,
-    name            TEXT,
-    host            TEXT,
-    port            INT     NOT NULL DEFAULT 502,
-    unit_id         INT     NOT NULL DEFAULT 1,
-    poll_interval_s INT     NOT NULL DEFAULT 30,
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- ---------------------------------------------------------------------------
 -- Raw smart meter readings (~one insert every 5s).
 -- time = ingestion time (now()), since msg_timestamp can be unreliable.
 -- ---------------------------------------------------------------------------
@@ -270,19 +255,6 @@ DROP TRIGGER IF EXISTS wallbox_reading_notify ON wallbox_reading;
 CREATE TRIGGER wallbox_reading_notify
     AFTER INSERT ON wallbox_reading
     FOR EACH ROW EXECUTE FUNCTION notify_wallbox_reading();
-
--- ---------------------------------------------------------------------------
--- Single-row SMA inverter connection config (Speedwire via pysma-plus).
--- Password is NOT stored here (collector reads it from SMA_PASSWORD env).
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS sma_config (
-    id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-    enabled         BOOLEAN NOT NULL DEFAULT false,
-    name            TEXT,
-    host            TEXT,
-    poll_interval_s INT     NOT NULL DEFAULT 60,
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
 
 -- ---------------------------------------------------------------------------
 -- Raw SMA inverter readings (one insert per poll interval, default ~60s).

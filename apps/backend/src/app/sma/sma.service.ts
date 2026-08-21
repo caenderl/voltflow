@@ -1,34 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import type {
   DataRange,
-  SmaConfig,
   SmaDailySummary,
   SmaMinutePower,
   SmaReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
 import { MAX_RAW_ROWS, assertNotTruncated, toDataRange } from '../common/db-utils';
-import type {
-  Configurable,
-  HasHistory,
-  HasLatest,
-  HasRange,
-} from '../common/device-capabilities';
-import {
-  DriverConfigStore,
-  asBool,
-  asNumber,
-  asStringOrNull,
-} from '../common/config-store';
+import type { HasHistory, HasLatest, HasRange } from '../common/device-capabilities';
 import { DbService } from '../database/db.service';
 import { rowToSmaReading } from './sma.mapper';
-
-const DEFAULT_CONFIG: SmaConfig = {
-  enabled: false,
-  name: null,
-  host: null,
-  pollIntervalS: 60,
-};
 
 const READING_COLUMNS = `time, device_sn, asleep, grid_power, pv_power_a, pv_power_b,
   daily_yield_wh, total_yield_kwh, power_l1, power_l2, power_l3,
@@ -37,35 +18,9 @@ const READING_COLUMNS = `time, device_sn, asleep, grid_power, pv_power_a, pv_pow
 
 @Injectable()
 export class SmaService
-  implements
-    HasLatest<SmaReading>,
-    HasRange,
-    HasHistory<SmaReading>,
-    Configurable<SmaConfig>
+  implements HasLatest<SmaReading>, HasRange, HasHistory<SmaReading>
 {
-  private readonly config: DriverConfigStore<SmaConfig>;
-
-  constructor(private readonly db: DbService) {
-    this.config = new DriverConfigStore<SmaConfig>(
-      db,
-      'sma-speedwire',
-      [
-        { column: 'enabled', key: 'enabled', fromDb: asBool },
-        { column: 'name', key: 'name', fromDb: asStringOrNull },
-        { column: 'host', key: 'host', fromDb: asStringOrNull },
-        { column: 'poll_interval_s', key: 'pollIntervalS', fromDb: asNumber },
-      ],
-      DEFAULT_CONFIG,
-    );
-  }
-
-  getConfig(): Promise<SmaConfig> {
-    return this.config.get();
-  }
-
-  saveConfig(c: SmaConfig): Promise<SmaConfig> {
-    return this.config.save(c);
-  }
+  constructor(private readonly db: DbService) {}
 
   async latest(deviceSn?: string): Promise<SmaReading | null> {
     const { rows } = await this.db.query(
@@ -157,5 +112,4 @@ export class SmaService
       powerW: Math.round(Number(r['grid_power_avg'] ?? 0)),
     }));
   }
-
 }

@@ -1,26 +1,27 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, firstValueFrom, forkJoin, map, of } from 'rxjs';
+import { Observable, catchError, firstValueFrom, map, of } from 'rxjs';
 import type {
   AppSettings,
   DataRange,
+  DeviceConfig,
+  DeviceDriver,
   EnergyBalance,
   EnergySummary,
   MeterCheckpoint,
   MeterReading,
   MeterReconciliation,
   SeriesResponse,
-  SmaConfig,
   SmaDailySummary,
   SmaMinutePower,
   SmaReading,
   TariffPeriod,
-  WallboxConfig,
   WallboxDailySummary,
   WallboxReading,
 } from '@org/shared-types';
 import { appendWindowed } from '../core/chart-utils';
 import type { CalibrationFactors } from '../core/calibration';
 import { type View, rangeFor, startOfDay } from '../core/date-utils';
+import { DeviceConfigApiService } from '../core/device-config-api.service';
 import { LiveService } from '../core/live.service';
 import { MeterApiService } from '../core/meter-api.service';
 import { SettingsApiService } from '../core/settings-api.service';
@@ -29,7 +30,7 @@ import { SmaApiService } from '../core/sma-api.service';
 import { WallboxApiService } from '../core/wallbox-api.service';
 import type {
   CheckpointSaveEvent,
-  ConfigSaveEvent,
+  DeviceConfigSaveEvent,
   TariffPeriodSaveEvent,
 } from '../core/config-types';
 
@@ -63,6 +64,7 @@ export class DashboardDataService {
   private readonly smaApi = inject(SmaApiService);
   private readonly energyApi = inject(EnergyApiService);
   private readonly settingsApi = inject(SettingsApiService);
+  private readonly deviceConfigApi = inject(DeviceConfigApiService);
 
   // Live readings (WebSocket)
   readonly latest = signal<MeterReading | null>(null);
@@ -79,8 +81,21 @@ export class DashboardDataService {
   readonly dataRange = signal<DataRange | null>(null);
   readonly tariffPeriods = signal<TariffPeriod[]>([]);
   readonly appSettings = signal<AppSettings | null>(null);
-  readonly wallboxConfig = signal<WallboxConfig | null>(null);
-  readonly smaConfig = signal<SmaConfig | null>(null);
+  readonly deviceConfigs = signal<DeviceConfig[]>([]);
+  /**
+   * The enabled config for each driver, or the first row if none is enabled -
+   * until the live view is itself multi-device aware (frontend stage 4), the
+   * live/history cards can only ever represent one device per kind, same as
+   * when these were the singleton tables. Consumers only read `name`/`enabled`
+   * /`pollIntervalS`, all present on `DeviceConfig`, so this is a drop-in for
+   * the old per-vendor config signals.
+   */
+  private firstConfig(driver: DeviceDriver): DeviceConfig | null {
+    const rows = this.deviceConfigs().filter((d) => d.driver === driver);
+    return rows.find((d) => d.enabled) ?? rows[0] ?? null;
+  }
+  readonly wallboxConfig = computed(() => this.firstConfig('anker-v1-modbus'));
+  readonly smaConfig = computed(() => this.firstConfig('sma-speedwire'));
   readonly checkpoints = signal<MeterCheckpoint[]>([]);
   /** Checkpoints vs. smart meter, recomputed whenever a checkpoint changes. */
   readonly reconciliation = signal<MeterReconciliation | null>(null);
@@ -141,8 +156,7 @@ export class DashboardDataService {
     this.loadInto(this.meterApi.range(), (r) => this.dataRange.set(r));
     this.loadTariffPeriods();
     this.loadInto(this.settingsApi.appSettings(), (s) => this.appSettings.set(s));
-    this.loadInto(this.wallboxApi.config(), (c) => this.wallboxConfig.set(c));
-    this.loadInto(this.smaApi.config(), (c) => this.smaConfig.set(c));
+    this.loadDeviceConfigs();
     this.loadCheckpoints();
 
     this.loadToday();
@@ -223,41 +237,69 @@ export class DashboardDataService {
     this.periodBalance.set(null);
   }
 
-  /**
-   * Save all three configs in parallel. Resolves true only if every save
-   * succeeded (callers keep the modal open otherwise); failures set `error`.
-   */
-  saveConfig(event: ConfigSaveEvent): Promise<boolean> {
-    const attempt = <T>(obs: Observable<T>, apply: (v: T) => void, msg: string) =>
-      obs.pipe(
-        map((v) => {
-          apply(v);
+  /** Resolves true once the display settings have actually been saved. */
+  saveConfig(appSettings: AppSettings): Promise<boolean> {
+    this.error.set(null);
+    return firstValueFrom(
+      this.settingsApi.saveAppSettings(appSettings).pipe(
+        map((saved) => {
+          this.appSettings.set(saved);
           return true;
         }),
         catchError(() => {
-          this.error.set(msg);
+          this.error.set('Anzeige-Einstellungen konnten nicht gespeichert werden.');
           return of(false);
         }),
-      );
-    return firstValueFrom(
-      forkJoin([
-        attempt(
-          this.wallboxApi.saveConfig(event.wallbox),
-          (saved) => this.wallboxConfig.set(saved),
-          'Wallbox-Konfiguration konnte nicht gespeichert werden.',
-        ),
-        attempt(
-          this.smaApi.saveConfig(event.sma),
-          (saved) => this.smaConfig.set(saved),
-          'SMA-Konfiguration konnte nicht gespeichert werden.',
-        ),
-        attempt(
-          this.settingsApi.saveAppSettings(event.appSettings),
-          (saved) => this.appSettings.set(saved),
-          'Anzeige-Einstellungen konnten nicht gespeichert werden.',
-        ),
-      ]).pipe(map((results) => results.every(Boolean))),
+      ),
     );
+  }
+
+  /**
+   * Resolves true only once the save has actually landed. Does not touch the
+   * shared `error` signal — this section shows two device lists on one tab,
+   * so a shared message could surface under the wrong card; callers show
+   * their own fixed message on failure instead.
+   */
+  saveDeviceConfig(event: DeviceConfigSaveEvent): Promise<boolean> {
+    const input = {
+      name: event.name,
+      enabled: event.enabled,
+      host: event.host,
+      port: event.port,
+      unitId: event.unitId,
+      pollIntervalS: event.pollIntervalS,
+    };
+    const obs =
+      event.id === undefined
+        ? this.deviceConfigApi.create({ driver: event.driver, ...input })
+        : this.deviceConfigApi.update(event.id, input);
+    return firstValueFrom(
+      obs.pipe(
+        map(() => {
+          this.loadDeviceConfigs();
+          return true;
+        }),
+        catchError(() => of(false)),
+      ),
+    );
+  }
+
+  /** Same non-shared-error reasoning as {@link saveDeviceConfig}. */
+  deleteDeviceConfig(id: number): Promise<boolean> {
+    return firstValueFrom(
+      this.deviceConfigApi.delete(id).pipe(
+        map(() => {
+          this.deviceConfigs.set(this.deviceConfigs().filter((d) => d.id !== id));
+          return true;
+        }),
+        catchError(() => of(false)),
+      ),
+    );
+  }
+
+  /** Reload configured device instances after a create/update/delete. */
+  private loadDeviceConfigs(): void {
+    this.loadInto(this.deviceConfigApi.list(), (c) => this.deviceConfigs.set(c));
   }
 
   /**

@@ -1,36 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import type {
   DataRange,
-  WallboxConfig,
   WallboxDailySummary,
   WallboxHourlySummary,
   WallboxReading,
 } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
 import { MAX_RAW_ROWS, assertNotTruncated, toDataRange } from '../common/db-utils';
-import type {
-  Configurable,
-  HasHistory,
-  HasLatest,
-  HasRange,
-} from '../common/device-capabilities';
-import {
-  DriverConfigStore,
-  asBool,
-  asNumber,
-  asStringOrNull,
-} from '../common/config-store';
+import type { HasHistory, HasLatest, HasRange } from '../common/device-capabilities';
 import { DbService } from '../database/db.service';
 import { rowToWallboxReading } from './wallbox.mapper';
-
-const DEFAULT_CONFIG: WallboxConfig = {
-  enabled: false,
-  name: null,
-  host: null,
-  port: 502,
-  unitId: 1,
-  pollIntervalS: 30,
-};
 
 const READING_COLUMNS = `time, device_sn, status, cp_signal, active_power_w,
   session_energy_wh, session_duration_s, energy_wh,
@@ -39,37 +18,9 @@ const READING_COLUMNS = `time, device_sn, status, cp_signal, active_power_w,
 
 @Injectable()
 export class WallboxService
-  implements
-    HasLatest<WallboxReading>,
-    HasRange,
-    HasHistory<WallboxReading>,
-    Configurable<WallboxConfig>
+  implements HasLatest<WallboxReading>, HasRange, HasHistory<WallboxReading>
 {
-  private readonly config: DriverConfigStore<WallboxConfig>;
-
-  constructor(private readonly db: DbService) {
-    this.config = new DriverConfigStore<WallboxConfig>(
-      db,
-      'anker-v1-modbus',
-      [
-        { column: 'enabled', key: 'enabled', fromDb: asBool },
-        { column: 'name', key: 'name', fromDb: asStringOrNull },
-        { column: 'host', key: 'host', fromDb: asStringOrNull },
-        { column: 'port', key: 'port', fromDb: asNumber },
-        { column: 'unit_id', key: 'unitId', fromDb: asNumber },
-        { column: 'poll_interval_s', key: 'pollIntervalS', fromDb: asNumber },
-      ],
-      DEFAULT_CONFIG,
-    );
-  }
-
-  getConfig(): Promise<WallboxConfig> {
-    return this.config.get();
-  }
-
-  saveConfig(c: WallboxConfig): Promise<WallboxConfig> {
-    return this.config.save(c);
-  }
+  constructor(private readonly db: DbService) {}
 
   async latest(deviceSn?: string): Promise<WallboxReading | null> {
     const { rows } = await this.db.query(

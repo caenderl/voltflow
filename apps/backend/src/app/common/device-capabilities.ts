@@ -40,9 +40,3 @@ export interface HasRange {
 export interface HasHistory<R> {
   history(from: Date, to: Date): Promise<R[]>;
 }
-
-/** Reads and persists the device's single-row configuration. */
-export interface Configurable<C> {
-  getConfig(): Promise<C>;
-  saveConfig(config: C): Promise<C>;
-}
