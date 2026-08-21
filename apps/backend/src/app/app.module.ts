@@ -13,6 +13,7 @@ import { SmaModule } from './sma/sma.module';
 import { LiveModule } from './live/live.module';
 import { SystemModule } from './system/system.module';
 import { DevicesModule } from './devices/devices.module';
+import { EnergyModule } from './energy/energy.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { DevicesModule } from './devices/devices.module';
     LiveModule,
     SystemModule,
     DevicesModule,
+    EnergyModule,
   ],
   controllers: [AppController],
   providers: [AppService],

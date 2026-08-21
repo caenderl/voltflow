@@ -53,6 +53,10 @@ async def register_device(pool: asyncpg.Pool, snapshot: dict, device_type: str |
     stored): the collector knows which stream it opened, not how the household
     classifies the device, so a role corrected later must survive the next
     registration.
+
+    An unmapped type seeds NULL, not an empty array. COALESCE only fills a NULL,
+    so writing `{}` here would freeze the device as role-less forever - a later
+    version that learns the type could never seed it. NULL leaves the slot open.
     """
     await pool.execute(
         """
@@ -68,7 +72,7 @@ async def register_device(pool: asyncpg.Pool, snapshot: dict, device_type: str |
         snapshot.get("device_pn"),
         device_type,
         snapshot.get("alias") or snapshot.get("device_pn"),
-        _ROLES_BY_TYPE.get(device_type or "", []),
+        _ROLES_BY_TYPE.get(device_type or ""),
     )
 
 

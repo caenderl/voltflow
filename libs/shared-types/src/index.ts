@@ -584,15 +584,6 @@ export interface EnergyBalance {
   autarkyRate: number | null;
 }
 
-/** One bucket of the derived house-load series (combined meter + SMA, 1-min grid). */
-export interface HouseLoadPoint {
-  time: string;
-  /** Derived house consumption in W (PV + import − export). */
-  housePower: number | null;
-  /** PV production in W at this bucket. */
-  pvPower: number | null;
-}
-
 // ---------------------------------------------------------------------------
 // System health (host monitoring for the admin "System" tab)
 // ---------------------------------------------------------------------------

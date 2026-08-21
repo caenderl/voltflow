@@ -791,6 +791,104 @@ const MIGRATIONS: Migration[] = [
             if_not_exists     => TRUE);
           SELECT add_retention_policy('wallbox_1day', INTERVAL '10 years', if_not_exists => TRUE)`,
   },
+  // ---------------------------------------------------------------------------
+  // Role-based access to the aggregates.
+  //
+  // Until now every domain query named a vendor: the house load read `sma_1min`,
+  // the statistics read `sma_1hour` and `wallbox_1min`. What those queries
+  // actually mean is "every producer", "every consumer", "the grid meter" - and
+  // that is what `device.roles` records since 049. These views are the join, so
+  // a second inverter (or a storage device later) reaches the domain without
+  // touching a single query.
+  //
+  // They are deliberately thin: same columns, same grain, `device_sn` kept, only
+  // the rows filtered. The callers keep their own windows and deltas.
+  //
+  // The join is strict - a device whose roles are unknown contributes nothing.
+  // That is the point (an unclassified device must not silently count as PV),
+  // but it does mean the registry has to be right; 062 and the collector's
+  // COALESCE seeding are what keep it that way.
+  // ---------------------------------------------------------------------------
+  {
+    // 050 wrote an empty array for a type it had no mapping for. Empty is not
+    // NULL, so `COALESCE(device.roles, EXCLUDED.roles)` in the collector could
+    // never re-seed such a row once a later version learned that type. Reset
+    // those to NULL so the seeding heals them. Touches only empty arrays.
+    name: '062-device-roles-empty-to-null',
+    sql: `UPDATE device SET roles = NULL WHERE roles = '{}'::TEXT[]`,
+  },
+  {
+    name: '063-producer-views',
+    sql: `CREATE OR REPLACE VIEW producer_readings AS
+            SELECT r.* FROM sma_readings r
+              JOIN device d ON d.device_sn = r.device_sn
+             WHERE d.roles @> ARRAY['producer']::TEXT[];
+          CREATE OR REPLACE VIEW producer_1min AS
+            SELECT a.* FROM sma_1min a
+              JOIN device d ON d.device_sn = a.device_sn
+             WHERE d.roles @> ARRAY['producer']::TEXT[];
+          CREATE OR REPLACE VIEW producer_1hour AS
+            SELECT a.* FROM sma_1hour a
+              JOIN device d ON d.device_sn = a.device_sn
+             WHERE d.roles @> ARRAY['producer']::TEXT[];
+          CREATE OR REPLACE VIEW producer_1day AS
+            SELECT a.* FROM sma_1day a
+              JOIN device d ON d.device_sn = a.device_sn
+             WHERE d.roles @> ARRAY['producer']::TEXT[]`,
+  },
+  {
+    name: '064-grid-meter-views',
+    sql: `CREATE OR REPLACE VIEW grid_meter_readings AS
+            SELECT r.* FROM meter_reading r
+              JOIN device d ON d.device_sn = r.device_sn
+             WHERE d.roles @> ARRAY['grid-meter']::TEXT[];
+          CREATE OR REPLACE VIEW grid_meter_1min AS
+            SELECT a.* FROM meter_1min a
+              JOIN device d ON d.device_sn = a.device_sn
+             WHERE d.roles @> ARRAY['grid-meter']::TEXT[];
+          CREATE OR REPLACE VIEW grid_meter_1hour AS
+            SELECT a.* FROM meter_1hour a
+              JOIN device d ON d.device_sn = a.device_sn
+             WHERE d.roles @> ARRAY['grid-meter']::TEXT[]`,
+  },
+  {
+    name: '065-consumer-views',
+    sql: `CREATE OR REPLACE VIEW consumer_1min AS
+            SELECT a.* FROM wallbox_1min a
+              JOIN device d ON d.device_sn = a.device_sn
+             WHERE d.roles @> ARRAY['consumer']::TEXT[]`,
+  },
+  {
+    // Same arithmetic as 048, one level up: the sources are now "every grid
+    // meter" and "every producer" rather than two vendor aggregates. Column
+    // list unchanged, so CREATE OR REPLACE still applies in place.
+    //
+    // Storage extends the same shape - one more CTE over a consumer/storage
+    // view, folded into house_power as `+ discharge - charge`.
+    name: '066-house-load-view-roles',
+    sql: `CREATE OR REPLACE VIEW house_load_1min AS
+          WITH grid AS (
+            SELECT bucket,
+                   sum(grid_to_home_power_avg) AS grid_import,
+                   sum(pv_to_grid_power_avg)   AS grid_export
+              FROM grid_meter_1min
+             GROUP BY bucket
+          ), pv AS (
+            SELECT bucket, sum(grid_power_avg) AS pv_power
+              FROM producer_1min
+             GROUP BY bucket
+          )
+          SELECT
+            g.bucket                       AS bucket,
+            COALESCE(p.pv_power, 0)        AS pv_power,
+            g.grid_import                  AS grid_import,
+            g.grid_export                  AS grid_export,
+            COALESCE(p.pv_power, 0)
+              + COALESCE(g.grid_import, 0)
+              - COALESCE(g.grid_export, 0) AS house_power
+          FROM grid g
+          LEFT JOIN pv p ON p.bucket = g.bucket`,
+  },
 ];
 
 export async function applyMigrations(

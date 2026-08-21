@@ -111,10 +111,13 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
       const view = VIEW_BY_RESOLUTION[resolution];
       const { rows } = await this.db.query(
         `SELECT bucket,
-                grid_to_home_power_avg, grid_to_home_power_max,
-                pv_to_grid_power_avg, pv_to_grid_power_max
+                sum(grid_to_home_power_avg) AS grid_to_home_power_avg,
+                max(grid_to_home_power_max) AS grid_to_home_power_max,
+                sum(pv_to_grid_power_avg)   AS pv_to_grid_power_avg,
+                max(pv_to_grid_power_max)   AS pv_to_grid_power_max
            FROM ${view}
           WHERE bucket >= $1 AND bucket < $2
+          GROUP BY bucket
           ORDER BY bucket`,
         [from, to],
       );
@@ -137,7 +140,10 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
 
   /**
    * Energy summary for a time range. kWh = delta of the cumulative meter
-   * readings (max - min per bucket; the counter is monotonically increasing).
+   * readings (max - min per bucket; the counter is monotonically increasing),
+   * taken per device and only then summed - a plain max() - min() across
+   * devices would subtract one meter's counter from another's. The same shape
+   * billing and the checkpoint reconciliation already use.
    */
   async energy(
     period: EnergyPeriod,
@@ -148,11 +154,15 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
 
     // Bucket in local time so a "day" is a local calendar day (not a UTC day).
     const { rows } = await this.db.query(
-      `SELECT time_bucket($1::interval, time, $4) AS bucket,
-              max(grid_import_energy) - min(grid_import_energy) AS import_kwh,
-              max(grid_export_energy) - min(grid_export_energy) AS export_kwh
-         FROM meter_reading
-        WHERE time >= $2 AND time < $3
+      `SELECT bucket, sum(dev_import) AS import_kwh, sum(dev_export) AS export_kwh
+         FROM (
+           SELECT time_bucket($1::interval, time, $4) AS bucket, device_sn,
+                  max(grid_import_energy) - min(grid_import_energy) AS dev_import,
+                  max(grid_export_energy) - min(grid_export_energy) AS dev_export
+             FROM meter_reading
+            WHERE time >= $2 AND time < $3
+            GROUP BY bucket, device_sn
+         ) d
         GROUP BY bucket
         ORDER BY bucket`,
       [bucketInterval, from, to, TIMEZONE],
@@ -167,10 +177,14 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
     // Totals computed directly as a delta over the whole range (more accurate
     // than summing the buckets).
     const { rows: totalRows } = await this.db.query(
-      `SELECT max(grid_import_energy) - min(grid_import_energy) AS import_kwh,
-              max(grid_export_energy) - min(grid_export_energy) AS export_kwh
-         FROM meter_reading
-        WHERE time >= $1 AND time < $2`,
+      `SELECT sum(dev_import) AS import_kwh, sum(dev_export) AS export_kwh
+         FROM (
+           SELECT max(grid_import_energy) - min(grid_import_energy) AS dev_import,
+                  max(grid_export_energy) - min(grid_export_energy) AS dev_export
+             FROM meter_reading
+            WHERE time >= $1 AND time < $2
+            GROUP BY device_sn
+         ) d`,
       [from, to],
     );
     const total = totalRows[0] ?? {};
