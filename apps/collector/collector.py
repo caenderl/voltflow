@@ -29,13 +29,13 @@ from dotenv import load_dotenv
 __version__ = (Path(__file__).parent / "VERSION").read_text().strip()
 
 from db import (
+    bind_device_sn,
     create_pool,
     insert_reading,
     insert_sma_reading,
     insert_wallbox_reading,
     last_sma_reading,
-    read_sma_config,
-    read_wallbox_config,
+    read_device_configs,
     register_device,
 )
 # Stream modules are imported lazily inside each _run_* function so a single
@@ -174,6 +174,25 @@ async def _run_meter(pool) -> None:
     await _run_with_reconnect("Meter", lambda: stream_readings(interval=5), on_reading)
 
 
+async def _bind_config(pool, cfg: dict, snap: dict) -> None:
+    """Bind the config row to the serial found at its address, once.
+
+    Skipped when the row is already bound, so this stays a first-contact event:
+    re-binding on every restart would let a config row silently change which
+    physical device it means. Never fatal - a failed binding costs a link in the
+    UI, not a reading.
+    """
+    device_sn = snap.get("device_sn")
+    if not device_sn or cfg.get("device_sn") or cfg.get("id") is None:
+        return
+    try:
+        await bind_device_sn(pool, cfg["id"], device_sn)
+        cfg["device_sn"] = device_sn  # do not try again this run
+    except Exception as err:  # noqa: BLE001 - binding must never stop collecting
+        LOG.warning("could not bind config #%s to %s (%s: %s)",
+                    cfg.get("id"), device_sn, type(err).__name__, err)
+
+
 async def _run_wallbox(pool, cfg: dict) -> None:
     """Continuously poll the wallbox via Modbus into the DB (with reconnect)."""
     from wallbox_stream import stream_wallbox
@@ -203,6 +222,7 @@ async def _run_wallbox(pool, cfg: dict) -> None:
 
         if not device_registered:
             await register_device(pool, snap, "wallbox")
+            await _bind_config(pool, cfg, snap)
             device_registered = True
         await insert_wallbox_reading(pool, snap)
         count += 1
@@ -307,6 +327,7 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
                     try:
                         if not registered:
                             await register_device(pool, snap, "inverter")
+                            await _bind_config(pool, cfg, snap)
                             registered = True
                         await insert_sma_reading(pool, snap)
                     except Exception as db_err:  # noqa: BLE001
@@ -352,70 +373,144 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
             await asyncio.sleep(interval)
 
 
-async def _supervise(pool, kind: str, read_config, run_factory) -> None:
-    """Run a config-gated collector (SMA/wallbox) whenever its device is enabled.
+# Which device_config.driver values each COLLECTOR value is responsible for.
+#
+# The driver is the third axis of the device model (role / driver / instance):
+# it names the protocol, and therefore which stream module has to be importable.
+# That is why the mapping lives here rather than in the DB - the prod images are
+# split per collector and only ship their own heavy deps, so a container must
+# never pick up a row whose driver it cannot actually talk (the sma/wallbox
+# images have no anker-solix-api, the meter image no pymodbus).
+#
+# The meter is deliberately absent: it is not config-gated. Its credentials are
+# env-only (they do not belong in the DB) and it has no address to configure, so
+# there is no row for it to be enabled or disabled by.
+DRIVERS_BY_COLLECTOR: dict[str, list[str]] = {
+    "sma": ["sma-speedwire"],
+    "wallbox": ["anker-v1-modbus"],
+}
 
-    Polls <device>_config every CONFIG_POLL_S seconds: starts the collector task
-    once `enabled` + `host` are set, and cancels/restarts it when the config
-    changes or the device is disabled. No process restart is needed to pick up a
-    device that is enabled (or reconfigured) later in the UI.
+
+async def _supervise_instances(pool, kind: str, drivers: list[str], run_factory) -> None:
+    """Run one collector task per enabled `device_config` row for these drivers.
+
+    Replaces the old one-config-per-device supervisor: the unit of work is now a
+    configured *instance*, so two wallboxes are two rows and therefore two
+    tasks. Polls every CONFIG_POLL_S seconds and reconciles the running tasks
+    against the rows - starting new ones, restarting those whose connection
+    settings changed, stopping those disabled or deleted. No process restart is
+    needed to pick up a device configured later in the UI.
+
+    Rows aimed at the same target are collapsed to one task. A user can quite
+    reasonably end up with two rows pointing at one address (a duplicate while
+    renaming, a second row added before the first was removed), and starting two
+    tasks against one device is not a cosmetic problem: two Modbus sessions
+    against the same unit fight over the wallbox's 120-second watchdog register.
     """
-    task: asyncio.Task | None = None
-    active_key = None  # config the running task was started with
+    tasks: dict[int, asyncio.Task] = {}
+    active_keys: dict[int, tuple] = {}
+    waiting_logged = False
+    missing_table_logged = False
+    dup_logged: set[tuple] = set()
 
-    def key_of(cfg: dict):
+    def key_of(cfg: dict) -> tuple:
         # A change to any of these requires restarting the underlying stream.
         return (cfg.get("host"), cfg.get("port"),
                 cfg.get("unit_id"), cfg.get("poll_interval_s"))
 
-    async def stop():
-        nonlocal task, active_key
-        if task is not None:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-            except Exception as err:  # noqa: BLE001
-                # _run_sma/_run_wallbox already catch broadly internally, so
-                # this only fires for a bug that escapes them - but when it
-                # does, silently swallowing it (as before) is exactly what
-                # makes that class of bug invisible in production.
-                LOG.error("%s collector task ended with an unexpected error: %s: %s",
-                          kind, type(err).__name__, err)
-            task, active_key = None, None
+    def target_of(cfg: dict) -> tuple:
+        # What the row points at, ignoring how often it is polled.
+        return (cfg.get("host"), cfg.get("port"), cfg.get("unit_id"))
 
-    waiting_logged = False
+    async def stop(config_id: int) -> None:
+        task = tasks.pop(config_id, None)
+        active_keys.pop(config_id, None)
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception as err:  # noqa: BLE001
+            # The _run_* functions catch broadly internally, so this only fires
+            # for a bug that escapes them - but when it does, silently
+            # swallowing it is exactly what makes that class of bug invisible
+            # in production.
+            LOG.error("%s collector task #%s ended with an unexpected error: %s: %s",
+                      kind, config_id, type(err).__name__, err)
+
+    async def stop_all() -> None:
+        for config_id in list(tasks):
+            await stop(config_id)
+
     try:
         while True:
             try:
-                cfg = await read_config(pool)
+                rows = await read_device_configs(pool, drivers)
             except Exception as err:  # noqa: BLE001 - a config read must not kill the loop
                 LOG.warning("%s config read failed (%s: %s) - retrying",
                             kind, type(err).__name__, err)
-                cfg = None
-            enabled = bool(cfg and cfg.get("enabled") and cfg.get("host"))
+                rows = []
 
-            if enabled:
-                new_key = key_of(cfg)
-                if task is not None and (task.done() or new_key != active_key):
-                    await stop()
-                if task is None:
-                    LOG.info("%s enabled (%s) - starting collector", kind, cfg["host"])
-                    task = asyncio.create_task(run_factory(pool, cfg))
-                    active_key = new_key
-                    waiting_logged = False
+            if rows is None:
+                # Table absent: the backend has not applied its migrations yet.
+                # Distinct from "no rows" - that is a normal idle state, this is
+                # a deploy that has not finished, and it silences every device.
+                if not missing_table_logged:
+                    LOG.warning("%s: device_config does not exist yet - waiting for "
+                                "the backend to migrate", kind)
+                    missing_table_logged = True
+                rows = []
             else:
-                if task is not None:
-                    LOG.info("%s disabled - stopping collector", kind)
-                    await stop()
-                if not waiting_logged:
-                    LOG.info("%s not enabled - waiting; auto-starts when enabled in the UI", kind)
-                    waiting_logged = True
+                missing_table_logged = False
+
+            usable: dict[int, dict] = {}
+            seen_targets: dict[tuple, int] = {}
+            for cfg in rows:
+                if not cfg.get("host"):
+                    continue  # enabled but not reachable yet; nothing to start
+                target = target_of(cfg)
+                first = seen_targets.get(target)
+                if first is not None:
+                    if target not in dup_logged:
+                        LOG.warning("%s: config #%s targets the same device as #%s (%s) "
+                                    "- running only #%s",
+                                    kind, cfg["id"], first, cfg.get("host"), first)
+                        dup_logged.add(target)
+                    continue
+                seen_targets[target] = cfg["id"]
+                usable[cfg["id"]] = cfg
+            dup_logged &= set(seen_targets)
+
+            # Stop what is no longer wanted (disabled, deleted, or deduplicated).
+            for config_id in list(tasks):
+                if config_id not in usable:
+                    LOG.info("%s #%s disabled - stopping collector", kind, config_id)
+                    await stop(config_id)
+
+            # Start or restart what is.
+            for config_id, cfg in usable.items():
+                new_key = key_of(cfg)
+                task = tasks.get(config_id)
+                if task is not None and (task.done() or new_key != active_keys.get(config_id)):
+                    await stop(config_id)
+                    task = None
+                if task is None:
+                    LOG.info("%s #%s enabled (%s%s) - starting collector",
+                             kind, config_id, cfg["host"],
+                             f' "{cfg["name"]}"' if cfg.get("name") else "")
+                    tasks[config_id] = asyncio.create_task(run_factory(pool, cfg))
+                    active_keys[config_id] = new_key
+                    waiting_logged = False
+
+            if not tasks and not waiting_logged:
+                LOG.info("%s not enabled - waiting; auto-starts when enabled in the UI", kind)
+                waiting_logged = True
 
             await asyncio.sleep(CONFIG_POLL_S)
     finally:
-        await stop()
+        await stop_all()
 
 
 async def run() -> None:
@@ -436,13 +531,13 @@ async def run() -> None:
             if not sma_password:
                 LOG.warning("SMA_PASSWORD not set - SMA collector disabled")
             else:
-                tasks.append(asyncio.create_task(
-                    _supervise(pool, "SMA", read_sma_config,
-                               lambda p, c: _run_sma(p, c, sma_password))))
+                tasks.append(asyncio.create_task(_supervise_instances(
+                    pool, "SMA", DRIVERS_BY_COLLECTOR["sma"],
+                    lambda p, c: _run_sma(p, c, sma_password))))
 
         if COLLECTOR in ("all", "wallbox"):
-            tasks.append(asyncio.create_task(
-                _supervise(pool, "Wallbox", read_wallbox_config, _run_wallbox)))
+            tasks.append(asyncio.create_task(_supervise_instances(
+                pool, "Wallbox", DRIVERS_BY_COLLECTOR["wallbox"], _run_wallbox)))
 
         if not tasks:
             LOG.error("COLLECTOR=%r started no collectors", COLLECTOR)

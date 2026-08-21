@@ -64,13 +64,23 @@ in) shipping only its own deps; `all` — the default, used by `npm run collecto
 — runs all three in one process. Stream modules are therefore imported **lazily
 inside** each `_run_*`, never at module top (the sma/wallbox images don't have
 anker-solix-api/pymodbus). Config-gated collectors (sma/wallbox) run under
-`_supervise(...)`, which polls `<device>_config` and starts/stops the task as the
-device is enabled/disabled in the UI — no restart needed.
+`_supervise_instances(...)`, which polls the **`device_config`** rows for its
+driver(s) and runs **one task per enabled row** — so two wallboxes are two rows,
+not a code change. It starts, restarts (on changed connection settings) and
+stops tasks as rows are edited in the UI, with no process restart. Rows aimed at
+the same `(host, port, unit_id)` are collapsed to one task: two Modbus sessions
+against one unit fight over the wallbox watchdog. The meter is deliberately not
+config-gated (env-only credentials, no address to configure).
+
+`DRIVERS_BY_COLLECTOR` maps each `COLLECTOR` value to the `device_config.driver`
+values it may run. Keep it in code, not the DB: a container must never pick up a
+row whose stream module it cannot import.
 
 Adding a device: new `<device>_stream.py` + `_run_<device>` + a `COLLECTOR`
-branch in `run()`; then `Dockerfile.<device>`, `requirements-<device>.txt`, a
-`collector-<device>` service in `docker-compose.prod.yml`, and a deploy target in
-`scripts/deploy.sh`.
+branch in `run()` + an entry in `DRIVERS_BY_COLLECTOR` and the `DeviceDriver`
+union in `libs/shared-types`; then `Dockerfile.<device>`,
+`requirements-<device>.txt`, a `collector-<device>` service in
+`docker-compose.prod.yml`, and a deploy target in `scripts/deploy.sh`.
 
 → **Template: `apps/collector/wallbox_stream.py`** (config-gated: only polls when
 the device is enabled in the UI settings).
