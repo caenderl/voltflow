@@ -1,15 +1,5 @@
 <div class="settings-stack">
-  <app-device-instance-list
-    [driver]="'sma-speedwire'"
-    heading="PV-Wechselrichter"
-    subtitle="SMA Wechselrichter per Speedwire."
-    [devices]="smaDevices()"
-  />
-
-  <app-device-instance-list
-    [driver]="'anker-v1-modbus'"
-    heading="Wallbox"
-    subtitle="Anker V1 Wallbox per Modbus TCP."
-    [devices]="wallboxDevices()"
-  />
+  @for (driver of drivers; track driver) {
+    <app-device-instance-list [driver]="driver" />
+  }
 </div>

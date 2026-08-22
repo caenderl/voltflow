@@ -90,11 +90,24 @@ optional-with-a-fallback: the fallback *is* the bug. A row that has never made
 contact is unbound and has no history to carry — start cold; the first
 successful read binds it.
 
-Adding a device: new `<device>_stream.py` + `_run_<device>` + a `COLLECTOR`
-branch in `run()` + an entry in `DRIVERS_BY_COLLECTOR` and the `DeviceDriver`
-union in `libs/shared-types`; then `Dockerfile.<device>`,
-`requirements-<device>.txt`, a `collector-<device>` service in
-`docker-compose.prod.yml`, and a deploy target in `scripts/deploy.sh`.
+Adding a device:
+
+1. **Collector** — `<device>_stream.py`, `_run_<device>`, a `COLLECTOR` branch
+   in `run()`, an entry in `DRIVERS_BY_COLLECTOR`.
+2. **Types** — the `DeviceDriver` union *and* an entry in **`DRIVER_TRAITS`**
+   (`libs/shared-types`). The settings UI and the API's driver allowlist are
+   both derived from the traits, so neither needs an edit of its own: the new
+   device gets its card, its fields and its defaults by having traits.
+3. **Roles** — if it introduces a new `device.type`, map it in *both*
+   `_ROLES_BY_TYPE` (`apps/collector/db.py`, seeds a new device) and
+   `ROLES_BY_TYPE` (`devices/device.mapper.ts`, answers for rows written before
+   the mapping existed). The duplication is deliberate.
+4. **Schema** — a new reading table needs its hypertable, notify trigger,
+   aggregates and a role view per role it serves; a new *driver* for a role that
+   already has views does not.
+5. **Packaging** — `Dockerfile.<device>`, `requirements-<device>.txt`, a
+   `collector-<device>` service in `docker-compose.prod.yml`, a deploy target in
+   `scripts/deploy.sh`.
 
 → **Template: `apps/collector/wallbox_stream.py`** (config-gated: only polls when
 the device is enabled in the UI settings).

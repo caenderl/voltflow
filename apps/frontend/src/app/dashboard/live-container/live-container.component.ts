@@ -3,6 +3,7 @@ import { WALLBOX_STATUS_LABELS } from '@org/shared-types';
 import { liveSparkChart, netWatts } from '../../core/chart-utils';
 import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
 import { ClockService } from '../../core/clock.service';
+import { DeviceRegistryService } from '../../core/device-registry.service';
 import { DashboardDataService, LIVE_WINDOW_MS } from '../dashboard-data.service';
 import { LiveViewComponent, type FlowState } from '../live-view/live-view.component';
 import type { SmaState } from '../sma-card/sma-card.component';
@@ -49,6 +50,15 @@ function isStale(readingTime: string, pollIntervalS: number, now: number): boole
 export class LiveContainerComponent {
   private readonly data = inject(DashboardDataService);
   private readonly clock = inject(ClockService);
+  private readonly registry = inject(DeviceRegistryService);
+
+  // Still one card per device kind, so each has to pick a row to describe -
+  // see DeviceRegistryService.representative, which the per-instance rework
+  // removes.
+  private readonly wallboxCfg = computed(() =>
+    this.registry.representative('anker-v1-modbus'),
+  );
+  private readonly smaCfg = computed(() => this.registry.representative('sma-speedwire'));
 
   // Today's Bezug/Einspeisung, corrected onto the physical meter when
   // calibration is on — the same factor the history and admin views use.
@@ -58,24 +68,24 @@ export class LiveContainerComponent {
   // Eigenverbrauch/Hauslast never disagree with the calibrated Bezug/Einspeisung.
   readonly balance = computed(() => calibrateBalance(this.data.balance(), this.data.calibration()));
 
-  readonly wallboxName = computed(() => this.data.wallboxConfig()?.name?.trim() || 'Wallbox');
+  readonly wallboxName = computed(() => this.wallboxCfg()?.name?.trim() || 'Wallbox');
 
-  readonly smaName = computed(() => this.data.smaConfig()?.name?.trim() || 'PV-Anlage');
+  readonly smaName = computed(() => this.smaCfg()?.name?.trim() || 'PV-Anlage');
 
   readonly smaState = computed<SmaState | null>(() => {
-    if (this.data.smaConfig()?.enabled === false) return null;
+    if (this.smaCfg()?.enabled === false) return null;
     const s = this.data.sma();
     if (!s) return null;
     return {
       productionW: s.gridPower ?? 0,
       dailyYieldKwh: (s.dailyYieldWh ?? 0) / 1000,
       asleep: s.asleep,
-      stale: isStale(s.time, this.data.smaConfig()?.pollIntervalS ?? 60, this.clock.now()),
+      stale: isStale(s.time, this.smaCfg()?.pollIntervalS ?? 60, this.clock.now()),
     };
   });
 
   readonly wallboxState = computed<WallboxState | null>(() => {
-    if (this.data.wallboxConfig()?.enabled === false) return null;
+    if (this.wallboxCfg()?.enabled === false) return null;
     const w = this.data.wallbox();
     if (!w) return null;
     const status = w.status ?? 0;
@@ -84,7 +94,7 @@ export class LiveContainerComponent {
       charging: status === 2,
       powerW: w.activePowerW ?? 0,
       sessionKwh: (w.sessionEnergyWh ?? 0) / 1000,
-      stale: isStale(w.time, this.data.wallboxConfig()?.pollIntervalS ?? 30, this.clock.now()),
+      stale: isStale(w.time, this.wallboxCfg()?.pollIntervalS ?? 30, this.clock.now()),
     };
   });
 

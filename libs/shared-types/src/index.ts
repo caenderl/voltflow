@@ -26,6 +26,83 @@ export type DeviceDriver =
   | 'anker-solix-mqtt';
 
 /**
+ * What one driver implies — everything both sides would otherwise re-derive
+ * from a `driver === '…'` comparison. Before this existed, "this driver speaks
+ * Modbus and therefore has a port and a unit id" was written three times (the
+ * settings form's field visibility, the CRUD service's SQL, the controller's
+ * comment), and the drivers a user may configure at all were a second literal
+ * list next to the type union — so adding a driver meant finding all of them.
+ *
+ * Deliberately NOT in the database, for the same reason `DRIVERS_BY_COLLECTOR`
+ * is not: a driver is only real if code exists that can talk it, and a row
+ * claiming otherwise would be a promise nothing can keep.
+ *
+ * Roles are absent on purpose. They hang off what a device *is*
+ * (`device.type` → {@link DeviceRole}) and are overridable per device in the
+ * registry; duplicating a default here would give a hybrid inverter two places
+ * to disagree about what it does.
+ */
+export interface DriverTraits {
+  /** What one device of this driver is called in the UI. */
+  label: string;
+  /** One line under the heading, naming the vendor and protocol. */
+  description: string;
+  /**
+   * The user can create and edit `device_config` rows for this driver. False
+   * for the meter: env-only credentials and no address to configure, so a row
+   * would be one nothing ever reads.
+   */
+  configurable: boolean;
+  /** Addresses a unit on a TCP port — `port`/`unitId` mean something. */
+  usesModbus: boolean;
+  /** Seeded into a new instance's form. */
+  defaultPollIntervalS: number;
+  /** Modbus defaults; null for drivers where the field does not apply. */
+  defaultPort: number | null;
+  defaultUnitId: number | null;
+}
+
+export const DRIVER_TRAITS: Record<DeviceDriver, DriverTraits> = {
+  'sma-speedwire': {
+    label: 'PV-Wechselrichter',
+    description: 'SMA Wechselrichter per Speedwire.',
+    configurable: true,
+    usesModbus: false,
+    defaultPollIntervalS: 60,
+    defaultPort: null,
+    defaultUnitId: null,
+  },
+  'anker-v1-modbus': {
+    label: 'Wallbox',
+    description: 'Anker V1 Wallbox per Modbus TCP.',
+    configurable: true,
+    usesModbus: true,
+    defaultPollIntervalS: 30,
+    defaultPort: 502,
+    defaultUnitId: 1,
+  },
+  'anker-solix-mqtt': {
+    label: 'Smart Meter',
+    description: 'Anker Solix Smart Meter über die MQTT-Cloud.',
+    configurable: false,
+    usesModbus: false,
+    defaultPollIntervalS: 5,
+    defaultPort: null,
+    defaultUnitId: null,
+  },
+};
+
+/**
+ * Drivers a user can configure instances of, in the order the settings UI
+ * lists them. Derived from {@link DRIVER_TRAITS} rather than written out again,
+ * so a new driver appears in the UI and passes the API's validation by virtue
+ * of having traits at all.
+ */
+export const CONFIGURABLE_DRIVERS: readonly DeviceDriver[] = (
+  Object.keys(DRIVER_TRAITS) as DeviceDriver[]
+).filter((d) => DRIVER_TRAITS[d].configurable);
+
+/**
  * One configured device instance — a row the user created in the settings UI,
  * as opposed to {@link DeviceInfo}, which is a device the collector has
  * actually seen. The two meet at {@link deviceSn}: it is null until the

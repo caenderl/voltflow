@@ -20,6 +20,7 @@ import {
   sumByMinuteBucket,
 } from '../../core/chart-utils';
 import { ClockService } from '../../core/clock.service';
+import { DeviceRegistryService } from '../../core/device-registry.service';
 import { type View, dayLabel, periodLabelFor, rangeFor, startOfDay } from '../../core/date-utils';
 import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
 import { type Costs, computeCosts } from '../../core/costs';
@@ -55,6 +56,7 @@ import { HistoryViewComponent } from '../history-view/history-view.component';
 export class HistoryContainerComponent {
   private readonly data = inject(DashboardDataService);
   private readonly clock = inject(ClockService);
+  private readonly registry = inject(DeviceRegistryService);
   private readonly router = inject(Router);
 
   // Bound from the route's `data: { view }` via withComponentInputBinding().
@@ -170,7 +172,7 @@ export class HistoryContainerComponent {
       // Rendered whenever the PV inverter is enabled - an enabled inverter with
       // no data yet shows a flat zero line rather than the whole section
       // vanishing. Hidden only when the inverter is not enabled.
-      if (!this.data.smaConfig()?.enabled) return null;
+      if (!this.registry.representative('sma-speedwire')?.enabled) return null;
       const data = this.data.smaMinutePower();
       // Full minute resolution (1440 slots), matching the Leistung chart.
       const slots = minuteBucketSlots(this.refDate(), 1);
@@ -218,7 +220,7 @@ export class HistoryContainerComponent {
    *  section vanishing, which looked like a bug. Hidden only when the wallbox is
    *  not enabled at all. */
   readonly wallboxChart = computed<EChartsCoreOption | null>(() => {
-    if (!this.data.wallboxConfig()?.enabled) return null;
+    if (!this.registry.representative('anker-v1-modbus')?.enabled) return null;
     const view = this.view();
     if (view === 'day') {
       const hist = this.data.wallboxHistory();
