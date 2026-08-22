@@ -19,10 +19,15 @@ export interface WallboxState {
   styleUrl: './wallbox-card.component.scss',
 })
 export class WallboxCardComponent {
-  readonly state = input.required<WallboxState>();
+  /** Null while this instance has never reported — see DeviceCard. */
+  readonly state = input.required<WallboxState | null>();
   readonly name = input<string>('Wallbox');
 
-  readonly statusLabel = computed(() =>
-    this.state().stale ? 'Veraltet' : this.state().statusLabel,
-  );
+  readonly charging = computed(() => this.state()?.charging ?? false);
+  readonly stale = computed(() => this.state()?.stale ?? false);
+  readonly statusLabel = computed(() => {
+    const s = this.state();
+    if (s === null) return 'Nicht verbunden';
+    return s.stale ? 'Veraltet' : s.statusLabel;
+  });
 }

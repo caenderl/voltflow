@@ -172,7 +172,7 @@ export class HistoryContainerComponent {
       // Rendered whenever the PV inverter is enabled - an enabled inverter with
       // no data yet shows a flat zero line rather than the whole section
       // vanishing. Hidden only when the inverter is not enabled.
-      if (!this.registry.representative('sma-speedwire')?.enabled) return null;
+      if (!this.registry.hasEnabled('sma-speedwire')) return null;
       const data = this.data.smaMinutePower();
       // Full minute resolution (1440 slots), matching the Leistung chart.
       const slots = minuteBucketSlots(this.refDate(), 1);
@@ -220,7 +220,7 @@ export class HistoryContainerComponent {
    *  section vanishing, which looked like a bug. Hidden only when the wallbox is
    *  not enabled at all. */
   readonly wallboxChart = computed<EChartsCoreOption | null>(() => {
-    if (!this.registry.representative('anker-v1-modbus')?.enabled) return null;
+    if (!this.registry.hasEnabled('anker-v1-modbus')) return null;
     const view = this.view();
     if (view === 'day') {
       const hist = this.data.wallboxHistory();

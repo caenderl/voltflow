@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, type WritableSignal, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, firstValueFrom, map, of } from 'rxjs';
 import type {
   AppSettings,
@@ -60,10 +60,18 @@ export class DashboardDataService {
   private readonly settingsApi = inject(SettingsApiService);
   private readonly registry = inject(DeviceRegistryService);
 
-  // Live readings (WebSocket)
+  // Live readings (WebSocket), keyed by device serial for the kinds that can
+  // have several instances. The gateway sends one message per device on
+  // connect and one per reading after that, each naming its own `deviceSn`.
+  readonly wallboxBySn = signal<ReadonlyMap<string, WallboxReading>>(new Map());
+  readonly smaBySn = signal<ReadonlyMap<string, SmaReading>>(new Map());
+  /**
+   * The grid meter stays singular: it is the house connection point, of which
+   * there is one by definition, and the hero figure is a site-level number. A
+   * second grid meter would have to be *summed* into it, not picked between,
+   * so a map here would only make the wrong thing look supported.
+   */
   readonly latest = signal<MeterReading | null>(null);
-  readonly wallbox = signal<WallboxReading | null>(null);
-  readonly sma = signal<SmaReading | null>(null);
   readonly liveBuffer = signal<LivePoint[]>([]);
 
   // Today (live view), refreshed periodically
@@ -123,8 +131,8 @@ export class DashboardDataService {
         ),
       );
     });
-    this.live.wallboxReadings$().subscribe((w) => this.wallbox.set(w));
-    this.live.smaReadings$().subscribe((s) => this.sma.set(s));
+    this.live.wallboxReadings$().subscribe((w) => upsertBySn(this.wallboxBySn, w));
+    this.live.smaReadings$().subscribe((s) => upsertBySn(this.smaBySn, s));
     this.live.reconnects$().subscribe(() => this.resumeLive());
     // A backgrounded tab / PWA is suspended without the socket necessarily
     // dropping, so becoming visible again is its own resume trigger.
@@ -394,4 +402,17 @@ export class DashboardDataService {
       this.liveBuffer.set(appendWindowed(this.liveBuffer(), points, LIVE_WINDOW_MS));
     });
   }
+}
+
+/**
+ * Replace one device's entry in a by-serial map. A new Map each time, because a
+ * signal holding a mutated Map is the same object and would notify nobody.
+ */
+function upsertBySn<T extends { deviceSn: string }>(
+  target: WritableSignal<ReadonlyMap<string, T>>,
+  reading: T,
+): void {
+  const next = new Map(target());
+  next.set(reading.deviceSn, reading);
+  target.set(next);
 }
