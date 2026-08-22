@@ -1,34 +1,35 @@
 import type { DataRange } from '@org/shared-types';
 
 /**
- * Capability interfaces ("ports") shared by the device services. A service
+ * Capability interfaces ("ports") the device services implement. A service
  * implements the ones it actually supports — these describe only the *common*
- * shape, not the full repertoire. Device-specific queries (e.g. the SMA energy
- * balance or the meter series/resolution) deliberately stay off these
- * interfaces; they are unique to one device and forcing them into a generic
- * contract would only obscure them.
+ * shape, not the full repertoire. Device-specific queries (e.g. the PV minute
+ * power or the meter series/resolution) deliberately stay off these interfaces;
+ * they are unique to one device and forcing them into a generic contract would
+ * only obscure them.
  *
- * Implementing a capability is a compile-time promise (TypeScript enforces the
- * signature) and lets shared consumers — the live gateway, config endpoints —
- * treat any device through the port instead of by concrete type.
+ * Only {@link HasLatestPerDevice} currently has a polymorphic consumer: the
+ * live gateway holds every device through it and never by concrete type. The
+ * other two have a single implementer each after the endpoints nothing called
+ * were removed — they stay as named contracts so the next device has a shape to
+ * match rather than inventing its own signature, not because anything consumes
+ * them generically today.
  */
 
 /**
- * Reads the single most recent reading, or null when there is none yet.
+ * Reads the most recent reading OF EVERY DEVICE of this kind — one row per
+ * `device_sn`, in no particular order, empty when nothing has been recorded.
  *
- * `deviceSn` picks one device of this kind; without it the newest reading over
- * all of them is returned. That default is only unambiguous while exactly one
- * device of a kind is installed - with two it alternates between them, so any
- * caller that means a particular device has to name it.
- *
- * Implementations bind an empty `deviceSn` as `|| null` (falling back to the
- * "all devices" default), not `?? null`: a query string with the param present
- * but empty (`?deviceSn=`) parses to `''`, which `??` would pass straight
- * through to `device_sn = ''` and silently match no row. A serial number is
- * never the empty string, so treating `''` the same as "not given" is safe.
+ * Deliberately not "the newest reading" singular, which is what this used to
+ * be: with one device of a kind installed that is the same thing by accident,
+ * and with two it returns whichever wrote last, so the live view would show one
+ * device's values under whatever card happened to render. A device that has
+ * been silent for a while still appears with its last known reading; judging
+ * that as stale is the consumer's job, and a missing card is worse than an old
+ * value that says how old it is.
  */
-export interface HasLatest<R> {
-  latest(deviceSn?: string): Promise<R | null>;
+export interface HasLatestPerDevice<R> {
+  latestPerDevice(): Promise<R[]>;
 }
 
 /** Reports the [first, last] timestamp span of stored readings. */

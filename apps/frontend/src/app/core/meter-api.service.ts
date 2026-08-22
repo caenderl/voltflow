@@ -6,20 +6,19 @@ import type {
   DataRange,
   EnergyPeriod,
   EnergySummary,
-  MeterReading,
   SeriesResolution,
   SeriesResponse,
 } from '@org/shared-types';
 
-/** REST access to the smart meter endpoints (/api/meter). */
+/**
+ * REST access to the smart meter endpoints (/api/meter). Live readings are not
+ * among them — they come over the WebSocket (`LiveService`), including the
+ * initial state a fresh client is sent on connect.
+ */
 @Injectable({ providedIn: 'root' })
 export class MeterApiService {
   private readonly http = inject(HttpClient);
   private readonly base = '/api/meter';
-
-  latest(): Observable<MeterReading | null> {
-    return this.http.get<MeterReading | null>(`${this.base}/latest`);
-  }
 
   range(): Observable<DataRange> {
     return this.http.get<DataRange>(`${this.base}/range`);

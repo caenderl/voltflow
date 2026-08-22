@@ -17,7 +17,7 @@ import {
   round3,
   toDataRange,
 } from '../common/db-utils';
-import type { HasLatest, HasRange } from '../common/device-capabilities';
+import type { HasLatestPerDevice, HasRange } from '../common/device-capabilities';
 import { DbService } from '../database/db.service';
 import { rowToReading } from './meter.mapper';
 
@@ -43,7 +43,7 @@ const PERIOD_TRUNC: Record<EnergyPeriod, { field: string; interval: string }> = 
 };
 
 @Injectable()
-export class MeterService implements HasLatest<MeterReading>, HasRange {
+export class MeterService implements HasLatestPerDevice<MeterReading>, HasRange {
   constructor(private readonly db: DbService) {}
 
   /**
@@ -77,17 +77,16 @@ export class MeterService implements HasLatest<MeterReading>, HasRange {
     return toDataRange(rows[0]);
   }
 
-  async latest(deviceSn?: string): Promise<MeterReading | null> {
+  /** Last reading of every grid meter — see {@link SmaService.latestPerDevice}. */
+  async latestPerDevice(): Promise<MeterReading[]> {
     const { rows } = await this.db.query(
-      `SELECT time, device_sn, grid_to_home_power, pv_to_grid_power,
+      `SELECT DISTINCT ON (device_sn)
+              time, device_sn, grid_to_home_power, pv_to_grid_power,
               grid_import_energy, grid_export_energy
          FROM meter_reading
-        WHERE ($1::text IS NULL OR device_sn = $1)
-        ORDER BY time DESC
-        LIMIT 1`,
-      [deviceSn || null],
+        ORDER BY device_sn, time DESC`,
     );
-    return rows.length ? rowToReading(rows[0]) : null;
+    return rows.map(rowToReading);
   }
 
   async series(

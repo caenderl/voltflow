@@ -1,17 +1,14 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import type { SmaDailySummary, SmaMinutePower, SmaReading } from '@org/shared-types';
+import type { SmaDailySummary, SmaMinutePower } from '@org/shared-types';
 
-/** REST access to the SMA inverter endpoints (/api/sma). */
+/** REST access to the SMA aggregate endpoints (/api/sma); live values come over
+ *  the WebSocket, see {@link MeterApiService}. */
 @Injectable({ providedIn: 'root' })
 export class SmaApiService {
   private readonly http = inject(HttpClient);
   private readonly base = '/api/sma';
-
-  latest(): Observable<SmaReading | null> {
-    return this.http.get<SmaReading | null>(`${this.base}/latest`);
-  }
 
   /** Daily PV yield over [from, to). */
   dailyEnergy(from: Date, to: Date): Observable<SmaDailySummary[]> {

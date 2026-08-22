@@ -212,7 +212,6 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 
 | Endpoint | Beschreibung |
 |----------|--------------|
-| `GET /api/meter/latest?deviceSn` | Letzter Messwert (ohne `deviceSn`: neuester über alle Zähler) |
 | `GET /api/meter/series?from&to&resolution=raw\|1min\|1hour\|1day` | Leistungs-Zeitreihe |
 | `GET /api/meter/energy?period=day\|week\|month&date=YYYY-MM-DD` | kWh-Bezug/Einspeisung |
 | `GET /api/meter/range` | Verfügbarer Datenzeitraum |
@@ -224,20 +223,21 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/devices` | Geräte-Registry: alle je registrierten Geräte mit ihren Rollen (`grid-meter`/`producer`/`consumer`/`storage`) |
 | `GET` / `POST` / `PUT` / `DELETE /api/device-configs` | Konfigurierte Geräte-Instanzen (Treiber, Name, IP, Port/Unit-ID, Intervall, an/aus) — eine Zeile pro Wallbox/Wechselrichter, nicht mehr je eine Singleton-Config |
 | `GET` / `PUT /api/app-settings` | Globale Anzeige-Einstellungen (z. B. Kalibrierung auf den Zählerstand) |
-| `GET /api/wallbox/latest?deviceSn` | Letzter Wallbox-Messwert (ohne `deviceSn`: neuester über alle Wallboxen) |
 | `GET /api/wallbox/history?from&to` | Rohe Wallbox-Messwerte |
 | `GET /api/wallbox/energy/daily?from&to` | Geladene Energie pro Tag (kWh) |
-| `GET /api/wallbox/energy/hourly?from&to` | Geladene Energie pro Stunde (kWh, Tagesansicht) |
-| `GET /api/sma/latest?deviceSn` | Letzter SMA-Messwert (ohne `deviceSn`: neuester über alle Wechselrichter) |
-| `GET /api/sma/history?from&to` | Rohe SMA-Messwerte |
 | `GET /api/sma/energy/daily?from&to` | PV-Ertrag pro Tag (kWh) |
 | `GET /api/sma/power/minute?from&to` | PV-Leistung pro Minute (W, Tagesansicht) |
 | `GET /api/energy/balance?from&to` | Energiebilanz des Haushalts: Eigenverbrauch & Autarkie (rollenbasiert, unabhängig vom Gerätehersteller) |
 | `GET /api/system/health` | Host-Health (Load/RAM/Disk) + Container-Liste (Admin-Tab „System", nicht persistiert) |
 | `GET /api/system/backups` | Backup-Status: lokale Dumps (Alter, Größe) + Off-Site-Repo aus `backups/status.json` |
 | WS-Event `reading` | Live-Messwert Smart Meter (~alle 5 s) |
-| WS-Event `wallbox-reading` | Live-Wallbox-Wert (~alle 30 s) |
-| WS-Event `sma-reading` | Live-SMA-Wert (~alle 60 s) |
+| WS-Event `wallbox-reading` | Live-Wallbox-Wert (Intervall pro Instanz konfigurierbar) |
+| WS-Event `sma-reading` | Live-SMA-Wert (Intervall pro Instanz konfigurierbar) |
+
+Jeder Live-Messwert trägt seine `deviceSn`; ein Event deckt **alle** Geräte seiner Art ab.
+Beim Verbinden schickt das Backend pro Gerät dessen letzten bekannten Wert auf demselben
+Event — ein Client, der seinen Zustand nach `deviceSn` schlüsselt, braucht keine eigene
+„Initial State"-Nachricht.
 
 ## Datensicherheit (Daten bleiben bei Updates erhalten)
 

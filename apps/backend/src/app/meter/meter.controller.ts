@@ -3,7 +3,6 @@ import type {
   DataRange,
   EnergyPeriod,
   EnergySummary,
-  MeterReading,
   SeriesResolution,
   SeriesResponse,
 } from '@org/shared-types';
@@ -16,16 +15,6 @@ const PERIODS: EnergyPeriod[] = ['day', 'week', 'month'];
 @Controller('meter')
 export class MeterController {
   constructor(private readonly meter: MeterService) {}
-
-  /**
-   * Latest reading. `deviceSn` picks one device; without it the newest reading
-   * across all devices of this kind is returned (unambiguous while there is
-   * exactly one).
-   */
-  @Get('latest')
-  latest(@Query('deviceSn') deviceSn?: string): Promise<MeterReading | null> {
-    return this.meter.latest(deviceSn);
-  }
 
   @Get('range')
   range(): Promise<DataRange> {
