@@ -1,13 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type {
-  DataRange,
-  WallboxDailySummary,
-  WallboxHourlySummary,
-  WallboxReading,
-} from '@org/shared-types';
+import type { WallboxDailySummary, WallboxReading } from '@org/shared-types';
 import { TIMEZONE } from '../common/config';
-import { MAX_RAW_ROWS, assertNotTruncated, toDataRange } from '../common/db-utils';
-import type { HasHistory, HasLatest, HasRange } from '../common/device-capabilities';
+import { MAX_RAW_ROWS, assertNotTruncated } from '../common/db-utils';
+import type { HasHistory, HasLatestPerDevice } from '../common/device-capabilities';
 import { DbService } from '../database/db.service';
 import { rowToWallboxReading } from './wallbox.mapper';
 
@@ -18,27 +13,18 @@ const READING_COLUMNS = `time, device_sn, status, cp_signal, active_power_w,
 
 @Injectable()
 export class WallboxService
-  implements HasLatest<WallboxReading>, HasRange, HasHistory<WallboxReading>
+  implements HasLatestPerDevice<WallboxReading>, HasHistory<WallboxReading>
 {
   constructor(private readonly db: DbService) {}
 
-  async latest(deviceSn?: string): Promise<WallboxReading | null> {
+  /** Last reading of every wallbox — see {@link SmaService.latestPerDevice}. */
+  async latestPerDevice(): Promise<WallboxReading[]> {
     const { rows } = await this.db.query(
-      `SELECT ${READING_COLUMNS}
+      `SELECT DISTINCT ON (device_sn) ${READING_COLUMNS}
          FROM wallbox_reading
-        WHERE ($1::text IS NULL OR device_sn = $1)
-        ORDER BY time DESC
-        LIMIT 1`,
-      [deviceSn || null],
+        ORDER BY device_sn, time DESC`,
     );
-    return rows.length ? rowToWallboxReading(rows[0]) : null;
-  }
-
-  async range(): Promise<DataRange> {
-    const { rows } = await this.db.query(
-      `SELECT min(time) AS first, max(time) AS last FROM wallbox_reading`,
-    );
-    return toDataRange(rows[0]);
+    return rows.map(rowToWallboxReading);
   }
 
   /**
@@ -62,30 +48,6 @@ export class WallboxService
     );
     return rows.map((r) => ({
       day: String(r['day']),
-      chargedKwh: Number(r['charged_kwh']),
-    }));
-  }
-
-  /**
-   * Hourly charged energy in [from, to) from the wallbox_1hour continuous
-   * aggregate, summed across devices (the cagg is grouped by device_sn).
-   * Only hours with actual charging activity are returned.
-   */
-  async hourlyEnergy(from: Date, to: Date): Promise<WallboxHourlySummary[]> {
-    const { rows } = await this.db.query(
-      `SELECT
-         bucket,
-         ROUND(sum(charged_kwh)::numeric, 2) AS charged_kwh
-       FROM wallbox_1hour
-       WHERE bucket >= $1
-         AND bucket < $2
-       GROUP BY bucket
-       HAVING COALESCE(sum(charged_kwh), 0) > 0
-       ORDER BY bucket`,
-      [from, to],
-    );
-    return rows.map((r) => ({
-      time: new Date(r['bucket'] as string).toISOString(),
       chargedKwh: Number(r['charged_kwh']),
     }));
   }

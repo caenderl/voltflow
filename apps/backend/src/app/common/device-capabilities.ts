@@ -14,21 +14,19 @@ import type { DataRange } from '@org/shared-types';
  */
 
 /**
- * Reads the single most recent reading, or null when there is none yet.
+ * Reads the most recent reading OF EVERY DEVICE of this kind — one row per
+ * `device_sn`, in no particular order, empty when nothing has been recorded.
  *
- * `deviceSn` picks one device of this kind; without it the newest reading over
- * all of them is returned. That default is only unambiguous while exactly one
- * device of a kind is installed - with two it alternates between them, so any
- * caller that means a particular device has to name it.
- *
- * Implementations bind an empty `deviceSn` as `|| null` (falling back to the
- * "all devices" default), not `?? null`: a query string with the param present
- * but empty (`?deviceSn=`) parses to `''`, which `??` would pass straight
- * through to `device_sn = ''` and silently match no row. A serial number is
- * never the empty string, so treating `''` the same as "not given" is safe.
+ * Deliberately not "the newest reading" singular, which is what this used to
+ * be: with one device of a kind installed that is the same thing by accident,
+ * and with two it returns whichever wrote last, so the live view would show one
+ * device's values under whatever card happened to render. A device that has
+ * been silent for a while still appears with its last known reading; judging
+ * that as stale is the consumer's job, and a missing card is worse than an old
+ * value that says how old it is.
  */
-export interface HasLatest<R> {
-  latest(deviceSn?: string): Promise<R | null>;
+export interface HasLatestPerDevice<R> {
+  latestPerDevice(): Promise<R[]>;
 }
 
 /** Reports the [first, last] timestamp span of stored readings. */

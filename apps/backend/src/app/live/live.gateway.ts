@@ -13,7 +13,7 @@ import { LIVE_DEVICES, type LiveDeviceDescriptor } from './live-device';
 interface LiveChannel {
   event: string;
   stream$: Observable<unknown>;
-  latest: () => Promise<unknown | null>;
+  latestPerDevice: () => Promise<unknown[]>;
 }
 
 /**
@@ -39,7 +39,7 @@ export class LiveGateway implements OnModuleInit, OnGatewayConnection {
     this.channels = devices.map((d) => ({
       event: d.event,
       stream$: listen.register(d.notifyChannel, d.map),
-      latest: d.latest,
+      latestPerDevice: d.latestPerDevice,
     }));
   }
 
@@ -50,19 +50,21 @@ export class LiveGateway implements OnModuleInit, OnGatewayConnection {
   }
 
   /**
-   * Send the latest known value of every channel to a new client. Channels are
-   * fetched concurrently and independently: one channel's DB error must not
-   * block the others, and — since NestJS's socket.io adapter awaits this with
-   * no .catch() of its own — must never reject out of this method, or it
-   * becomes an unhandled rejection that crashes the process.
+   * Send every device's last known reading to a new client — one emit per
+   * device, on the same event the live stream uses, so a client that keys its
+   * state by `deviceSn` needs no separate "initial state" message shape.
+   *
+   * Channels are fetched concurrently and independently: one channel's DB error
+   * must not block the others, and — since NestJS's socket.io adapter awaits
+   * this with no .catch() of its own — must never reject out of this method, or
+   * it becomes an unhandled rejection that crashes the process.
    */
   async handleConnection(client: Socket): Promise<void> {
     this.logger.log(`Client connected: ${client.id}`);
     await Promise.allSettled(
-      this.channels.map(async ({ event, latest }) => {
+      this.channels.map(async ({ event, latestPerDevice }) => {
         try {
-          const reading = await latest();
-          if (reading) client.emit(event, reading);
+          for (const reading of await latestPerDevice()) client.emit(event, reading);
         } catch (err) {
           this.logger.error(
             `Failed to fetch latest "${event}" for ${client.id}`,

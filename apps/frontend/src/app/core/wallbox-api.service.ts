@@ -3,15 +3,12 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import type { WallboxDailySummary, WallboxReading } from '@org/shared-types';
 
-/** REST access to the wallbox endpoints (/api/wallbox). */
+/** REST access to the wallbox endpoints (/api/wallbox); live values come over
+ *  the WebSocket, see {@link MeterApiService}. */
 @Injectable({ providedIn: 'root' })
 export class WallboxApiService {
   private readonly http = inject(HttpClient);
   private readonly base = '/api/wallbox';
-
-  latest(): Observable<WallboxReading | null> {
-    return this.http.get<WallboxReading | null>(`${this.base}/latest`);
-  }
 
   dailyEnergy(from: Date, to: Date): Observable<WallboxDailySummary[]> {
     const params = new HttpParams()
