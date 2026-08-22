@@ -1,0 +1,62 @@
+<app-settings-card
+  heading="Erkannte Geräte"
+  subtitle="Alles, was je Messwerte geliefert hat. Die Rolle entscheidet, ob ein Gerät in Hauslast, Bilanz und Statistik zählt."
+>
+  @if (rows().length) {
+    <table class="registry-table">
+      <thead>
+        <tr>
+          <th>Gerät</th>
+          <th>Seriennummer</th>
+          <th>Rollen</th>
+          <th>Zugeordnet</th>
+          <th>Erstkontakt</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of rows(); track r.info.deviceSn) {
+          <tr [class.saving]="saving() === r.info.deviceSn">
+            <td>
+              {{ r.info.alias || r.info.devicePn || '–' }}
+              @if (r.info.type) {
+                <span class="hint-sm type">{{ r.info.type }}</span>
+              }
+            </td>
+            <td><span class="device-sn">{{ r.info.deviceSn }}</span></td>
+            <td class="roles">
+              @for (role of roles; track role) {
+                <button
+                  type="button"
+                  class="role-chip"
+                  [class.on]="has(r.info, role)"
+                  [disabled]="saving() !== null"
+                  [title]="has(r.info, role) ? 'Rolle entfernen' : 'Rolle hinzufügen'"
+                  (click)="toggle(r.info, role)"
+                >
+                  {{ roleLabels[role] }}
+                </button>
+              }
+              @if (!r.info.roles.length) {
+                <span class="hint-sm warn">zählt nirgends mit</span>
+              }
+            </td>
+            <td>
+              @if (r.claimedBy) {
+                {{ r.claimedBy }}
+              } @else {
+                <span class="hint-sm">nicht konfiguriert</span>
+              }
+            </td>
+            <td class="num">{{ r.info.firstSeen | date: 'dd.MM.yyyy' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    <p class="hint-sm">Noch hat kein Gerät Messwerte geliefert.</p>
+  }
+
+  @if (error(); as e) {
+    <p class="device-error">{{ e }}</p>
+  }
+</app-settings-card>

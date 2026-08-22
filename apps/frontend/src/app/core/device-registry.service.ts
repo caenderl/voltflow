@@ -73,21 +73,6 @@ export class DeviceRegistryService {
     }),
   );
 
-  /**
-   * Devices that were registered but that no config row claims — the smart
-   * meter, which is not configurable by design, and hardware whose row was
-   * deleted. Worth showing: they keep contributing readings under their roles,
-   * so a device nobody can see is a device nobody can explain.
-   */
-  readonly unclaimed = computed<DeviceInfo[]>(() => {
-    const bound = new Set(
-      this.configs()
-        .map((c) => c.deviceSn)
-        .filter((sn): sn is string => sn !== null),
-    );
-    return this.devices().filter((d) => !bound.has(d.deviceSn));
-  });
-
   /** The configured instances of one driver, in stored order. */
   instancesOf(driver: DeviceDriver): DeviceInstance[] {
     return this.instances().filter((i) => i.config.driver === driver);
@@ -153,14 +138,34 @@ export class DeviceRegistryService {
     );
   }
 
+  /**
+   * Change what a device is in energy terms. Every role view filters on this,
+   * so a correction here moves the device into (or out of) the house load, the
+   * statistics and the energy balance from the next query onwards - no
+   * migration, no restart.
+   */
+  setRoles(deviceSn: string, roles: DeviceRole[]): Promise<boolean> {
+    return firstValueFrom(
+      this.devicesApi.setRoles(deviceSn, roles).pipe(
+        map((updated) => {
+          this.devices.set(
+            this.devices().map((d) => (d.deviceSn === updated.deviceSn ? updated : d)),
+          );
+          return true;
+        }),
+        catchError(() => of(false)),
+      ),
+    );
+  }
+
   /** Same non-shared-error reasoning as {@link save}. */
   remove(id: number): Promise<boolean> {
     return firstValueFrom(
       this.configApi.delete(id).pipe(
         map(() => {
           // Drop the row locally, but refetch the registry: the device itself
-          // is deliberately NOT deleted, so it moves to `unclaimed` rather
-          // than disappearing.
+          // is deliberately NOT deleted, so it stays in the registry list as
+          // "nicht konfiguriert" rather than disappearing.
           this.configs.set(this.configs().filter((c) => c.id !== id));
           this.loadDevices();
           return true;

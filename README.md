@@ -221,6 +221,7 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/billing?year=YYYY` | Abrechnung eines Kalenderjahres auf Basis der abgelesenen Zählerstände (Monate, Ableseperioden, Summen) |
 | `GET /api/statistics` | Rekorde über den gesamten Bestand: PV-/Verbrauchsspitzen, Grundlast, Speicher-Dimensionierung |
 | `GET /api/devices` | Geräte-Registry: alle je registrierten Geräte mit ihren Rollen (`grid-meter`/`producer`/`consumer`/`storage`) |
+| `PUT /api/devices/:deviceSn/roles` | Rollen eines Geräts korrigieren — entscheidet, ob es in Hauslast, Bilanz und Statistik zählt (mindestens eine Rolle) |
 | `GET` / `POST` / `PUT` / `DELETE /api/device-configs` | Konfigurierte Geräte-Instanzen (Treiber, Name, IP, Port/Unit-ID, Intervall, an/aus) — eine Zeile pro Wallbox/Wechselrichter, nicht mehr je eine Singleton-Config |
 | `GET` / `PUT /api/app-settings` | Globale Anzeige-Einstellungen (z. B. Kalibrierung auf den Zählerstand) |
 | `GET /api/energy/balance?from&to` | Energiebilanz des Haushalts: Eigenverbrauch & Autarkie |
