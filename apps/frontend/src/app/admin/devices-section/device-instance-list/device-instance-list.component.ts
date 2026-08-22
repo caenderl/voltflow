@@ -42,6 +42,15 @@ export class DeviceInstanceListComponent implements OnInit {
   readonly traits = computed(() => DRIVER_TRAITS[this.driver()]);
   readonly instances = computed(() => this.registry.instancesOf(this.driver()));
 
+  // Placeholders are strings, the defaults are numbers (and null where the
+  // field does not apply) - converted here rather than in the template, where
+  // `null + ''` would quietly render the word "null".
+  readonly portPlaceholder = computed(() => String(this.traits().defaultPort ?? ''));
+  readonly unitIdPlaceholder = computed(() => String(this.traits().defaultUnitId ?? ''));
+  readonly intervalPlaceholder = computed(() =>
+    String(this.traits().defaultPollIntervalS),
+  );
+
   readonly formEditingId = signal<number | null>(null);
   readonly formName = signal('');
   readonly formEnabled = signal(false);
