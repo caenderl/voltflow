@@ -101,6 +101,21 @@ const ROLE_VIEWS: readonly (readonly [string, string, string, DeviceRole])[] = [
   ['071', 'consumer_1min', 'wallbox_1min', 'consumer'],
 ];
 
+/**
+ * The rest of the `consumer` axis, added later. A separate list only so the
+ * numbering keeps matching the execution order: everything above has to run
+ * before 072, which builds `house_load_1min` on top of two of those views.
+ *
+ * Until these existed the consumer role had a 1-minute view and nothing else,
+ * which is why the charging figures were still read straight off the vendor
+ * aggregates while PV and grid had long since moved to roles.
+ */
+const LATE_ROLE_VIEWS: readonly (readonly [string, string, string, DeviceRole])[] = [
+  ['078', 'consumer_readings', 'wallbox_reading', 'consumer'],
+  ['079', 'consumer_1hour', 'wallbox_1hour', 'consumer'],
+  ['080', 'consumer_1day', 'wallbox_1day', 'consumer'],
+];
+
 const MIGRATIONS: Migration[] = [
   {
     name: '001-tariff-table',
@@ -983,6 +998,10 @@ const MIGRATIONS: Migration[] = [
     sql: `DROP TABLE IF EXISTS sma_config;
           DROP TABLE IF EXISTS wallbox_config`,
   },
+  ...LATE_ROLE_VIEWS.map(([name, view, source, role]) => ({
+    name: `${name}-role-view-${view.replace(/_/g, '-')}`,
+    sql: roleView(view, source, role),
+  })),
 ];
 
 export async function applyMigrations(

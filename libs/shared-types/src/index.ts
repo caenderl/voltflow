@@ -591,13 +591,7 @@ export interface WallboxReading {
 /** Name of the WebSocket event used to push live wallbox readings. */
 export const WALLBOX_READING_EVENT = 'wallbox-reading';
 
-/** Daily charging energy summary per day, returned by GET /api/wallbox/energy/daily. */
-export interface WallboxDailySummary {
-  /** Local date in ISO format (YYYY-MM-DD). */
-  day: string;
-  /** Total energy charged this day in kWh. */
-  chargedKwh: number;
-}
+
 
 // ---------------------------------------------------------------------------
 // SMA PV inverter (STP 6000TL-20, Speedwire via pysma-plus)
@@ -643,24 +637,47 @@ export interface SmaReading {
 /** Name of the WebSocket event used to push live SMA readings. */
 export const SMA_READING_EVENT = 'sma-reading';
 
-/** Per-day energy summary, returned by the SMA energy/house-load endpoints. */
-export interface SmaDailySummary {
+
+
+/**
+ * Per-day PV yield, returned by GET /api/energy/production/daily. Named for the
+ * `producer` role, not for SMA: which inverter served it is not part of the
+ * answer.
+ */
+export interface ProductionDaySummary {
   /** Local date in ISO format (YYYY-MM-DD). */
   day: string;
-  /** PV energy produced this day in kWh. */
+  /** PV energy produced this day in kWh, over all producers. */
   yieldKwh: number;
 }
 
-/** Per-minute average PV power, returned by GET /api/sma/power/minute. */
-export interface SmaMinutePower {
+/** Per-minute average PV power, returned by GET /api/energy/production/minute. */
+export interface ProductionMinutePower {
   /** ISO timestamp of the minute bucket start. */
   time: string;
-  /** Average PV power (grid_power) this minute, in W. */
+  /** Average PV power this minute in W, summed over all producers. */
   powerW: number;
 }
 
 /**
- * Derived energy balance over a period (kWh), combining SMA production with the
+ * Per-day energy drawn by the separately metered consumers (today: the
+ * wallbox), returned by GET /api/energy/consumers/daily.
+ */
+export interface ConsumerDaySummary {
+  /** Local date in ISO format (YYYY-MM-DD). */
+  day: string;
+  energyKwh: number;
+}
+
+/** The same per minute, returned by GET /api/energy/consumers/minute. */
+export interface ConsumerMinuteEnergy {
+  /** ISO timestamp of the minute bucket start. */
+  time: string;
+  energyKwh: number;
+}
+
+/**
+ * Derived energy balance over a period (kWh), combining PV production with the
  * smart meter import/export. Enables self-consumption and self-sufficiency.
  */
 export interface EnergyBalance {

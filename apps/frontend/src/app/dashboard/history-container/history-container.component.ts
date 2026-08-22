@@ -145,7 +145,7 @@ export class HistoryContainerComponent {
     // Week: PV production fits as its own (unstacked) bar next to Bezug/Einspeisung.
     // Month has too many day-slots for a third bar - it gets its own chart instead (see pvChart).
     if (view === 'week') {
-      const production = this.data.smaDailyEnergy();
+      const production = this.data.productionDaily();
       if (production.length > 0) {
         const prodByKey = new Map(production.map((d) => [isoToSlotKey(d.day), d.yieldKwh]));
         series.push({
@@ -173,7 +173,7 @@ export class HistoryContainerComponent {
       // no data yet shows a flat zero line rather than the whole section
       // vanishing. Hidden only when the inverter is not enabled.
       if (!this.registry.hasEnabled('sma-speedwire')) return null;
-      const data = this.data.smaMinutePower();
+      const data = this.data.productionMinute();
       // Full minute resolution (1440 slots), matching the Leistung chart.
       const slots = minuteBucketSlots(this.refDate(), 1);
       const byKey = sumByMinuteBucket(data, (d) => d.powerW, 1);
@@ -196,7 +196,7 @@ export class HistoryContainerComponent {
       );
     }
     if (view === 'month') {
-      const data = this.data.smaDailyEnergy();
+      const data = this.data.productionDaily();
       if (data.length === 0) return null;
       const slots = energySlots('month', this.refDate());
       const byKey = new Map(data.map((d) => [isoToSlotKey(d.day), d.yieldKwh]));
@@ -223,19 +223,18 @@ export class HistoryContainerComponent {
     if (!this.registry.hasEnabled('anker-v1-modbus')) return null;
     const view = this.view();
     if (view === 'day') {
-      const hist = this.data.wallboxHistory();
+      const data = this.data.consumersMinute();
       const slots = minuteBucketSlots(this.refDate());
-      // Charged energy per 5-min bucket, summed straight from each reading's
-      // own measured energyWh (Wh -> kWh). Deliberately NOT re-derived from
-      // activePowerW x an assumed sample spacing: the poll interval is
-      // user-adjustable (5-3600s), so any assumed rate both mis-scales the
-      // present and retroactively rescales every past day the moment the
-      // setting changes. The collector integrates over the real elapsed time
-      // between polls, which is the same figure the backend aggregates use.
+      // Charged energy per 5-min bucket, already integrated over the real
+      // elapsed time between polls by the collector and aggregated per minute
+      // by the backend. Deliberately NOT re-derived from activePowerW x an
+      // assumed sample spacing: the poll interval is user-adjustable
+      // (5-3600s), so any assumed rate both mis-scales the present and
+      // retroactively rescales every past day the moment the setting changes.
       // Unlike the PV line, 0 is a real value here (not charging), so every
       // *elapsed* slot is drawn; the rest of today is still in the future and
       // stays a gap rather than a zero line running to midnight.
-      const byKey = sumByMinuteBucket(hist, (r) => r.energyWh ?? 0);
+      const byKey = sumByMinuteBucket(data, (d) => d.energyKwh);
       const lastSlot = lastCompleteSlot(this.refDate());
       return categorySeriesChart(
         slots.map((s) => s.label),
@@ -245,7 +244,7 @@ export class HistoryContainerComponent {
             color: CHART_COLORS.charge,
             type: 'line',
             data: slots.map((s, i) =>
-              i > lastSlot ? null : round2((byKey.get(s.key) ?? 0) / 1000),
+              i > lastSlot ? null : round2(byKey.get(s.key) ?? 0),
             ),
           },
         ],
@@ -254,9 +253,9 @@ export class HistoryContainerComponent {
       );
     }
     if (view === 'week' || view === 'month') {
-      const data = this.data.wallboxDailyEnergy();
+      const data = this.data.consumersDaily();
       const slots = energySlots(view, this.refDate());
-      const byKey = new Map(data.map((d) => [isoToSlotKey(d.day), d.chargedKwh]));
+      const byKey = new Map(data.map((d) => [isoToSlotKey(d.day), d.energyKwh]));
       return categorySeriesChart(
         slots.map((s) => s.label),
         [
