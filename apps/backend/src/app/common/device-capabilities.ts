@@ -1,16 +1,19 @@
 import type { DataRange } from '@org/shared-types';
 
 /**
- * Capability interfaces ("ports") shared by the device services. A service
+ * Capability interfaces ("ports") the device services implement. A service
  * implements the ones it actually supports — these describe only the *common*
- * shape, not the full repertoire. Device-specific queries (e.g. the SMA energy
- * balance or the meter series/resolution) deliberately stay off these
- * interfaces; they are unique to one device and forcing them into a generic
- * contract would only obscure them.
+ * shape, not the full repertoire. Device-specific queries (e.g. the PV minute
+ * power or the meter series/resolution) deliberately stay off these interfaces;
+ * they are unique to one device and forcing them into a generic contract would
+ * only obscure them.
  *
- * Implementing a capability is a compile-time promise (TypeScript enforces the
- * signature) and lets shared consumers — the live gateway, config endpoints —
- * treat any device through the port instead of by concrete type.
+ * Only {@link HasLatestPerDevice} currently has a polymorphic consumer: the
+ * live gateway holds every device through it and never by concrete type. The
+ * other two have a single implementer each after the endpoints nothing called
+ * were removed — they stay as named contracts so the next device has a shape to
+ * match rather than inventing its own signature, not because anything consumes
+ * them generically today.
  */
 
 /**
