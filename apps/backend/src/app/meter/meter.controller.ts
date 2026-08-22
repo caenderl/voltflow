@@ -12,6 +12,14 @@ import { MeterService } from './meter.service';
 const RESOLUTIONS: SeriesResolution[] = ['raw', '1min', '1hour', '1day'];
 const PERIODS: EnergyPeriod[] = ['day', 'week', 'month'];
 
+/**
+ * Stays under `meter` rather than moving to `/api/energy` with the production
+ * and consumer figures, even though `series`/`energy` read the `grid_meter_*`
+ * role views like those do. "Meter" here already names the role — there is one
+ * grid meter, it is the house connection point, and `/api/meter/energy` says
+ * exactly what it returns. `/api/sma/energy/daily` did not: nothing in it said
+ * whether you were getting one inverter or every producer.
+ */
 @Controller('meter')
 export class MeterController {
   constructor(private readonly meter: MeterService) {}
