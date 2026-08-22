@@ -271,12 +271,24 @@ async def _run_sma(pool, cfg: dict, password: str) -> None:
     carry = {"date": None, "daily_wh": None, "total_kwh": None,
              "produced": False, "serial": None, "model": None,
              "last_power": None}
-    try:
-        seed = await last_sma_reading(pool)
-    except Exception as err:  # noqa: BLE001 - seed must never crash the collector
-        LOG.warning("SMA seed read failed (%s: %s) - continuing without carry",
-                    type(err).__name__, err)
-        seed = None
+    # Seeded ONLY from this instance's own history. The carry decides which
+    # serial an unreachable inverter is recorded under (the asleep branch far
+    # below writes carry["serial"]), so seeding it from "whichever inverter
+    # wrote last" is not a harmless default: with two rows configured, the task
+    # for an offline inverter fabricates 0 W rows - carried daily_yield and all
+    # - on a healthy one's serial, which is exactly the false-zero class of bug
+    # sleep_implausible exists to prevent, one instance over.
+    #
+    # An unbound row (device_sn NULL) has no identity to seed from and starts
+    # cold: it has never made contact, so there is no history of its own to
+    # carry, and the first successful read is what binds it (_bind_config).
+    seed = None
+    if cfg.get("device_sn"):
+        try:
+            seed = await last_sma_reading(pool, cfg["device_sn"])
+        except Exception as err:  # noqa: BLE001 - seed must never crash the collector
+            LOG.warning("SMA seed read failed (%s: %s) - continuing without carry",
+                        type(err).__name__, err)
     if seed:
         carry["serial"] = seed.get("device_sn")
         carry["model"] = seed.get("device_pn")

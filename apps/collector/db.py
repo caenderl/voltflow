@@ -233,12 +233,18 @@ async def bind_device_sn(pool: asyncpg.Pool, config_id: int, device_sn: str) -> 
         pass  # backend has not migrated yet; nothing to bind to
 
 
-async def last_sma_reading(pool: asyncpg.Pool) -> dict | None:
-    """Most recent SMA reading (for seeding the daily_yield carry after a
-    restart and for writing asleep rows when the inverter is unreachable).
+async def last_sma_reading(pool: asyncpg.Pool, device_sn: str) -> dict | None:
+    """Most recent reading OF ONE INVERTER (for seeding the daily_yield carry
+    after a restart and for writing asleep rows when it is unreachable).
 
     grid_power seeds the "was it producing?" check that decides whether an
     unreachable inverter may be recorded as 0 W (sma_stream.sleep_implausible).
+
+    `device_sn` is required rather than optional-with-a-global-fallback: the
+    carried serial is what an unreachable inverter's rows are written under, so
+    "whichever inverter wrote last" is not a harmless default once a second one
+    is configured - it is one instance writing readings for another. Callers
+    that do not know which device they mean must not seed at all.
     """
     try:
         row = await pool.fetchrow(
@@ -246,7 +252,9 @@ async def last_sma_reading(pool: asyncpg.Pool) -> dict | None:
             "       r.daily_yield_wh, r.total_yield_kwh "
             "FROM sma_readings r "
             "LEFT JOIN device d ON d.device_sn = r.device_sn "
-            "ORDER BY r.time DESC LIMIT 1"
+            "WHERE r.device_sn = $1 "
+            "ORDER BY r.time DESC LIMIT 1",
+            device_sn,
         )
     except asyncpg.UndefinedTableError:
         return None

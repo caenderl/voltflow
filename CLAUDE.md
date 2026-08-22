@@ -79,6 +79,17 @@ config-gated (env-only credentials, no address to configure).
 values it may run. Keep it in code, not the DB: a container must never pick up a
 row whose stream module it cannot import.
 
+**Per-instance state must be scoped by the bound `device_sn`.** Anything a task
+seeds or carries from the DB (last reading, counters, "was it producing")
+belongs to *one* instance. A global "newest row" read looks correct with one
+device installed and silently makes one instance write readings for another as
+soon as a second row exists — a serial an unreachable device's rows get
+attributed to is a fabricated measurement, not a cosmetic mix-up. Scope such a
+read to `cfg["device_sn"]`, and make the parameter required rather than
+optional-with-a-fallback: the fallback *is* the bug. A row that has never made
+contact is unbound and has no history to carry — start cold; the first
+successful read binds it.
+
 Adding a device: new `<device>_stream.py` + `_run_<device>` + a `COLLECTOR`
 branch in `run()` + an entry in `DRIVERS_BY_COLLECTOR` and the `DeviceDriver`
 union in `libs/shared-types`; then `Dockerfile.<device>`,
