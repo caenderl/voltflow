@@ -19,15 +19,22 @@ export interface SmaState {
   styleUrl: './sma-card.component.scss',
 })
 export class SmaCardComponent {
-  readonly state = input.required<SmaState>();
+  /** Null while this instance has never reported — see DeviceCard. */
+  readonly state = input.required<SmaState | null>();
   readonly name = input<string>('PV-Anlage');
   /** Today's energy balance (self-consumption / autarky), if available. */
   readonly balance = input<EnergyBalance | null>(null);
 
-  readonly producing = computed(() => !this.state().asleep && this.state().productionW > 0);
+  readonly producing = computed(() => {
+    const s = this.state();
+    return s !== null && !s.asleep && s.productionW > 0;
+  });
+  readonly stale = computed(() => this.state()?.stale ?? false);
   readonly statusLabel = computed(() => {
-    if (this.state().stale) return 'Veraltet';
-    if (this.state().asleep) return 'Schläft';
-    return this.state().productionW > 0 ? 'Produziert' : 'Standby';
+    const s = this.state();
+    if (s === null) return 'Nicht verbunden';
+    if (s.stale) return 'Veraltet';
+    if (s.asleep) return 'Schläft';
+    return s.productionW > 0 ? 'Produziert' : 'Standby';
   });
 }

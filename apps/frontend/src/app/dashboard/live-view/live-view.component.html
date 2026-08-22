@@ -42,13 +42,13 @@
   <div echarts [options]="liveSpark()" class="spark"></div>
 </section>
 
-@if (smaState() || wallboxState()) {
+@if (smaCards().length || wallboxCards().length) {
   <div class="live-cards">
-    @if (smaState(); as s) {
-      <app-sma-card [state]="s" [name]="smaName()" [balance]="balance()" />
+    @for (c of smaCards(); track c.id) {
+      <app-sma-card [state]="c.state" [name]="c.name" [balance]="$first ? balance() : null" />
     }
-    @if (wallboxState(); as wb) {
-      <app-wallbox-card [state]="wb" [name]="wallboxName()" />
+    @for (c of wallboxCards(); track c.id) {
+      <app-wallbox-card [state]="c.state" [name]="c.name" />
     }
   </div>
 }

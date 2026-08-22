@@ -5,7 +5,11 @@ import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
 import { ClockService } from '../../core/clock.service';
 import { DeviceRegistryService } from '../../core/device-registry.service';
 import { DashboardDataService, LIVE_WINDOW_MS } from '../dashboard-data.service';
-import { LiveViewComponent, type FlowState } from '../live-view/live-view.component';
+import {
+  LiveViewComponent,
+  type DeviceCard,
+  type FlowState,
+} from '../live-view/live-view.component';
 import type { SmaState } from '../sma-card/sma-card.component';
 import type { WallboxState } from '../wallbox-card/wallbox-card.component';
 
@@ -39,10 +43,8 @@ function isStale(readingTime: string, pollIntervalS: number, now: number): boole
       [today]="today()"
       [calibrated]="calibrated()"
       [liveSpark]="liveSpark()"
-      [wallboxState]="wallboxState()"
-      [wallboxName]="wallboxName()"
-      [smaState]="smaState()"
-      [smaName]="smaName()"
+      [smaCards]="smaCards()"
+      [wallboxCards]="wallboxCards()"
       [balance]="balance()"
     />
   `,
@@ -52,14 +54,6 @@ export class LiveContainerComponent {
   private readonly clock = inject(ClockService);
   private readonly registry = inject(DeviceRegistryService);
 
-  // Still one card per device kind, so each has to pick a row to describe -
-  // see DeviceRegistryService.representative, which the per-instance rework
-  // removes.
-  private readonly wallboxCfg = computed(() =>
-    this.registry.representative('anker-v1-modbus'),
-  );
-  private readonly smaCfg = computed(() => this.registry.representative('sma-speedwire'));
-
   // Today's Bezug/Einspeisung, corrected onto the physical meter when
   // calibration is on — the same factor the history and admin views use.
   readonly today = computed(() => calibrateEnergy(this.data.today(), this.data.calibration()));
@@ -68,35 +62,63 @@ export class LiveContainerComponent {
   // Eigenverbrauch/Hauslast never disagree with the calibrated Bezug/Einspeisung.
   readonly balance = computed(() => calibrateBalance(this.data.balance(), this.data.calibration()));
 
-  readonly wallboxName = computed(() => this.wallboxCfg()?.name?.trim() || 'Wallbox');
+  /**
+   * One card per ENABLED configured inverter, with that instance's own reading
+   * (looked up by its bound serial) and its own poll interval for the staleness
+   * check. A disabled row is not shown at all; an enabled one that has never
+   * reported gets a card with a null state rather than vanishing.
+   *
+   * Readings are matched through the config row's binding, never by taking
+   * whatever is in the map: a serial can outlive the row that pointed at it
+   * (replaced hardware still has readings within retention), and that must not
+   * conjure a card for a device nobody configured.
+   */
+  readonly smaCards = computed<DeviceCard<SmaState>[]>(() =>
+    this.registry
+      .instancesOf('sma-speedwire')
+      .filter((i) => i.config.enabled)
+      .map((i) => {
+        const s = i.config.deviceSn ? this.data.smaBySn().get(i.config.deviceSn) : undefined;
+        return {
+          id: i.config.id,
+          name: i.name,
+          state: s
+            ? {
+                productionW: s.gridPower ?? 0,
+                dailyYieldKwh: (s.dailyYieldWh ?? 0) / 1000,
+                asleep: s.asleep,
+                stale: isStale(s.time, i.config.pollIntervalS, this.clock.now()),
+              }
+            : null,
+        };
+      }),
+  );
 
-  readonly smaName = computed(() => this.smaCfg()?.name?.trim() || 'PV-Anlage');
-
-  readonly smaState = computed<SmaState | null>(() => {
-    if (this.smaCfg()?.enabled === false) return null;
-    const s = this.data.sma();
-    if (!s) return null;
-    return {
-      productionW: s.gridPower ?? 0,
-      dailyYieldKwh: (s.dailyYieldWh ?? 0) / 1000,
-      asleep: s.asleep,
-      stale: isStale(s.time, this.smaCfg()?.pollIntervalS ?? 60, this.clock.now()),
-    };
-  });
-
-  readonly wallboxState = computed<WallboxState | null>(() => {
-    if (this.wallboxCfg()?.enabled === false) return null;
-    const w = this.data.wallbox();
-    if (!w) return null;
-    const status = w.status ?? 0;
-    return {
-      statusLabel: WALLBOX_STATUS_LABELS[status] ?? `Status ${status}`,
-      charging: status === 2,
-      powerW: w.activePowerW ?? 0,
-      sessionKwh: (w.sessionEnergyWh ?? 0) / 1000,
-      stale: isStale(w.time, this.wallboxCfg()?.pollIntervalS ?? 30, this.clock.now()),
-    };
-  });
+  /** Same shape as {@link smaCards}, for the wallboxes. */
+  readonly wallboxCards = computed<DeviceCard<WallboxState>[]>(() =>
+    this.registry
+      .instancesOf('anker-v1-modbus')
+      .filter((i) => i.config.enabled)
+      .map((i) => {
+        const w = i.config.deviceSn
+          ? this.data.wallboxBySn().get(i.config.deviceSn)
+          : undefined;
+        const status = w?.status ?? 0;
+        return {
+          id: i.config.id,
+          name: i.name,
+          state: w
+            ? {
+                statusLabel: WALLBOX_STATUS_LABELS[status] ?? `Status ${status}`,
+                charging: status === 2,
+                powerW: w.activePowerW ?? 0,
+                sessionKwh: (w.sessionEnergyWh ?? 0) / 1000,
+                stale: isStale(w.time, i.config.pollIntervalS, this.clock.now()),
+              }
+            : null,
+        };
+      }),
+  );
 
   /**
    * The hero figure. Stale-checked like the two device cards: the smart meter

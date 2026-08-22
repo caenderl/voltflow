@@ -20,7 +20,12 @@ export interface DeviceInstance {
   config: DeviceConfig;
   /** Registry entry, or null while the row has never made contact. */
   info: DeviceInfo | null;
-  /** Best available display name: given name, else the device's own alias. */
+  /**
+   * Best available display name: the given name, else the device's own alias,
+   * else the driver's label qualified by the address. The address matters —
+   * two unnamed wallboxes would otherwise both be called "Wallbox", which is
+   * exactly the ambiguity per-instance views exist to remove.
+   */
   name: string;
   /** Roles the domain reads this device through; empty while unbound. */
   roles: DeviceRole[];
@@ -55,13 +60,14 @@ export class DeviceRegistryService {
       const info = config.deviceSn
         ? (this.bySerial().get(config.deviceSn) ?? null)
         : null;
+      const label = DRIVER_TRAITS[config.driver].label;
       return {
         config,
         info,
         name:
           config.name?.trim() ||
           info?.alias?.trim() ||
-          DRIVER_TRAITS[config.driver].label,
+          (config.host ? `${label} ${config.host}` : label),
         roles: info?.roles ?? [],
       };
     }),
@@ -88,16 +94,15 @@ export class DeviceRegistryService {
   }
 
   /**
-   * One representative instance per driver: the enabled one, else the first.
+   * Is any instance of this driver enabled?
    *
-   * A stopgap for the views that still show "one card per device kind" and
-   * therefore have to pick. It is wrong by construction as soon as two rows of
-   * a driver are enabled, and exists only until the live and history views read
-   * {@link instancesOf} instead.
+   * What the site-level views gate on. They show one figure for the whole house
+   * (total PV yield, total charged energy), so the question is whether such a
+   * device exists at all — not which one, which is why nothing here picks a
+   * representative row any more.
    */
-  representative(driver: DeviceDriver): DeviceConfig | null {
-    const rows = this.configs().filter((c) => c.driver === driver);
-    return rows.find((c) => c.enabled) ?? rows[0] ?? null;
+  hasEnabled(driver: DeviceDriver): boolean {
+    return this.configs().some((c) => c.driver === driver && c.enabled);
   }
 
   /** Load both halves. Errors are ignored — the app renders without them. */
