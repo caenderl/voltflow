@@ -1,6 +1,9 @@
 import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
-import type { DeviceConfig, DeviceDriver } from '@org/shared-types';
-import { DashboardDataService } from '../../../dashboard/dashboard-data.service';
+import { DRIVER_TRAITS, type DeviceDriver } from '@org/shared-types';
+import {
+  DeviceRegistryService,
+  type DeviceInstance,
+} from '../../../core/device-registry.service';
 import { NumberFieldComponent } from '../../../ui/number-field/number-field.component';
 import { SettingsCardComponent } from '../../../ui/settings-card/settings-card.component';
 import { TextFieldComponent } from '../../../ui/text-field/text-field.component';
@@ -10,14 +13,18 @@ import { ToggleSwitchComponent } from '../../../ui/toggle-switch/toggle-switch.c
  * Add/edit form plus a table of configured instances for one driver - the
  * per-device-kind analog of the tariffs section's list+form (saves take
  * effect immediately, no shared footer). Instantiated once per driver by
- * `DevicesSectionComponent`; owns its own form state so the SMA and Wallbox
- * cards on the same tab never share one in-progress edit.
+ * `DevicesSectionComponent`; owns its own form state so the cards on the same
+ * tab never share one in-progress edit.
  *
- * Deliberately does not read `DashboardDataService.error` for its own
- * messages: two cards render at once here (unlike every other admin section,
- * which is alone on its tab), and a shared signal would risk a Wallbox
- * failure surfacing under the SMA card. A local, fixed message avoids that
- * regardless of which card actually failed.
+ * Everything driver-specific - the heading, the blurb, whether there are
+ * Port/Unit-ID fields, what a new row starts with - comes from
+ * `DRIVER_TRAITS`. The component itself knows no driver by name, which is what
+ * makes a new device a traits entry rather than a new template.
+ *
+ * Deliberately does not read a shared error signal: several cards render at
+ * once here (unlike every other admin section, which is alone on its tab), and
+ * a shared signal would risk one card's failure surfacing under another. A
+ * local, fixed message avoids that regardless of which card actually failed.
  */
 @Component({
   selector: 'app-device-instance-list',
@@ -27,15 +34,22 @@ import { ToggleSwitchComponent } from '../../../ui/toggle-switch/toggle-switch.c
   styleUrl: './device-instance-list.component.scss',
 })
 export class DeviceInstanceListComponent implements OnInit {
-  private readonly data = inject(DashboardDataService);
+  private readonly registry = inject(DeviceRegistryService);
 
   /** Immutable for the lifetime of one instance — driver never changes on an edit. */
   readonly driver = input.required<DeviceDriver>();
-  readonly heading = input.required<string>();
-  readonly subtitle = input<string>('');
-  readonly devices = input.required<DeviceConfig[]>();
 
-  readonly isModbus = computed(() => this.driver() === 'anker-v1-modbus');
+  readonly traits = computed(() => DRIVER_TRAITS[this.driver()]);
+  readonly instances = computed(() => this.registry.instancesOf(this.driver()));
+
+  // Placeholders are strings, the defaults are numbers (and null where the
+  // field does not apply) - converted here rather than in the template, where
+  // `null + ''` would quietly render the word "null".
+  readonly portPlaceholder = computed(() => String(this.traits().defaultPort ?? ''));
+  readonly unitIdPlaceholder = computed(() => String(this.traits().defaultUnitId ?? ''));
+  readonly intervalPlaceholder = computed(() =>
+    String(this.traits().defaultPollIntervalS),
+  );
 
   readonly formEditingId = signal<number | null>(null);
   readonly formName = signal('');
@@ -53,40 +67,43 @@ export class DeviceInstanceListComponent implements OnInit {
   }
 
   resetForm(): void {
+    const t = this.traits();
     this.formEditingId.set(null);
     this.formName.set('');
     this.formEnabled.set(false);
     this.formHost.set('');
-    this.formPort.set(this.isModbus() ? 502 : null);
-    this.formUnitId.set(this.isModbus() ? 1 : null);
-    this.formInterval.set(this.isModbus() ? 30 : 60);
+    this.formPort.set(t.defaultPort);
+    this.formUnitId.set(t.defaultUnitId);
+    this.formInterval.set(t.defaultPollIntervalS);
     this.formError.set(null);
   }
 
-  edit(d: DeviceConfig): void {
-    this.formEditingId.set(d.id);
-    this.formName.set(d.name ?? '');
-    this.formEnabled.set(d.enabled);
-    this.formHost.set(d.host ?? '');
-    this.formPort.set(d.port);
-    this.formUnitId.set(d.unitId);
-    this.formInterval.set(d.pollIntervalS);
+  edit(i: DeviceInstance): void {
+    const c = i.config;
+    this.formEditingId.set(c.id);
+    this.formName.set(c.name ?? '');
+    this.formEnabled.set(c.enabled);
+    this.formHost.set(c.host ?? '');
+    this.formPort.set(c.port);
+    this.formUnitId.set(c.unitId);
+    this.formInterval.set(c.pollIntervalS);
     this.formError.set(null);
   }
 
   save(): void {
     this.formError.set(null);
+    const t = this.traits();
     const editingId = this.formEditingId();
-    void this.data
-      .saveDeviceConfig({
+    void this.registry
+      .save({
         id: editingId ?? undefined,
         driver: this.driver(),
         name: this.formName().trim() || null,
         enabled: this.formEnabled(),
         host: this.formHost().trim() || null,
-        port: this.isModbus() ? (this.formPort() ?? 502) : null,
-        unitId: this.isModbus() ? (this.formUnitId() ?? 1) : null,
-        pollIntervalS: this.formInterval() ?? (this.isModbus() ? 30 : 60),
+        port: t.usesModbus ? (this.formPort() ?? t.defaultPort) : null,
+        unitId: t.usesModbus ? (this.formUnitId() ?? t.defaultUnitId) : null,
+        pollIntervalS: this.formInterval() ?? t.defaultPollIntervalS,
       })
       .then((ok) => {
         if (ok) this.resetForm();
@@ -100,10 +117,10 @@ export class DeviceInstanceListComponent implements OnInit {
       });
   }
 
-  remove(d: DeviceConfig): void {
+  remove(i: DeviceInstance): void {
     this.formError.set(null);
-    if (this.formEditingId() === d.id) this.resetForm();
-    void this.data.deleteDeviceConfig(d.id).then((ok) => {
+    if (this.formEditingId() === i.config.id) this.resetForm();
+    void this.registry.remove(i.config.id).then((ok) => {
       if (!ok) this.formError.set('Gerät konnte nicht gelöscht werden.');
     });
   }

@@ -1,9 +1,26 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { DeviceConfig, DeviceConfigCreateInput, DeviceConfigInput } from '@org/shared-types';
+import {
+  DRIVER_TRAITS,
+  type DeviceConfig,
+  type DeviceConfigCreateInput,
+  type DeviceConfigInput,
+  type DeviceDriver,
+} from '@org/shared-types';
 import { numOrNull } from '../common/db-utils';
 import { DbService } from '../database/db.service';
 
 const COLUMNS = `id, driver, name, enabled, host, port, unit_id, poll_interval_s, device_sn`;
+
+/**
+ * Drivers whose `port`/`unit_id` mean something, passed into the statements
+ * below as an array parameter. Deriving it from the traits rather than writing
+ * `driver = 'anker-v1-modbus'` into the SQL keeps a second Modbus device from
+ * silently losing its port: it would be one more entry in DRIVER_TRAITS, and
+ * the queries pick it up with no edit here.
+ */
+const MODBUS_DRIVERS: DeviceDriver[] = (
+  Object.keys(DRIVER_TRAITS) as DeviceDriver[]
+).filter((d) => DRIVER_TRAITS[d].usesModbus);
 
 /**
  * CRUD over `device_config`: one row per configured device instance, the
@@ -29,8 +46,8 @@ export class DeviceConfigService {
     const { rows } = await this.db.query(
       `INSERT INTO device_config (driver, name, enabled, host, port, unit_id, poll_interval_s)
        VALUES ($1, $2, $3, $4,
-               CASE WHEN $1 = 'anker-v1-modbus' THEN $5::int ELSE NULL END,
-               CASE WHEN $1 = 'anker-v1-modbus' THEN $6::int ELSE NULL END,
+               CASE WHEN $1 = ANY($8::text[]) THEN $5::int ELSE NULL END,
+               CASE WHEN $1 = ANY($8::text[]) THEN $6::int ELSE NULL END,
                $7)
        RETURNING ${COLUMNS}`,
       [
@@ -41,6 +58,7 @@ export class DeviceConfigService {
         input.port,
         input.unitId,
         input.pollIntervalS,
+        MODBUS_DRIVERS,
       ],
     );
     return rowToConfig(rows[0]);
@@ -50,13 +68,22 @@ export class DeviceConfigService {
     const { rows } = await this.db.query(
       `UPDATE device_config
           SET name = $2, enabled = $3, host = $4,
-              port    = CASE WHEN driver = 'anker-v1-modbus' THEN $5::int ELSE NULL END,
-              unit_id = CASE WHEN driver = 'anker-v1-modbus' THEN $6::int ELSE NULL END,
+              port    = CASE WHEN driver = ANY($8::text[]) THEN $5::int ELSE NULL END,
+              unit_id = CASE WHEN driver = ANY($8::text[]) THEN $6::int ELSE NULL END,
               poll_interval_s = $7,
               updated_at = now()
         WHERE id = $1
         RETURNING ${COLUMNS}`,
-      [id, input.name, input.enabled, input.host, input.port, input.unitId, input.pollIntervalS],
+      [
+        id,
+        input.name,
+        input.enabled,
+        input.host,
+        input.port,
+        input.unitId,
+        input.pollIntervalS,
+        MODBUS_DRIVERS,
+      ],
     );
     if (!rows.length) throw new NotFoundException(`device_config ${id} not found`);
     return rowToConfig(rows[0]);

@@ -9,22 +9,15 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import type {
-  DeviceConfig,
-  DeviceConfigCreateInput,
-  DeviceConfigInput,
-  DeviceDriver,
+import {
+  CONFIGURABLE_DRIVERS,
+  type DeviceConfig,
+  type DeviceConfigCreateInput,
+  type DeviceConfigInput,
+  type DeviceDriver,
 } from '@org/shared-types';
 import { emptyToNull, parseIntInRange } from '../common/query-params';
 import { DeviceConfigService } from './device-config.service';
-
-/**
- * Configurable drivers, i.e. those with a `device_config` row at all. The
- * meter (`anker-solix-mqtt`) is deliberately absent: it is not config-gated
- * (env-only credentials, no address to configure), so accepting it here would
- * let a client create a row nothing ever reads.
- */
-const DRIVERS: readonly DeviceDriver[] = ['sma-speedwire', 'anker-v1-modbus'];
 
 @Controller('device-configs')
 export class DeviceConfigController {
@@ -60,10 +53,15 @@ export class DeviceConfigController {
 }
 
 function parseDriver(value: unknown): DeviceDriver {
-  if (typeof value === 'string' && (DRIVERS as readonly string[]).includes(value)) {
+  if (
+    typeof value === 'string' &&
+    (CONFIGURABLE_DRIVERS as readonly string[]).includes(value)
+  ) {
     return value as DeviceDriver;
   }
-  throw new BadRequestException(`driver must be one of: ${DRIVERS.join(', ')}`);
+  throw new BadRequestException(
+    `driver must be one of: ${CONFIGURABLE_DRIVERS.join(', ')}`,
+  );
 }
 
 /**
