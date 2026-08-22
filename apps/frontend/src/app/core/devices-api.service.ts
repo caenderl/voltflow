@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import type { DeviceInfo } from '@org/shared-types';
+import type { DeviceInfo, DeviceRole } from '@org/shared-types';
 
 /**
  * REST access to the device registry (/api/devices) — every device a collector
@@ -16,5 +16,13 @@ export class DevicesApiService {
 
   list(): Observable<DeviceInfo[]> {
     return this.http.get<DeviceInfo[]>('/api/devices');
+  }
+
+  /** Correct what a device is in energy terms. */
+  setRoles(deviceSn: string, roles: DeviceRole[]): Observable<DeviceInfo> {
+    return this.http.put<DeviceInfo>(
+      `/api/devices/${encodeURIComponent(deviceSn)}/roles`,
+      { roles },
+    );
   }
 }

@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { CONFIGURABLE_DRIVERS } from '@org/shared-types';
 import { DeviceInstanceListComponent } from './device-instance-list/device-instance-list.component';
+import { DeviceRegistryListComponent } from './device-registry-list/device-registry-list.component';
 
 /**
  * "Geräte" section: one instance list per configurable driver. Thin wrapper —
@@ -12,7 +13,7 @@ import { DeviceInstanceListComponent } from './device-instance-list/device-insta
 @Component({
   selector: 'app-devices-section',
   standalone: true,
-  imports: [DeviceInstanceListComponent],
+  imports: [DeviceInstanceListComponent, DeviceRegistryListComponent],
   templateUrl: './devices-section.component.html',
   styleUrl: './devices-section.component.scss',
 })

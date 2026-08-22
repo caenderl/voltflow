@@ -11,6 +11,22 @@
  */
 export type DeviceRole = 'grid-meter' | 'producer' | 'consumer' | 'storage';
 
+/** Every role, in the order the settings UI offers them. */
+export const DEVICE_ROLES: readonly DeviceRole[] = [
+  'grid-meter',
+  'producer',
+  'consumer',
+  'storage',
+];
+
+/** What each role means, for the UI and for anyone reading the union above. */
+export const DEVICE_ROLE_LABELS: Record<DeviceRole, string> = {
+  'grid-meter': 'Zähler',
+  producer: 'Erzeuger',
+  consumer: 'Verbraucher',
+  storage: 'Speicher',
+};
+
 /**
  * How a device is talked to — protocol plus the shape of the values it reports.
  * Orthogonal to {@link DeviceRole}: the same role can be served by any driver
