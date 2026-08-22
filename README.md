@@ -223,16 +223,21 @@ manuell als vertrauenswürdiges Root-Zertifikat importieren).
 | `GET /api/devices` | Geräte-Registry: alle je registrierten Geräte mit ihren Rollen (`grid-meter`/`producer`/`consumer`/`storage`) |
 | `GET` / `POST` / `PUT` / `DELETE /api/device-configs` | Konfigurierte Geräte-Instanzen (Treiber, Name, IP, Port/Unit-ID, Intervall, an/aus) — eine Zeile pro Wallbox/Wechselrichter, nicht mehr je eine Singleton-Config |
 | `GET` / `PUT /api/app-settings` | Globale Anzeige-Einstellungen (z. B. Kalibrierung auf den Zählerstand) |
-| `GET /api/wallbox/history?from&to` | Rohe Wallbox-Messwerte |
-| `GET /api/wallbox/energy/daily?from&to` | Geladene Energie pro Tag (kWh) |
-| `GET /api/sma/energy/daily?from&to` | PV-Ertrag pro Tag (kWh) |
-| `GET /api/sma/power/minute?from&to` | PV-Leistung pro Minute (W, Tagesansicht) |
-| `GET /api/energy/balance?from&to` | Energiebilanz des Haushalts: Eigenverbrauch & Autarkie (rollenbasiert, unabhängig vom Gerätehersteller) |
+| `GET /api/energy/balance?from&to` | Energiebilanz des Haushalts: Eigenverbrauch & Autarkie |
+| `GET /api/energy/production/daily?from&to` | PV-Ertrag pro Tag (kWh), über alle Erzeuger |
+| `GET /api/energy/production/minute?from&to` | PV-Leistung pro Minute (W, Tagesansicht) |
+| `GET /api/energy/consumers/daily?from&to` | Energie der separat gemessenen Verbraucher pro Tag (kWh) |
+| `GET /api/energy/consumers/minute?from&to` | dieselbe pro Minute (Tagesansicht) |
 | `GET /api/system/health` | Host-Health (Load/RAM/Disk) + Container-Liste (Admin-Tab „System", nicht persistiert) |
 | `GET /api/system/backups` | Backup-Status: lokale Dumps (Alter, Größe) + Off-Site-Repo aus `backups/status.json` |
 | WS-Event `reading` | Live-Messwert Smart Meter (~alle 5 s) |
 | WS-Event `wallbox-reading` | Live-Wallbox-Wert (Intervall pro Instanz konfigurierbar) |
 | WS-Event `sma-reading` | Live-SMA-Wert (Intervall pro Instanz konfigurierbar) |
+
+Die Energie-Endpunkte sind nach der **Rolle** adressiert, die die Frage beantwortet, nicht
+nach dem Hersteller, der sie gerade bedient: `/api/energy/production/*` liest die
+`producer_*`-Views, `/api/energy/consumers/*` die `consumer_*`-Views. Gerätespezifisch bleiben
+nur die Live-Messwerte — und die kommen über den WebSocket, nicht über REST.
 
 Jeder Live-Messwert trägt seine `deviceSn`; ein Event deckt **alle** Geräte seiner Art ab.
 Beim Verbinden schickt das Backend pro Gerät dessen letzten bekannten Wert auf demselben

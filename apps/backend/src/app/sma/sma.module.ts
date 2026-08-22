@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
-import { SmaController } from './sma.controller';
 import { SmaService } from './sma.service';
 
+/** No controller: the inverters' live readings go out over the WebSocket, and
+ *  their energy figures are served by the energy module under their role. */
 @Module({
   imports: [DatabaseModule],
-  controllers: [SmaController],
   providers: [SmaService],
   exports: [SmaService],
 })

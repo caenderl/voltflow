@@ -9,11 +9,12 @@ import type {
   MeterReading,
   MeterReconciliation,
   SeriesResponse,
-  SmaDailySummary,
-  SmaMinutePower,
+  ConsumerDaySummary,
+  ConsumerMinuteEnergy,
+  ProductionDaySummary,
+  ProductionMinutePower,
   SmaReading,
   TariffPeriod,
-  WallboxDailySummary,
   WallboxReading,
 } from '@org/shared-types';
 import { appendWindowed } from '../core/chart-utils';
@@ -24,8 +25,6 @@ import { LiveService } from '../core/live.service';
 import { MeterApiService } from '../core/meter-api.service';
 import { SettingsApiService } from '../core/settings-api.service';
 import { EnergyApiService } from '../core/energy-api.service';
-import { SmaApiService } from '../core/sma-api.service';
-import { WallboxApiService } from '../core/wallbox-api.service';
 import type { CheckpointSaveEvent, TariffPeriodSaveEvent } from '../core/config-types';
 
 export interface LivePoint {
@@ -54,8 +53,6 @@ const LOAD_ERROR = 'Daten konnten nicht geladen werden (Backend erreichbar?).';
 export class DashboardDataService {
   private readonly live = inject(LiveService);
   private readonly meterApi = inject(MeterApiService);
-  private readonly wallboxApi = inject(WallboxApiService);
-  private readonly smaApi = inject(SmaApiService);
   private readonly energyApi = inject(EnergyApiService);
   private readonly settingsApi = inject(SettingsApiService);
   private readonly registry = inject(DeviceRegistryService);
@@ -104,10 +101,10 @@ export class DashboardDataService {
   readonly energy = signal<EnergySummary | null>(null);
   /** Balance for the selected history period. */
   readonly periodBalance = signal<EnergyBalance | null>(null);
-  readonly wallboxDailyEnergy = signal<WallboxDailySummary[]>([]);
-  readonly wallboxHistory = signal<WallboxReading[]>([]);
-  readonly smaDailyEnergy = signal<SmaDailySummary[]>([]);
-  readonly smaMinutePower = signal<SmaMinutePower[]>([]);
+  readonly consumersDaily = signal<ConsumerDaySummary[]>([]);
+  readonly consumersMinute = signal<ConsumerMinuteEnergy[]>([]);
+  readonly productionDaily = signal<ProductionDaySummary[]>([]);
+  readonly productionMinute = signal<ProductionMinutePower[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
@@ -174,10 +171,10 @@ export class DashboardDataService {
     // Clear all period-energy signals up front so a chart never renders the
     // previous period's data mapped onto the new slots while the refetch is in
     // flight (hourly keys are date-independent, so stale data would collide).
-    this.wallboxDailyEnergy.set([]);
-    this.wallboxHistory.set([]);
-    this.smaDailyEnergy.set([]);
-    this.smaMinutePower.set([]);
+    this.consumersDaily.set([]);
+    this.consumersMinute.set([]);
+    this.productionDaily.set([]);
+    this.productionMinute.set([]);
     this.energyApi.balance(from, to).subscribe({
       next: (b) => current() && this.periodBalance.set(b),
       error: () => current() && this.periodBalance.set(null),
@@ -196,22 +193,22 @@ export class DashboardDataService {
       error: () => current() && this.error.set(LOAD_ERROR),
     });
     if (view === 'week' || view === 'month') {
-      this.wallboxApi.dailyEnergy(from, to).subscribe({
-        next: (d) => current() && this.wallboxDailyEnergy.set(d),
-        error: () => current() && this.wallboxDailyEnergy.set([]),
+      this.energyApi.consumersDaily(from, to).subscribe({
+        next: (d) => current() && this.consumersDaily.set(d),
+        error: () => current() && this.consumersDaily.set([]),
       });
-      this.smaApi.dailyEnergy(from, to).subscribe({
-        next: (d) => current() && this.smaDailyEnergy.set(d),
-        error: () => current() && this.smaDailyEnergy.set([]),
+      this.energyApi.productionDaily(from, to).subscribe({
+        next: (d) => current() && this.productionDaily.set(d),
+        error: () => current() && this.productionDaily.set([]),
       });
     } else {
-      this.wallboxApi.history(from, to).subscribe({
-        next: (d) => current() && this.wallboxHistory.set(d),
-        error: () => current() && this.wallboxHistory.set([]),
+      this.energyApi.consumersMinute(from, to).subscribe({
+        next: (d) => current() && this.consumersMinute.set(d),
+        error: () => current() && this.consumersMinute.set([]),
       });
-      this.smaApi.minutePower(from, to).subscribe({
-        next: (d) => current() && this.smaMinutePower.set(d),
-        error: () => current() && this.smaMinutePower.set([]),
+      this.energyApi.productionMinute(from, to).subscribe({
+        next: (d) => current() && this.productionMinute.set(d),
+        error: () => current() && this.productionMinute.set([]),
       });
     }
   }
@@ -219,10 +216,10 @@ export class DashboardDataService {
   /** Reset the history-period state (when switching to the live view). */
   clearPeriod(): void {
     this.periodSeq++; // invalidate any in-flight period requests
-    this.wallboxDailyEnergy.set([]);
-    this.wallboxHistory.set([]);
-    this.smaDailyEnergy.set([]);
-    this.smaMinutePower.set([]);
+    this.consumersDaily.set([]);
+    this.consumersMinute.set([]);
+    this.productionDaily.set([]);
+    this.productionMinute.set([]);
     this.periodBalance.set(null);
   }
 
