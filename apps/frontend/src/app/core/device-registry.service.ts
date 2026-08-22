@@ -20,7 +20,12 @@ export interface DeviceInstance {
   config: DeviceConfig;
   /** Registry entry, or null while the row has never made contact. */
   info: DeviceInfo | null;
-  /** Best available display name: given name, else the device's own alias. */
+  /**
+   * Best available display name: the given name, else the device's own alias,
+   * else the driver's label qualified by the address. The address matters —
+   * two unnamed wallboxes would otherwise both be called "Wallbox", which is
+   * exactly the ambiguity per-instance views exist to remove.
+   */
   name: string;
   /** Roles the domain reads this device through; empty while unbound. */
   roles: DeviceRole[];
@@ -55,13 +60,14 @@ export class DeviceRegistryService {
       const info = config.deviceSn
         ? (this.bySerial().get(config.deviceSn) ?? null)
         : null;
+      const label = DRIVER_TRAITS[config.driver].label;
       return {
         config,
         info,
         name:
           config.name?.trim() ||
           info?.alias?.trim() ||
-          DRIVER_TRAITS[config.driver].label,
+          (config.host ? `${label} ${config.host}` : label),
         roles: info?.roles ?? [],
       };
     }),
