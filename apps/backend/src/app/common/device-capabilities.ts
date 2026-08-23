@@ -8,12 +8,16 @@ import type { DataRange } from '@org/shared-types';
  * they are unique to one device and forcing them into a generic contract would
  * only obscure them.
  *
- * Only {@link HasLatestPerDevice} currently has a polymorphic consumer: the
- * live gateway holds every device through it and never by concrete type. The
- * other two have a single implementer each after the endpoints nothing called
- * were removed — they stay as named contracts so the next device has a shape to
- * match rather than inventing its own signature, not because anything consumes
- * them generically today.
+ * {@link HasLatestPerDevice} is the one with a polymorphic consumer: the live
+ * gateway holds every device through it and never by concrete type, which is
+ * what lets a new device be one more descriptor. {@link HasRange} has a single
+ * implementer and stays as a named contract for the next device that needs the
+ * shape.
+ *
+ * There was a third, `HasHistory`, for raw readings over a range. Its last
+ * implementer went when the day view stopped shipping raw wallbox rows for the
+ * client to integrate, and an interface nothing implements is not a contract —
+ * it is a description of a past design. Re-add it when a device needs it.
  */
 
 /**
@@ -35,9 +39,4 @@ export interface HasLatestPerDevice<R> {
 /** Reports the [first, last] timestamp span of stored readings. */
 export interface HasRange {
   range(): Promise<DataRange>;
-}
-
-/** Returns the raw readings in [from, to), oldest first. */
-export interface HasHistory<R> {
-  history(from: Date, to: Date): Promise<R[]>;
 }
