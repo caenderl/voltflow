@@ -83,6 +83,19 @@ if [ ! -f certs/voltflow.crt ] || [ ! -f certs/voltflow.key ]; then
   exit 1
 fi
 
+# The frontend joins the shared `edge` network (see docker-compose.prod.yml).
+# No compose file creates it, deliberately, so it does NOT reappear on its own
+# after a server rebuild - and without it the frontend container will not start
+# at all, taking the whole UI down over a missing one-liner.
+if [ "$DRY" -eq 0 ] && printf '%s\n' "${services[@]}" | grep -qx frontend; then
+  ssh "$SERVER" "docker network inspect edge >/dev/null 2>&1" || {
+    echo "ERROR: network 'edge' does not exist on $SERVER." >&2
+    echo "       Create it once:  ssh $SERVER docker network create edge" >&2
+    echo "       It is the seam between this nginx and the stacks it proxies," >&2
+    echo "       owned by neither, so that neither can remove it." >&2
+    exit 1; }
+fi
+
 # 1) Cross-build the selected images for amd64
 run docker buildx bake -f "$COMPOSE_FILE" --set "*.platform=$PLATFORM" --load "${services[@]}"
 
