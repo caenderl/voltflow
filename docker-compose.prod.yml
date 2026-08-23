@@ -150,8 +150,30 @@ services:
       - "443:8443"
     volumes:
       - ./certs:/etc/nginx/certs:ro
+    # `default` HAS to stay listed: naming any network here replaces the
+    # implicit one, and without it the frontend cannot resolve `backend:3000`
+    # any more — which takes the whole app down, not just the proxy.
+    #
+    # `edge` is the single seam to the neighbouring stacks this nginx
+    # reverse-proxies (freqtrade today, see apps/frontend/nginx.conf).
+    # Deliberately only the frontend: the database, the backend and the
+    # collectors stay on voltflow_default, out of reach from over there.
+    networks:
+      - default
+      - edge
     depends_on:
       - backend
+
+networks:
+  # Owned by no stack. Created once by hand (`docker network create edge`) and
+  # from then on only ever joined, never created or removed by a compose file.
+  #
+  # That is the whole point: `docker compose down` removes a project's OWN
+  # default network. If this seam lived in voltflow_default (as it did) or in
+  # freqtrade_default, taking one stack down would leave the other unable to
+  # start — the energy monitoring must not depend on a trading bot's uptime.
+  edge:
+    external: true
 
 volumes:
   voltflow-db-data:
