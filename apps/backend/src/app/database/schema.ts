@@ -109,6 +109,13 @@ const ROLE_VIEWS: readonly (readonly [string, string, string, DeviceRole])[] = [
  * Until these existed the consumer role had a 1-minute view and nothing else,
  * which is why the charging figures were still read straight off the vendor
  * aggregates while PV and grid had long since moved to roles.
+ *
+ * Only `consumer_1day` has a reader today (`EnergyService.consumersDaily`);
+ * `consumer_readings` and `consumer_1hour` are deliberately created anyway, so
+ * the role axis has the same four resolutions as `producer_*` and
+ * `grid_meter_*`. A view is a definition, not stored rows, and the asymmetry is
+ * what made the wallbox figures skip roles for three releases. Grepping either
+ * name and finding no caller is a decision, not a leftover.
  */
 const LATE_ROLE_VIEWS: readonly (readonly [string, string, string, DeviceRole])[] = [
   ['078', 'consumer_readings', 'wallbox_reading', 'consumer'],
