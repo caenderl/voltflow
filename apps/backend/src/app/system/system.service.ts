@@ -33,6 +33,10 @@ export class SystemService {
    *  override for a specific mount. */
   private readonly diskPath = process.env.SYSTEM_DISK_PATH ?? '/';
   private readonly dockerSocket = process.env.DOCKER_SOCKET ?? '/var/run/docker.sock';
+  /** Compose project whose containers this tab reports on. The host also runs
+   *  unrelated stacks (freqtrade, the shared ingress); those are somebody
+   *  else's business and only pad the list. */
+  private readonly composeProject = process.env.COMPOSE_PROJECT ?? 'voltflow';
 
   async getHealth(): Promise<SystemHealth> {
     const [memory, disk, containers] = await Promise.all([
@@ -86,11 +90,17 @@ export class SystemService {
     }
   }
 
-  /** Query the Docker socket for the container list. Returns [] on any failure
-   *  (socket not mounted, insufficient permissions, timeout). */
+  /** Query the Docker socket for this stack's container list, narrowed to the
+   *  compose project by label — a name prefix would miss a container renamed
+   *  via `container_name:`. Returns [] on any failure (socket not mounted,
+   *  insufficient permissions, timeout); an empty list therefore still means
+   *  "no Docker", since the backend itself is part of the project. */
   private async readContainers(): Promise<ContainerStatus[]> {
     try {
-      const body = await this.dockerGet('/containers/json?all=1');
+      const filters = encodeURIComponent(
+        JSON.stringify({ label: [`com.docker.compose.project=${this.composeProject}`] }),
+      );
+      const body = await this.dockerGet(`/containers/json?all=1&filters=${filters}`);
       const list = JSON.parse(body) as DockerContainer[];
       return list
         .map((c) => ({
