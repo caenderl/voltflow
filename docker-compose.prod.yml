@@ -145,22 +145,25 @@ services:
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 128m
-    ports:
-      - "8080:8080"
-      - "443:8443"
-    volumes:
-      - ./certs:/etc/nginx/certs:ro
+    # No host ports and no TLS cert here any more: this container just serves
+    # the SPA and proxies to `backend` over plain HTTP on `default`. TLS
+    # termination and the :443/:8080 host ports live one layer up, in the
+    # shared ingress (see https://github.com/caenderl/ingress-deploy) — the
+    # `edge` alias below is how that ingress finds this container.
+    #
     # `default` HAS to stay listed: naming any network here replaces the
     # implicit one, and without it the frontend cannot resolve `backend:3000`
     # any more — which takes the whole app down, not just the proxy.
     #
-    # `edge` is the single seam to the neighbouring stacks this nginx
-    # reverse-proxies (freqtrade today, see apps/frontend/nginx.conf).
-    # Deliberately only the frontend: the database, the backend and the
-    # collectors stay on voltflow_default, out of reach from over there.
+    # `edge` is the single seam to the ingress and the other stacks it fronts
+    # (freqtrade today). Deliberately only the frontend: the database, the
+    # backend and the collectors stay on voltflow_default, out of reach from
+    # over there.
     networks:
-      - default
-      - edge
+      default:
+      edge:
+        aliases:
+          - voltflow
     depends_on:
       - backend
 
