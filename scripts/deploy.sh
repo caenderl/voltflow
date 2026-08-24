@@ -103,7 +103,7 @@ else
 fi
 
 # 3) Sync the deploy bundle (compose always; init.sql harmless; .env opt-in).
-# No certs here any more - TLS lives in the ingress repo, not this one.
+# TLS lives in the separate ingress repo - nothing to sync for it here.
 step "Sync bundle"
 run ssh "$SERVER" "mkdir -p ~/$REMOTE_DIR/db"
 run scp "$COMPOSE_FILE" "$SERVER:$REMOTE_DIR/$COMPOSE_FILE"

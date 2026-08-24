@@ -184,10 +184,10 @@ in einem Prozess (`npm run collector`). Nur `collector-meter` unterliegt der Ank
 Beim ersten `all`-Deploy nach der Aufteilung entfernt `scripts/deploy.sh` den alten Monolith-Container
 `collector` automatisch (`--remove-orphans`), damit keine zweite Anker-Session entsteht.
 
-**HTTPS-Zertifikat:** liegt nicht mehr in diesem Repo. TLS-Terminierung, Zertifikat und der
-`edge`-Docker-Netz-Anschluss, über den der Ingress diesen Frontend-Container erreicht, gehören
-jetzt zu [caenderl/ingress-deploy](https://github.com/caenderl/ingress-deploy) — dort auch die
-Anleitung zum Neuausstellen des Zertifikats.
+**HTTPS-Zertifikat:** TLS-Terminierung und Zertifikat liegen in
+[caenderl/ingress-deploy](https://github.com/caenderl/ingress-deploy), das diesen
+Frontend-Container über das `edge`-Docker-Netz erreicht — dort auch die Anleitung zum
+Neuausstellen des Zertifikats.
 
 > **Bestehende DB migrieren:** Dump auf der Quelle ziehen (`scripts/backup.sh`), auf den Server
 > kopieren und in eine **frische** DB restoren (`scripts/restore.sh`, TimescaleDB-aware via
