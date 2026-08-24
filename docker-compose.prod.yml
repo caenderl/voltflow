@@ -145,15 +145,15 @@ services:
     restart: unless-stopped
     logging: *default-logging
     mem_limit: 128m
-    # No host ports and no TLS cert here any more: this container just serves
-    # the SPA and proxies to `backend` over plain HTTP on `default`. TLS
-    # termination and the :443/:8080 host ports live one layer up, in the
-    # shared ingress (see https://github.com/caenderl/ingress-deploy) — the
-    # `edge` alias below is how that ingress finds this container.
+    # This container serves the SPA and proxies to `backend`, in plain HTTP on
+    # `default` only, no host port. TLS termination and the LAN-facing
+    # hostnames live in the shared ingress (see
+    # https://github.com/caenderl/ingress-deploy), which reaches this
+    # container via the `edge` alias below.
     #
     # `default` HAS to stay listed: naming any network here replaces the
-    # implicit one, and without it the frontend cannot resolve `backend:3000`
-    # any more — which takes the whole app down, not just the proxy.
+    # implicit one, and without it the frontend cannot resolve `backend:3000`,
+    # which takes the whole app down, not just the proxy.
     #
     # `edge` is the single seam to the ingress and the other stacks it fronts
     # (freqtrade today). Deliberately only the frontend: the database, the
