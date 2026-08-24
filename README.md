@@ -130,7 +130,10 @@ bei jedem PR: `npm ci` → `npm test` (vitest) → `nx run-many -t build` (Backe
 Alles als Container. Die Images werden auf einem Dev-Rechner (z. B. Apple-Silicon-Mac)
 für `linux/amd64` cross-gebaut und **ohne Registry** per `docker save | ssh | docker load`
 auf den Server übertragen. Der Server braucht nur das Bundle (`docker-compose.prod.yml` +
-`.env` + `db/init.sql` + `certs/`) — **keinen Source-Tree und keinen Build**.
+`.env` + `db/init.sql`) — **keinen Source-Tree und keinen Build**. TLS und der
+LAN-Hostname (`https://voltflow.local`) kommen von einem separaten, gemeinsam
+mit anderen Stacks genutzten Ingress-nginx, siehe
+[caenderl/ingress-deploy](https://github.com/caenderl/ingress-deploy).
 
 **Komfort-Wrapper** (kapselt alle Schritte unten, niemals `down`/`-v`, DB-Volume bleibt unangetastet):
 
@@ -153,15 +156,13 @@ docker save voltflow-collector-meter voltflow-collector-sma voltflow-collector-w
   voltflow-backend voltflow-frontend | gzip | ssh <server> 'gunzip | docker load'
 
 # 3) Bundle auf den Server (einmalig bzw. bei Änderung)
-ssh <server> 'mkdir -p ~/voltflow/db ~/voltflow/certs'
+ssh <server> 'mkdir -p ~/voltflow/db'
 scp docker-compose.prod.yml .env <server>:~/voltflow/
 scp db/init.sql <server>:~/voltflow/db/
-scp certs/voltflow.crt certs/voltflow.key <server>:~/voltflow/certs/   # nginx startet ohne Zertifikat nicht
-ssh <server> 'chmod 644 ~/voltflow/certs/voltflow.key'                 # non-root nginx muss den Key lesen können
 
 # 4) Auf dem Server starten/aktualisieren
 ssh <server> 'cd ~/voltflow && docker compose -f docker-compose.prod.yml up -d'
-# -> Dashboard: https://<server> (Port 8080 redirect auf HTTPS)
+# -> Dashboard: https://voltflow.local (terminiert vom separaten Ingress-Stack)
 ```
 
 `docker-compose.prod.yml` referenziert die App-Images mit `image:`-Tags + `pull_policy: never`,
@@ -170,8 +171,9 @@ sodass der Server sie aus dem `docker load` nutzt (kein Build, kein Registry-Pul
 `restart: unless-stopped` (überleben Server-Reboot).
 
 Services: `db` (TimescaleDB), die drei Collector-Container `collector-meter` / `collector-sma` /
-`collector-wallbox`, `backend`, `frontend` (nginx, terminiert TLS auf Port 443/8443 und
-reverse-proxyt `/api` + `/socket.io` ans Backend; Port 8080 redirected auf HTTPS).
+`collector-wallbox`, `backend`, `frontend` (nginx, liefert die SPA aus und reverse-proxyt `/api` +
+`/socket.io` ans Backend, alles über Plain HTTP auf Port 8080 — kein TLS, kein Host-Port; erreicht
+wird es nur über den Ingress-Stack, mit dem es sich das `edge`-Docker-Netz teilt).
 DB-Daten liegen im Volume `voltflow-db-data`.
 
 **Collector-Aufteilung:** Jedes Gerät läuft in einem eigenen, schlanken Image — `collector-meter`
@@ -182,21 +184,10 @@ in einem Prozess (`npm run collector`). Nur `collector-meter` unterliegt der Ank
 Beim ersten `all`-Deploy nach der Aufteilung entfernt `scripts/deploy.sh` den alten Monolith-Container
 `collector` automatisch (`--remove-orphans`), damit keine zweite Anker-Session entsteht.
 
-**HTTPS-Zertifikat (mkcert, lokales Netz):** `certs/voltflow.crt` + `certs/voltflow.key` liegen
-lokal (gitignored) und werden von `scripts/deploy.sh` mit ins Bundle nach `~/voltflow/certs/`
-kopiert. Neu erzeugen bei IP-/Hostnamewechsel:
-
-```bash
-mkcert -cert-file certs/voltflow.crt -key-file certs/voltflow.key <server-ip> voltflow.local localhost 127.0.0.1
-```
-
-Damit Browser/Geräte im Netz dem Zertifikat vertrauen, einmalig die mkcert-Root-CA installieren
-(`$(mkcert -CAROOT)/rootCA.pem`, z.B. auf dem Mac via `mkcert -install`, auf anderen Geräten
-manuell als vertrauenswürdiges Root-Zertifikat importieren).
-
-> **Nach Zertifikat-Neuerzeugung:** nginx liest das Zertifikat nur beim Container-Start —
-> ein `docker compose up -d` ohne Image-Änderung wendet ein neues Zertifikat **nicht** an.
-> Auf dem Server einmal `docker compose -f docker-compose.prod.yml restart frontend` ausführen.
+**HTTPS-Zertifikat:** liegt nicht mehr in diesem Repo. TLS-Terminierung, Zertifikat und der
+`edge`-Docker-Netz-Anschluss, über den der Ingress diesen Frontend-Container erreicht, gehören
+jetzt zu [caenderl/ingress-deploy](https://github.com/caenderl/ingress-deploy) — dort auch die
+Anleitung zum Neuausstellen des Zertifikats.
 
 > **Bestehende DB migrieren:** Dump auf der Quelle ziehen (`scripts/backup.sh`), auf den Server
 > kopieren und in eine **frische** DB restoren (`scripts/restore.sh`, TimescaleDB-aware via

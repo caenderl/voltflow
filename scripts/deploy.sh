@@ -74,19 +74,14 @@ run()  { echo "+ $*"; [ "$DRY" -eq 1 ] || "$@"; }
 
 step "Deploy [${services[*]}] -> $SERVER:~/$REMOTE_DIR (platform $PLATFORM)"
 
-# 0) Pre-flight: the bundle sync (step 3) ships the TLS cert for nginx; fail
-# fast BEFORE building/transferring images instead of aborting mid-deploy
-# with the new images already loaded on the server.
-if [ ! -f certs/voltflow.crt ] || [ ! -f certs/voltflow.key ]; then
-  echo "ERROR: certs/voltflow.crt / certs/voltflow.key missing (gitignored, per-machine)." >&2
-  echo "       Generate them with mkcert - see README, 'HTTPS-Zertifikat' section." >&2
-  exit 1
-fi
-
-# The frontend joins the shared `edge` network (see docker-compose.prod.yml).
-# No compose file creates it, deliberately, so it does NOT reappear on its own
-# after a server rebuild - and without it the frontend container will not start
-# at all, taking the whole UI down over a missing one-liner.
+# 0) Pre-flight: the frontend joins the shared `edge` network (see
+# docker-compose.prod.yml) to be reachable from the ingress
+# (https://github.com/caenderl/ingress-deploy), which terminates TLS for it.
+# No compose file creates `edge`, deliberately, so it does NOT reappear on its
+# own after a server rebuild - and without it the frontend container will not
+# start at all, taking the whole UI down over a missing one-liner. Fail fast
+# BEFORE building/transferring images instead of aborting mid-deploy with the
+# new images already loaded on the server.
 if [ "$DRY" -eq 0 ] && printf '%s\n' "${services[@]}" | grep -qx frontend; then
   ssh "$SERVER" "docker network inspect edge >/dev/null 2>&1" || {
     echo "ERROR: network 'edge' does not exist on $SERVER." >&2
@@ -107,15 +102,12 @@ else
   docker save "${images[@]}" | gzip | ssh "$SERVER" 'gunzip | docker load'
 fi
 
-# 3) Sync the deploy bundle (compose always; init.sql/certs harmless; .env opt-in)
+# 3) Sync the deploy bundle (compose always; init.sql harmless; .env opt-in).
+# No certs here any more - TLS lives in the ingress repo, not this one.
 step "Sync bundle"
-run ssh "$SERVER" "mkdir -p ~/$REMOTE_DIR/db ~/$REMOTE_DIR/certs"
+run ssh "$SERVER" "mkdir -p ~/$REMOTE_DIR/db"
 run scp "$COMPOSE_FILE" "$SERVER:$REMOTE_DIR/$COMPOSE_FILE"
 run scp db/init.sql "$SERVER:$REMOTE_DIR/db/init.sql"
-run scp certs/voltflow.crt certs/voltflow.key "$SERVER:$REMOTE_DIR/certs/"
-# nginx-unprivileged runs as a non-root user; scp preserves the local 600 mode
-# on the key, which that user can't read - relax it on the server copy only.
-run ssh "$SERVER" "chmod 644 ~/$REMOTE_DIR/certs/voltflow.key"
 if [ "$PUSH_ENV" -eq 1 ]; then
   run scp .env "$SERVER:$REMOTE_DIR/.env"
 else
