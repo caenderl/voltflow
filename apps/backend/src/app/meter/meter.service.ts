@@ -150,33 +150,58 @@ export class MeterService implements HasLatestPerDevice<MeterReading>, HasRange 
   }
 
   /**
-   * Energy summary for a time range. kWh = delta of the cumulative meter
-   * readings (max - min per bucket; the counter is monotonically increasing),
-   * taken per device and only then summed - a plain max() - min() across
-   * devices would subtract one meter's counter from another's. The same shape
-   * billing and the checkpoint reconciliation already use.
+   * Energy summary for a time range. kWh = the cumulative meter counter's delta
+   * between adjacent hourly buckets (`last()` per bucket, so the delta is
+   * bucket-to-bucket, never max - min *within* a bucket, which would drop the
+   * first hour), taken per device and only then summed - a plain delta across
+   * devices would subtract one meter's counter from another's.
+   *
+   * Reads `grid_meter_1hour`, not the raw `grid_meter_readings`: the raw table
+   * is dropped after 30 days, so a raw-backed query silently loses its earliest
+   * bars the moment the period reaches past that window (a month view a few days
+   * into a new month, any older week). The hourly aggregate is kept for two
+   * years and is fine enough to re-bucket into local calendar days here.
+   *
+   * A delta is only taken where the previous bucket is exactly one hour back,
+   * so a collector outage does not book the whole gap onto the hour it ended in;
+   * negative deltas (a meter swap / counter reset) are dropped too. One extra
+   * leading hour is pulled in so the first in-range bucket still has a
+   * predecessor to diff against.
    */
   async energy(
     period: EnergyPeriod,
     from: Date,
     to: Date,
   ): Promise<EnergySummary> {
-    const bucketInterval = period === 'day' ? '1 hour' : '1 day';
+    // day -> one bar per hour (the aggregate's own bucket); week/month -> one
+    // bar per LOCAL calendar day, so a "day" is not a UTC day. $3 is only
+    // referenced on the non-day path, so it is passed only then (pg rejects a
+    // param the statement never uses).
+    const bucketExpr =
+      period === 'day'
+        ? 'bucket'
+        : '((bucket AT TIME ZONE $3)::date::timestamp AT TIME ZONE $3)';
+    const params =
+      period === 'day' ? [from, to] : [from, to, TIMEZONE];
 
-    // Bucket in local time so a "day" is a local calendar day (not a UTC day).
     const { rows } = await this.db.query(
-      `SELECT bucket, sum(dev_import) AS import_kwh, sum(dev_export) AS export_kwh
-         FROM (
-           SELECT time_bucket($1::interval, time, $4) AS bucket, device_sn,
-                  max(grid_import_energy) - min(grid_import_energy) AS dev_import,
-                  max(grid_export_energy) - min(grid_export_energy) AS dev_export
-             FROM grid_meter_readings
-            WHERE time >= $2 AND time < $3
-            GROUP BY bucket, device_sn
-         ) d
-        GROUP BY bucket
-        ORDER BY bucket`,
-      [bucketInterval, from, to, TIMEZONE],
+      `WITH hourly AS (
+         SELECT bucket,
+                grid_import_energy - lag(grid_import_energy) OVER w AS di,
+                grid_export_energy - lag(grid_export_energy) OVER w AS de,
+                bucket - lag(bucket) OVER w AS gap
+           FROM grid_meter_1hour
+          WHERE bucket >= ($1::timestamptz - INTERVAL '1 hour') AND bucket < $2
+            AND grid_import_energy IS NOT NULL AND grid_export_energy IS NOT NULL
+          WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
+       )
+       SELECT ${bucketExpr} AS bucket,
+              sum(di) AS import_kwh, sum(de) AS export_kwh
+         FROM hourly
+        WHERE gap = INTERVAL '1 hour' AND di >= 0 AND de >= 0 AND bucket >= $1
+        GROUP BY 1
+        ORDER BY 1`,
+      params,
     );
 
     const buckets: EnergyBucket[] = rows.map((r) => ({
@@ -185,27 +210,21 @@ export class MeterService implements HasLatestPerDevice<MeterReading>, HasRange 
       exportKwh: round3(Number(r['export_kwh'] ?? 0)),
     }));
 
-    // Totals computed directly as a delta over the whole range (more accurate
-    // than summing the buckets).
-    const { rows: totalRows } = await this.db.query(
-      `SELECT sum(dev_import) AS import_kwh, sum(dev_export) AS export_kwh
-         FROM (
-           SELECT max(grid_import_energy) - min(grid_import_energy) AS dev_import,
-                  max(grid_export_energy) - min(grid_export_energy) AS dev_export
-             FROM grid_meter_readings
-            WHERE time >= $1 AND time < $2
-            GROUP BY device_sn
-         ) d`,
-      [from, to],
-    );
-    const total = totalRows[0] ?? {};
+    // Totals are the sum of the same adjacent-hour deltas, so the bucket sums
+    // add up to them exactly - no separate range query needed.
+    let importKwh = 0;
+    let exportKwh = 0;
+    for (const r of rows) {
+      importKwh += Number(r['import_kwh'] ?? 0);
+      exportKwh += Number(r['export_kwh'] ?? 0);
+    }
 
     return {
       period,
       from: from.toISOString(),
       to: to.toISOString(),
-      importKwh: round3(Number(total['import_kwh'] ?? 0)),
-      exportKwh: round3(Number(total['export_kwh'] ?? 0)),
+      importKwh: round3(importKwh),
+      exportKwh: round3(exportKwh),
       buckets,
     };
   }
