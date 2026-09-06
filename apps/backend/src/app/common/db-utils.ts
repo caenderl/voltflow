@@ -47,7 +47,7 @@ export function round4(v: number): number {
   return Math.round(v * 10000) / 10000;
 }
 
-/** Map a `SELECT min(time) AS first, max(time) AS last` row to a DataRange. */
+/** Map a row aliased `... AS first, ... AS last` (min/max of a time column) to a DataRange. */
 export function toDataRange(row: Record<string, unknown> | undefined): DataRange {
   const r = row ?? {};
   return {
