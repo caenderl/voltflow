@@ -26,8 +26,8 @@ import { rowToReading } from './meter.mapper';
  *
  * "What did the house draw from the grid" is the `grid-meter` role's question,
  * not this vendor's, so a device that does not carry the role must not appear
- * here. latest()/range() below stay on the raw table on purpose: those describe
- * one device, and latest() even names it.
+ * here. latest() below stays on the raw table on purpose: it describes one
+ * device and even names it.
  */
 const VIEW_BY_RESOLUTION: Record<Exclude<SeriesResolution, 'raw'>, string> = {
   '1min': 'grid_meter_1min',
@@ -70,9 +70,18 @@ export class MeterService implements HasLatestPerDevice<MeterReading>, HasRange 
     };
   }
 
+  /**
+   * How far the history and billing views can page back/forward — so it must
+   * report the span the CHARTS can render, not the raw table's. Raw
+   * `meter_reading` is dropped after 30 days, while `energy()` reads
+   * `grid_meter_1hour` (kept two years) for every period, so the hourly
+   * aggregate is the real floor. Reading `min(time) FROM meter_reading` here
+   * pinned "first" at 30 days ago and stranded every older month that still has
+   * hourly data.
+   */
   async range(): Promise<DataRange> {
     const { rows } = await this.db.query(
-      `SELECT min(time) AS first, max(time) AS last FROM meter_reading`,
+      `SELECT min(bucket) AS first, max(bucket) AS last FROM grid_meter_1hour`,
     );
     return toDataRange(rows[0]);
   }
