@@ -63,7 +63,9 @@ wraps it in a `_run_<device>(pool, cfg)` task with reconnect logic.
 `collector.py` runs one or all collectors, chosen by the **`COLLECTOR`** env
 (`meter | sma | wallbox | all`). In prod each collector is its own slim image /
 container (`Dockerfile.<device>`, `requirements-<device>.txt`, `COLLECTOR` baked
-in) shipping only its own deps; `all` — the default, used by `npm run collector`
+in) shipping only its own deps — installed from `requirements-<device>.lock`
+(exact versions; edit the `.txt` ranges, then regenerate with
+`scripts/lock-collector-deps.sh <device>`, never hand-bump the lock); `all` — the default, used by `npm run collector`
 — runs all three in one process. Stream modules are therefore imported **lazily
 inside** each `_run_*`, never at module top (the sma/wallbox images don't have
 anker-solix-api/pymodbus). Config-gated collectors (sma/wallbox) run under
@@ -105,7 +107,8 @@ Adding a device:
 4. **Schema** — a new reading table needs its hypertable, notify trigger,
    aggregates and a role view per role it serves; a new *driver* for a role that
    already has views does not.
-5. **Packaging** — `Dockerfile.<device>`, `requirements-<device>.txt`, a
+5. **Packaging** — `Dockerfile.<device>`, `requirements-<device>.txt` + its
+   `.lock` (`scripts/lock-collector-deps.sh`), a
    `collector-<device>` service in `docker-compose.prod.yml`, a deploy target in
    `scripts/deploy.sh`.
 
