@@ -2,9 +2,10 @@
 FROM python:3.12-slim
 WORKDIR /app
 
-# Runtime deps only (no git / anker-solix-api needed for this collector).
-COPY requirements-common.txt requirements-sma.txt ./
-RUN pip install --no-cache-dir -r requirements-sma.txt
+# Runtime deps only (no git / anker-solix-api needed for this collector), at
+# the exact versions in the lockfile - see scripts/lock-collector-deps.sh.
+COPY requirements-sma.lock ./
+RUN pip install --no-cache-dir -r requirements-sma.lock
 
 COPY . /app
 

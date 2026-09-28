@@ -1,0 +1,8 @@
+# GENERATED - exact versions installed into the collector-wallbox image.
+# Edit requirements-wallbox.txt (the ranges), then regenerate with
+#   scripts/lock-collector-deps.sh wallbox
+# Seeded from the image running in prod at v1.4.3 (pip freeze), so the first
+# rebuild installs exactly the set that has been running there.
+asyncpg==0.31.0
+pymodbus==3.13.1
+python-dotenv==1.2.2
