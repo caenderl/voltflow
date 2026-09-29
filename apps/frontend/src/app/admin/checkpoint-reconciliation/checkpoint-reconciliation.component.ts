@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import type { ReconciliationStatus } from '@org/shared-types';
 import { DashboardDataService } from '../../dashboard/dashboard-data.service';
 import { SettingsCardComponent } from '../../ui/settings-card/settings-card.component';
@@ -33,7 +33,6 @@ function describeDeviation(pct: number | null, label: string): string | null {
   standalone: true,
   imports: [DatePipe, DecimalPipe, SettingsCardComponent],
   templateUrl: './checkpoint-reconciliation.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './checkpoint-reconciliation.component.scss',
 })
 export class CheckpointReconciliationComponent {

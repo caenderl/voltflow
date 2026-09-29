@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import type { TariffPeriod } from '@org/shared-types';
 import { toLocalDateString } from '../../core/date-utils';
 import { DashboardDataService } from '../../dashboard/dashboard-data.service';
@@ -17,7 +17,6 @@ import { TextFieldComponent } from '../../ui/text-field/text-field.component';
   standalone: true,
   imports: [DatePipe, DecimalPipe, SettingsCardComponent, TextFieldComponent, NumberFieldComponent],
   templateUrl: './tariffs-section.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './tariffs-section.component.scss',
 })
 export class TariffsSectionComponent {

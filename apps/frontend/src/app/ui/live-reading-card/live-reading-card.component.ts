@@ -1,4 +1,4 @@
-import { Component, input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, input } from '@angular/core';
 
 /**
  * A live device reading: icon + name, a status pill, a big value with unit,
@@ -21,7 +21,6 @@ import { Component, input, ChangeDetectionStrategy } from '@angular/core';
       <ng-content />
     </section>
   `,
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './live-reading-card.component.scss',
 })
 export class LiveReadingCardComponent {

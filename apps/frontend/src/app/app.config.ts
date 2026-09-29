@@ -6,7 +6,7 @@ import {
 } from '@angular/core';
 import { registerLocaleData } from '@angular/common';
 import localeDe from '@angular/common/locales/de';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { provideHttpClient } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
 import { provideEchartsCore } from 'ngx-echarts';
@@ -25,7 +25,7 @@ export const appConfig: ApplicationConfig = {
       withComponentInputBinding(),
       withRouterConfig({ onSameUrlNavigation: 'reload' }),
     ),
-    provideHttpClient(withXhr()),
+    provideHttpClient(),
     // Only the modules the charts use (see core/echarts.ts), still lazy.
     provideEchartsCore({ echarts: () => import('./core/echarts').then((m) => m.echarts) }),
     { provide: LOCALE_ID, useValue: 'de-DE' },

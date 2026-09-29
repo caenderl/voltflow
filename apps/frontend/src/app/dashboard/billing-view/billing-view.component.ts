@@ -1,4 +1,4 @@
-import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
+import { Component, input, output } from '@angular/core';
 import type { BillingStatement } from '@org/shared-types';
 import { BillingMonthsComponent } from '../billing-months/billing-months.component';
 import { BillingPeriodsComponent } from '../billing-periods/billing-periods.component';
@@ -13,7 +13,6 @@ import { BillingSummaryComponent } from '../billing-summary/billing-summary.comp
   standalone: true,
   imports: [BillingSummaryComponent, BillingMonthsComponent, BillingPeriodsComponent],
   templateUrl: './billing-view.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './billing-view.component.scss',
 })
 export class BillingViewComponent {

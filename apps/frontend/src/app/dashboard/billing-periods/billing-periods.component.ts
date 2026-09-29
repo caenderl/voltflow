@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, input, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, input, signal } from '@angular/core';
 import type { BillingPeriod } from '@org/shared-types';
 
 /**
@@ -12,7 +12,6 @@ import type { BillingPeriod } from '@org/shared-types';
   standalone: true,
   imports: [DatePipe, DecimalPipe],
   templateUrl: './billing-periods.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './billing-periods.component.scss',
 })
 export class BillingPeriodsComponent {
