@@ -49,47 +49,35 @@ export class StatisticsService {
   }
 
   /**
-   * Per-hour energy: PV production plus the meter's import / feed-in, each as
-   * the delta of its cumulative counter between two adjacent buckets.
+   * Per-hour energy: PV production plus the meter's import / feed-in, from the
+   * hourly ledger (`producer_energy_1hour`, `grid_energy_1hour`) - the same
+   * hours the history bars and the balance sum.
    *
-   * Adjacent, not `max − min` within the day: the aggregates store `last()` per
-   * bucket, so a day's `min` is its *first hour's end* — that reading of the
-   * counters would silently drop the first hour of every day.
+   * Only MEASURED hours: the ledger spreads an outage evenly over the hours it
+   * covers (right for totals, meaningless for a record or a battery
+   * simulation), so an hour any grid meter only has an estimate or no valid
+   * delta for (a counter reset) is left out entirely, exactly as a missing
+   * hour always was - which is what keeps a half-covered day out of the
+   * records.
    *
-   * A delta is only taken where the previous bucket is exactly one hour back,
-   * which is what keeps a collector outage from booking the whole gap onto the
-   * hour it ended in. Negative deltas are dropped as well (a meter swap or a
-   * counter reset, never consumption).
-   *
-   * PV is null where the inverter has no bucket — unknown, not zero — except
-   * when there is no inverter data at all: a house without PV consumes exactly
-   * what it imports, and every figure here would otherwise be empty.
+   * PV is null where the inverter has no measured hour - unknown, not zero -
+   * except when there is no inverter data at all: a house without PV consumes
+   * exactly what it imports, and every figure here would otherwise be empty.
    */
   private async hourlyEnergy(): Promise<HourEnergy[]> {
     const { rows } = await this.db.query(
       `WITH pv AS (
-         SELECT bucket, sum(d) AS pv_kwh FROM (
-           SELECT bucket,
-                  total_yield_kwh - lag(total_yield_kwh) OVER w AS d,
-                  bucket - lag(bucket) OVER w AS gap
-             FROM producer_1hour
-            WHERE total_yield_kwh IS NOT NULL
-           WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
-         ) x
-          WHERE gap = INTERVAL '1 hour' AND d >= 0
+         SELECT bucket,
+                CASE WHEN bool_or(estimated) OR count(pv_kwh) < count(*) THEN NULL
+                     ELSE sum(pv_kwh) END AS pv_kwh
+           FROM producer_energy_1hour
           GROUP BY bucket
        ), grid AS (
-         SELECT bucket, sum(di) AS import_kwh, sum(de) AS export_kwh FROM (
-           SELECT bucket,
-                  grid_import_energy - lag(grid_import_energy) OVER w AS di,
-                  grid_export_energy - lag(grid_export_energy) OVER w AS de,
-                  bucket - lag(bucket) OVER w AS gap
-             FROM grid_meter_1hour
-            WHERE grid_import_energy IS NOT NULL AND grid_export_energy IS NOT NULL
-           WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
-         ) x
-          WHERE gap = INTERVAL '1 hour' AND di >= 0 AND de >= 0
+         SELECT bucket, sum(import_kwh) AS import_kwh, sum(export_kwh) AS export_kwh
+           FROM grid_energy_1hour
           GROUP BY bucket
+         HAVING NOT bool_or(estimated)
+            AND count(import_kwh) = count(*) AND count(export_kwh) = count(*)
        )
        SELECT (g.bucket AT TIME ZONE $1)::date::text        AS day,
               extract(hour FROM g.bucket AT TIME ZONE $1)   AS hour,

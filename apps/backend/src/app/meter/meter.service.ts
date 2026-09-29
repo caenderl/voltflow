@@ -159,23 +159,14 @@ export class MeterService implements HasLatestPerDevice<MeterReading>, HasRange 
   }
 
   /**
-   * Energy summary for a time range. kWh = the cumulative meter counter's delta
-   * between adjacent hourly buckets (`last()` per bucket, so the delta is
-   * bucket-to-bucket, never max - min *within* a bucket, which would drop the
-   * first hour), taken per device and only then summed - a plain delta across
-   * devices would subtract one meter's counter from another's.
+   * Energy summary for a time range: the grid ledger (`grid_energy_1hour`,
+   * see schema.ts 084) summed per hour or per local day. The ledger is where
+   * the counters become kWh - per device, hour by hour, with an outage spread
+   * over the hours it covers - so these bars, the balance next to them and the
+   * statistics all rest on the same figures.
    *
-   * Reads `grid_meter_1hour`, not the raw `grid_meter_readings`: the raw table
-   * is dropped after 30 days, so a raw-backed query silently loses its earliest
-   * bars the moment the period reaches past that window (a month view a few days
-   * into a new month, any older week). The hourly aggregate is kept for two
-   * years and is fine enough to re-bucket into local calendar days here.
-   *
-   * A delta is only taken where the previous bucket is exactly one hour back,
-   * so a collector outage does not book the whole gap onto the hour it ended in;
-   * negative deltas (a meter swap / counter reset) are dropped too. One extra
-   * leading hour is pulled in so the first in-range bucket still has a
-   * predecessor to diff against.
+   * It sits on the hourly aggregate (kept two years), not the raw readings
+   * (dropped after 30 days), so an older month keeps its bars.
    */
   async energy(
     period: EnergyPeriod,
@@ -194,20 +185,10 @@ export class MeterService implements HasLatestPerDevice<MeterReading>, HasRange 
       period === 'day' ? [from, to] : [from, to, TIMEZONE];
 
     const { rows } = await this.db.query(
-      `WITH hourly AS (
-         SELECT bucket,
-                grid_import_energy - lag(grid_import_energy) OVER w AS di,
-                grid_export_energy - lag(grid_export_energy) OVER w AS de,
-                bucket - lag(bucket) OVER w AS gap
-           FROM grid_meter_1hour
-          WHERE bucket >= ($1::timestamptz - INTERVAL '1 hour') AND bucket < $2
-            AND grid_import_energy IS NOT NULL AND grid_export_energy IS NOT NULL
-          WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
-       )
-       SELECT ${bucketExpr} AS bucket,
-              sum(di) AS import_kwh, sum(de) AS export_kwh
-         FROM hourly
-        WHERE gap = INTERVAL '1 hour' AND di >= 0 AND de >= 0 AND bucket >= $1
+      `SELECT ${bucketExpr} AS bucket,
+              sum(import_kwh) AS import_kwh, sum(export_kwh) AS export_kwh
+         FROM grid_energy_1hour
+        WHERE bucket >= $1 AND bucket < $2
         GROUP BY 1
         ORDER BY 1`,
       params,
@@ -219,7 +200,7 @@ export class MeterService implements HasLatestPerDevice<MeterReading>, HasRange 
       exportKwh: round3(Number(r['export_kwh'] ?? 0)),
     }));
 
-    // Totals are the sum of the same adjacent-hour deltas, so the bucket sums
+    // Totals are the sum of the same ledger hours, so the bucket sums
     // add up to them exactly - no separate range query needed.
     let importKwh = 0;
     let exportKwh = 0;
