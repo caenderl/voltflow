@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { BillingStatement } from '@org/shared-types';
 import { BillingApiService } from '../../core/billing-api.service';
@@ -17,6 +17,7 @@ import { BillingViewComponent } from '../billing-view/billing-view.component';
   selector: 'app-billing-container',
   standalone: true,
   imports: [BillingViewComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <app-billing-view
       [statement]="statement()"

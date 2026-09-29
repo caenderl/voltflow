@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsCoreOption } from 'echarts/core';
@@ -35,6 +35,7 @@ export interface DeviceCard<S> {
   standalone: true,
   imports: [CommonModule, NgxEchartsDirective, WallboxCardComponent, SmaCardComponent],
   templateUrl: './live-view.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './live-view.component.scss',
 })
 export class LiveViewComponent {

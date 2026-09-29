@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 
 /**
  * One admin-panel metric: a label + coloured headline value, a sub-line, and
@@ -21,6 +21,7 @@ import { Component, input } from '@angular/core';
       <ng-content />
     </article>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './metric-tile.component.scss',
 })
 export class MetricTileComponent {

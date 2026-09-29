@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 
 /** Which semantic the headline figure carries (colours the value and the dot). */
 export type StatAccent = 'solar' | 'import' | 'primary';
@@ -30,6 +30,7 @@ const EM_DASH = '–';
       <ng-content />
     </section>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stat-card.component.scss',
 })
 export class StatCardComponent {

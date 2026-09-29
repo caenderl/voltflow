@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import {
   DEVICE_ROLES,
@@ -35,6 +35,7 @@ interface RegistryRow {
   standalone: true,
   imports: [SettingsCardComponent, DatePipe],
   templateUrl: './device-registry-list.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './device-registry-list.component.scss',
 })
 export class DeviceRegistryListComponent {

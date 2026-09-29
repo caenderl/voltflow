@@ -1,4 +1,4 @@
-import { Component, input, model } from '@angular/core';
+import { Component, input, model, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 /**
@@ -16,6 +16,7 @@ import { FormsModule } from '@angular/forms';
       <span class="switch-label">{{ checked() ? activeLabel() : inactiveLabel() }}</span>
     </label>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './toggle-switch.component.scss',
 })
 export class ToggleSwitchComponent {

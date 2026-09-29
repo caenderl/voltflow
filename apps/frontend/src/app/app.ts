@@ -3,6 +3,7 @@ import {
   DestroyRef,
   inject,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
@@ -22,6 +23,7 @@ import { DashboardDataService } from './dashboard/dashboard-data.service';
     </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .update-banner {

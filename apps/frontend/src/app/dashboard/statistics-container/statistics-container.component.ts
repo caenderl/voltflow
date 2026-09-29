@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type { StatisticsResponse } from '@org/shared-types';
 import { StatisticsApiService } from '../../core/statistics-api.service';
@@ -13,6 +13,7 @@ import { StatisticsViewComponent } from '../statistics-view/statistics-view.comp
   selector: 'app-statistics-container',
   standalone: true,
   imports: [StatisticsViewComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <app-statistics-view
       [statistics]="statistics()"

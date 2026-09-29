@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import type { ContainerStatus } from '@org/shared-types';
 
 /** Read-only list of the stack's Docker containers with a state badge. */
@@ -6,6 +6,7 @@ import type { ContainerStatus } from '@org/shared-types';
   selector: 'app-system-containers',
   standalone: true,
   templateUrl: './system-containers.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './system-containers.component.scss',
 })
 export class SystemContainersComponent {

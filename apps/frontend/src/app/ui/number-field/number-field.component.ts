@@ -1,4 +1,4 @@
-import { Component, input, model } from '@angular/core';
+import { Component, input, model, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 /**
@@ -24,6 +24,7 @@ import { FormsModule } from '@angular/forms';
       />
     </label>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: '../field.scss',
 })
 export class NumberFieldComponent {

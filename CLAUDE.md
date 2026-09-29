@@ -8,9 +8,9 @@ Full architecture, API table and deployment: see @README.md.
 
 ## Stack
 
-- **NX 23** monorepo (npm workspaces), TypeScript 5.9
+- **NX 23** monorepo (npm workspaces), TypeScript 6.0
 - `apps/backend` — NestJS 11, REST + WebSocket, `pg`
-- `apps/frontend` — Angular 21, ngx-echarts
+- `apps/frontend` — Angular 22, ngx-echarts
 - `apps/collector` — Python (asyncio), **not** NX/Node — runs in the `venv`
 - `libs/shared-types` — shared TS types between backend and frontend
 - DB: TimescaleDB, pinned to `timescale/timescaledb:2.28.1-pg16`

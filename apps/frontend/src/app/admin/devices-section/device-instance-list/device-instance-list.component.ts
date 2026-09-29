@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DRIVER_TRAITS, type DeviceDriver } from '@org/shared-types';
 import {
   DeviceRegistryService,
@@ -31,6 +31,7 @@ import { ToggleSwitchComponent } from '../../../ui/toggle-switch/toggle-switch.c
   standalone: true,
   imports: [SettingsCardComponent, ToggleSwitchComponent, TextFieldComponent, NumberFieldComponent],
   templateUrl: './device-instance-list.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './device-instance-list.component.scss',
 })
 export class DeviceInstanceListComponent implements OnInit {
