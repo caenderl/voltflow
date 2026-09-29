@@ -26,7 +26,8 @@ export const appConfig: ApplicationConfig = {
       withRouterConfig({ onSameUrlNavigation: 'reload' }),
     ),
     provideHttpClient(),
-    provideEchartsCore({ echarts: () => import('echarts') }),
+    // Only the modules the charts use (see core/echarts.ts), still lazy.
+    provideEchartsCore({ echarts: () => import('./core/echarts').then((m) => m.echarts) }),
     { provide: LOCALE_ID, useValue: 'de-DE' },
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),

@@ -18,9 +18,39 @@ const MIN_NIGHT_SAMPLES = 240;
  */
 const NIGHT_PERCENTILE = 0.1;
 
+/**
+ * How long a computed result is served again. The figures are all-time
+ * records over hourly aggregates (and a 1-minute peak), so ten minutes of
+ * delay changes nothing anyone reads off them; recomputing costs ~0.4 s in
+ * prod and grows with the history the hourly aggregates keep (two years).
+ * The one visible staleness: a device's roles changed in the admin page reach
+ * the statistics up to ten minutes later.
+ */
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
 @Injectable()
 export class StatisticsService {
+  /**
+   * The last computation, as a promise: concurrent requests while it is still
+   * running share it instead of each starting their own.
+   */
+  private cached: { at: number; result: Promise<StatisticsResponse> } | null = null;
+
   constructor(private readonly db: DbService) {}
+
+  /** {@link compute}, served from memory for {@link CACHE_TTL_MS}. */
+  statistics(): Promise<StatisticsResponse> {
+    const now = Date.now();
+    if (this.cached && now - this.cached.at < CACHE_TTL_MS) return this.cached.result;
+
+    const result = this.compute();
+    this.cached = { at: now, result };
+    // A failed computation must not be served for the next ten minutes.
+    result.catch(() => {
+      if (this.cached?.result === result) this.cached = null;
+    });
+    return result;
+  }
 
   /**
    * All-time records over everything the database still holds.
@@ -31,7 +61,7 @@ export class StatisticsService {
    * are UTC on both sides and join exactly; the local day is assembled from
    * them here.
    */
-  async statistics(): Promise<StatisticsResponse> {
+  private async compute(): Promise<StatisticsResponse> {
     const [hours, nights, pvPeak, housePeak] = await Promise.all([
       this.hourlyEnergy(),
       this.nightBaselines(),
