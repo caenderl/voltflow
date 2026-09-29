@@ -28,6 +28,42 @@ case "${RESTIC_REPOSITORY:-}" in
   rclone:*) command -v rclone >/dev/null || { echo "rclone not installed (needed for the rclone: backend)" >&2; exit 1; } ;;
 esac
 
+# Google Drive throttles hard (RATE_LIMIT_EXCEEDED), worst of all on rclone's
+# shared default client ID. rclone then backs off internally while restic,
+# which gives it one minute to open the repo, gives up first: "unable to open
+# repository ... context deadline exceeded". A longer open timeout lets
+# rclone's own backoff finish; the retry below covers the throttle outlasting
+# even that. Both are harmless on an unthrottled backend.
+RESTIC_GLOBAL=()
+case "${RESTIC_REPOSITORY:-}" in
+  rclone:*) RESTIC_GLOBAL+=(-o "rclone.timeout=${RCLONE_OPEN_TIMEOUT:-5m}") ;;
+esac
+# Every restic call below (write_status included) goes through this.
+restic() { command restic ${RESTIC_GLOBAL[@]+"${RESTIC_GLOBAL[@]}"} "$@"; }
+
+# Network steps are retried: a throttled night used to lose the whole off-site
+# run. Each step is safe to repeat - a retried backup is at worst a second
+# snapshot the retention folds away, forget/prune and check are idempotent,
+# and a lock left by the failed attempt belongs to a dead process on this host,
+# which restic treats as stale.
+ATTEMPTS="${ATTEMPTS:-3}"
+RETRY_DELAY_S="${RETRY_DELAY_S:-300}"
+# Runs "$@" until it succeeds or ATTEMPTS are used up. The command sits in the
+# `until` condition, so a failed attempt neither aborts under `set -e` nor
+# fires the ERR trap; only the final failure (return 1) does.
+retry() {
+  local n=1
+  until "$@"; do
+    if [ "$n" -ge "$ATTEMPTS" ]; then
+      echo "[offsite] $stage failed after $n attempts" >&2
+      return 1
+    fi
+    echo "[offsite] $stage failed (attempt $n/$ATTEMPTS) - retrying in ${RETRY_DELAY_S}s ..." >&2
+    sleep "$RETRY_DELAY_S"
+    n=$((n + 1))
+  done
+}
+
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 # GFS retention (override in backup.env if desired).
 KEEP_DAILY="${KEEP_DAILY:-14}"
@@ -123,21 +159,25 @@ ping /start
 #    rewrites the whole stream); restic compresses the stored blobs itself.
 echo "[offsite] backing up database ..."
 stage="db"
-docker compose -f "$COMPOSE_FILE" exec -T db \
-  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
-  | restic backup --stdin --stdin-filename voltflow.sql --host voltflow --tag db
+# A function so a retry re-runs the whole pipe: stdin cannot be replayed.
+backup_db() {
+  docker compose -f "$COMPOSE_FILE" exec -T db \
+    sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+    | restic backup --stdin --stdin-filename voltflow.sql --host voltflow --tag db
+}
+retry backup_db
 
 # 2) Config needed to rebuild the host from bare metal: credentials (.env) and
 #    the TLS bundle. The restic repo is encrypted, so secrets are safe at rest.
 echo "[offsite] backing up config (.env, certs) ..."
 stage="config"
-restic backup --host voltflow --tag config .env certs
+retry restic backup --host voltflow --tag config .env certs
 
 # 3) GFS retention + prune (per snapshot group = per path, so db and config
 #    each keep their own daily/weekly/monthly set).
 echo "[offsite] applying retention (${KEEP_DAILY}d/${KEEP_WEEKLY}w/${KEEP_MONTHLY}m) ..."
 stage="retention"
-restic forget --host voltflow \
+retry restic forget --host voltflow \
   --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY" \
   --prune
 
@@ -145,7 +185,7 @@ restic forget --host voltflow \
 #    (restic check --read-data-subset=…) is worth scheduling weekly.
 echo "[offsite] verifying repository ..."
 stage="check"
-restic check
+retry restic check
 check_ok="true"
 
 # 5) Leave the summary the admin UI reads (see write_status above).
