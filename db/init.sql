@@ -93,7 +93,9 @@ FROM meter_reading
 GROUP BY device_sn, bucket
 WITH NO DATA;
 
--- 1-day buckets -> "month" view
+-- 1-day buckets, UTC days. Superseded by meter_1day_local (local days, built
+-- on meter_1hour by the backend's schema migrations), which is what
+-- grid_meter_1day and the billing read; kept so older databases stay intact.
 CREATE MATERIALIZED VIEW IF NOT EXISTS meter_1day
 WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT
@@ -109,15 +111,17 @@ FROM meter_reading
 GROUP BY device_sn, bucket
 WITH NO DATA;
 
--- Refresh policies (automatic background updates)
+-- Refresh policies (automatic background updates). Every start_offset stays
+-- well inside the raw retention below: a refresh whose window reaches into
+-- dropped raw chunks deletes the aggregate rows there (see schema.ts, 000).
 SELECT add_continuous_aggregate_policy('meter_1min',
     start_offset => INTERVAL '3 days',  end_offset => INTERVAL '1 minute',
     schedule_interval => INTERVAL '1 minute');
 SELECT add_continuous_aggregate_policy('meter_1hour',
-    start_offset => INTERVAL '30 days', end_offset => INTERVAL '1 hour',
+    start_offset => INTERVAL '7 days',  end_offset => INTERVAL '1 hour',
     schedule_interval => INTERVAL '1 hour');
 SELECT add_continuous_aggregate_policy('meter_1day',
-    start_offset => INTERVAL '1 year',  end_offset => INTERVAL '1 day',
+    start_offset => INTERVAL '7 days',  end_offset => INTERVAL '1 day',
     schedule_interval => INTERVAL '1 hour');
 
 -- Drop raw data after 30 days. Aggregates use tiered retention: minute/hour
@@ -230,11 +234,11 @@ SELECT add_continuous_aggregate_policy('wallbox_1min',
     end_offset        => INTERVAL '1 minute',
     schedule_interval => INTERVAL '1 minute');
 SELECT add_continuous_aggregate_policy('wallbox_1hour',
-    start_offset      => INTERVAL '90 days',
+    start_offset      => INTERVAL '7 days',
     end_offset        => INTERVAL '1 hour',
     schedule_interval => INTERVAL '1 hour');
 SELECT add_continuous_aggregate_policy('wallbox_1day',
-    start_offset      => INTERVAL '90 days',
+    start_offset      => INTERVAL '7 days',
     end_offset        => INTERVAL '1 day',
     schedule_interval => INTERVAL '1 hour');
 
@@ -342,10 +346,10 @@ SELECT add_continuous_aggregate_policy('sma_1min',
     start_offset => INTERVAL '3 days',  end_offset => INTERVAL '1 minute',
     schedule_interval => INTERVAL '1 minute');
 SELECT add_continuous_aggregate_policy('sma_1hour',
-    start_offset => INTERVAL '90 days', end_offset => INTERVAL '1 hour',
+    start_offset => INTERVAL '7 days',  end_offset => INTERVAL '1 hour',
     schedule_interval => INTERVAL '1 hour');
 SELECT add_continuous_aggregate_policy('sma_1day',
-    start_offset => INTERVAL '90 days', end_offset => INTERVAL '1 day',
+    start_offset => INTERVAL '7 days',  end_offset => INTERVAL '1 day',
     schedule_interval => INTERVAL '1 hour');
 
 SELECT add_retention_policy('sma_1min',  INTERVAL '90 days',  if_not_exists => TRUE);

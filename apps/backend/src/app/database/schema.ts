@@ -97,7 +97,9 @@ const ROLE_VIEWS: readonly (readonly [string, string, string, DeviceRole])[] = [
   ['067', 'grid_meter_readings', 'meter_reading', 'grid-meter'],
   ['068', 'grid_meter_1min', 'meter_1min', 'grid-meter'],
   ['069', 'grid_meter_1hour', 'meter_1hour', 'grid-meter'],
-  ['070', 'grid_meter_1day', 'meter_1day', 'grid-meter'],
+  // 070 (grid_meter_1day over the UTC meter_1day) moved to 083, onto the
+  // local-day meter_1day_local. Left here it would re-point the view at the
+  // old aggregate on every boot, only for 083 to move it back.
   ['071', 'consumer_1min', 'wallbox_1min', 'consumer'],
 ];
 
@@ -124,6 +126,65 @@ const LATE_ROLE_VIEWS: readonly (readonly [string, string, string, DeviceRole])[
 ];
 
 const MIGRATIONS: Migration[] = [
+  // ---------------------------------------------------------------------------
+  // Refresh windows inside the source's retention.
+  //
+  // Dropping raw chunks invalidates the aggregates over that range, and the
+  // next refresh whose window reaches into it recomputes those buckets from
+  // raw rows that are no longer there - i.e. DELETES them (verified on
+  // 2.28.1: a refresh over a dropped range took an hourly cagg from 481 to
+  // 247 rows). meter_1day refreshed a year back over 30 days of raw data and
+  // had therefore been deleting everything older than 30 days on every
+  // hourly run: its "10 years" held 34 days. The 1hour/1day windows of the
+  // other aggregates sat exactly on their raw retention (90 = 90 days), one
+  // bucket-floor away from the same loss.
+  //
+  // 7 days is far wider than any lateness the collectors produce, and far
+  // inside every retention. The creation steps below were moved to the same
+  // value: add_continuous_aggregate_policy(if_not_exists) with different
+  // offsets ERRORS on an existing policy ("refresh interval overlaps"), so
+  // they would otherwise fail on every boot after this step has run.
+  //
+  // Same shape as 046: re-create a policy only when its start_offset differs,
+  // a genuine no-op on every later boot. It runs FIRST, ahead of those
+  // creation steps, so on the boot that moves an existing database they
+  // already find the new offsets; an aggregate that does not exist yet (a
+  // fresh database before its creation step) is skipped, and gets the new
+  // offset from its creation step directly.
+  // ---------------------------------------------------------------------------
+  {
+    name: '000-refresh-windows-inside-retention',
+    sql: `DO $$
+          DECLARE
+            r   record;
+            cur interval;
+          BEGIN
+            FOR r IN
+              SELECT * FROM (VALUES
+                ('meter_1hour',   INTERVAL '1 hour'),
+                ('meter_1day',    INTERVAL '1 day'),
+                ('sma_1hour',     INTERVAL '1 hour'),
+                ('sma_1day',      INTERVAL '1 day'),
+                ('wallbox_1hour', INTERVAL '1 hour'),
+                ('wallbox_1day',  INTERVAL '1 day')
+              ) AS t(view_name, end_off)
+            LOOP
+              CONTINUE WHEN to_regclass(r.view_name) IS NULL;
+              cur := NULL;
+              SELECT (config->>'start_offset')::interval INTO cur
+                FROM timescaledb_information.jobs
+               WHERE proc_name = 'policy_refresh_continuous_aggregate'
+                 AND hypertable_name = r.view_name;
+              IF cur IS DISTINCT FROM INTERVAL '7 days' THEN
+                PERFORM remove_continuous_aggregate_policy(r.view_name::regclass, if_exists => TRUE);
+                PERFORM add_continuous_aggregate_policy(r.view_name::regclass,
+                          start_offset      => INTERVAL '7 days',
+                          end_offset        => r.end_off,
+                          schedule_interval => INTERVAL '1 hour');
+              END IF;
+            END LOOP;
+          END $$`,
+  },
   {
     name: '001-tariff-table',
     sql: `CREATE TABLE IF NOT EXISTS tariff (
@@ -232,7 +293,7 @@ const MIGRATIONS: Migration[] = [
   {
     name: '014-wallbox-1hour-policy',
     sql: `SELECT add_continuous_aggregate_policy('wallbox_1hour',
-            start_offset      => INTERVAL '90 days',
+            start_offset      => INTERVAL '7 days',
             end_offset        => INTERVAL '1 hour',
             schedule_interval => INTERVAL '1 hour',
             if_not_exists     => TRUE)`,
@@ -259,7 +320,7 @@ const MIGRATIONS: Migration[] = [
   {
     name: '017-wallbox-1day-policy',
     sql: `SELECT add_continuous_aggregate_policy('wallbox_1day',
-            start_offset      => INTERVAL '90 days',
+            start_offset      => INTERVAL '7 days',
             end_offset        => INTERVAL '1 day',
             schedule_interval => INTERVAL '1 hour',
             if_not_exists     => TRUE)`,
@@ -380,7 +441,7 @@ const MIGRATIONS: Migration[] = [
   {
     name: '031-sma-1hour-policy',
     sql: `SELECT add_continuous_aggregate_policy('sma_1hour',
-            start_offset => INTERVAL '90 days', end_offset => INTERVAL '1 hour',
+            start_offset => INTERVAL '7 days', end_offset => INTERVAL '1 hour',
             schedule_interval => INTERVAL '1 hour', if_not_exists => TRUE)`,
   },
   {
@@ -405,7 +466,7 @@ const MIGRATIONS: Migration[] = [
   {
     name: '034-sma-1day-policy',
     sql: `SELECT add_continuous_aggregate_policy('sma_1day',
-            start_offset => INTERVAL '90 days', end_offset => INTERVAL '1 day',
+            start_offset => INTERVAL '7 days', end_offset => INTERVAL '1 day',
             schedule_interval => INTERVAL '1 hour', if_not_exists => TRUE)`,
   },
   {
@@ -786,7 +847,7 @@ const MIGRATIONS: Migration[] = [
     // Must be its own statement: CREATE MATERIALIZED VIEW ... WITH DATA is
     // rejected inside a transaction block (and inside DO). WITH DATA rather
     // than WITH NO DATA so the whole history is materialized here, instead of
-    // leaving every query before the policy's 90 days start_offset to fall
+    // leaving every query before the policy's start_offset to fall
     // through to a live aggregate over raw for the rest of the retention.
     // IF NOT EXISTS makes it a no-op once built.
     name: '057-wallbox-1hour-rebuild',
@@ -805,7 +866,7 @@ const MIGRATIONS: Migration[] = [
   {
     name: '058-wallbox-1hour-policies',
     sql: `SELECT add_continuous_aggregate_policy('wallbox_1hour',
-            start_offset      => INTERVAL '90 days',
+            start_offset      => INTERVAL '7 days',
             end_offset        => INTERVAL '1 hour',
             schedule_interval => INTERVAL '1 hour',
             if_not_exists     => TRUE);
@@ -843,7 +904,7 @@ const MIGRATIONS: Migration[] = [
     // Must be its own statement: CREATE MATERIALIZED VIEW ... WITH DATA is
     // rejected inside a transaction block (and inside DO). WITH DATA rather
     // than WITH NO DATA so the whole history is materialized here, instead of
-    // leaving every query before the policy's 90 days start_offset to fall
+    // leaving every query before the policy's start_offset to fall
     // through to a live aggregate over raw for the rest of the retention.
     // IF NOT EXISTS makes it a no-op once built.
     name: '060-wallbox-1day-rebuild',
@@ -862,7 +923,7 @@ const MIGRATIONS: Migration[] = [
   {
     name: '061-wallbox-1day-policies',
     sql: `SELECT add_continuous_aggregate_policy('wallbox_1day',
-            start_offset      => INTERVAL '90 days',
+            start_offset      => INTERVAL '7 days',
             end_offset        => INTERVAL '1 day',
             schedule_interval => INTERVAL '1 hour',
             if_not_exists     => TRUE);
@@ -1009,6 +1070,58 @@ const MIGRATIONS: Migration[] = [
     name: `${name}-role-view-${view.replace(/_/g, '-')}`,
     sql: roleView(view, source, role),
   })),
+  // ---------------------------------------------------------------------------
+  // Grid meter per LOCAL day.
+  //
+  // meter_1day buckets by UTC day (every other *_1day is Europe/Berlin), and it
+  // cannot be rebuilt from raw: raw meter readings are kept 30 days. It is
+  // rebuilt one level up instead, as a hierarchical aggregate over meter_1hour,
+  // which is kept 2 years and still reaches back to the first reading - so this
+  // also restores every day meter_1day had lost (see 000).
+  //
+  // The figures are the hourly ones rolled up: max of maxima and last() of the
+  // counters are exact; the average is the mean of the hourly means, which
+  // equals the raw mean whenever the hours are equally covered.
+  //
+  // WITH DATA, its own statement (not allowed in a transaction or DO), so the
+  // whole history is materialized here rather than served through real-time
+  // aggregation. The bucket alias shadows the source column of the same name,
+  // hence the GROUP BY spelling out the expression.
+  // ---------------------------------------------------------------------------
+  {
+    name: '081-meter-1day-local-aggregate',
+    sql: `CREATE MATERIALIZED VIEW IF NOT EXISTS meter_1day_local
+          WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+          SELECT
+            device_sn,
+            time_bucket('1 day', bucket, 'Europe/Berlin') AS bucket,
+            avg(grid_to_home_power_avg)                   AS grid_to_home_power_avg,
+            max(grid_to_home_power_max)                   AS grid_to_home_power_max,
+            avg(pv_to_grid_power_avg)                     AS pv_to_grid_power_avg,
+            max(pv_to_grid_power_max)                     AS pv_to_grid_power_max,
+            last(grid_import_energy, bucket)              AS grid_import_energy,
+            last(grid_export_energy, bucket)              AS grid_export_energy
+          FROM meter_1hour
+          GROUP BY device_sn, time_bucket('1 day', bucket, 'Europe/Berlin')
+          WITH DATA`,
+  },
+  {
+    // Window inside meter_1hour's 2-year retention (see 000); kept as long as
+    // the other daily aggregates.
+    name: '082-meter-1day-local-policies',
+    sql: `SELECT add_continuous_aggregate_policy('meter_1day_local',
+            start_offset      => INTERVAL '7 days',
+            end_offset        => INTERVAL '1 day',
+            schedule_interval => INTERVAL '1 hour',
+            if_not_exists     => TRUE);
+          SELECT add_retention_policy('meter_1day_local', INTERVAL '10 years', if_not_exists => TRUE)`,
+  },
+  {
+    // Same column list as meter_1day, so CREATE OR REPLACE re-points the
+    // existing view in place.
+    name: '083-role-view-grid-meter-1day',
+    sql: roleView('grid_meter_1day', 'meter_1day_local', 'grid-meter'),
+  },
 ];
 
 export async function applyMigrations(

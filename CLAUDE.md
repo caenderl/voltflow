@@ -52,6 +52,14 @@ npm run typecheck   # tsc --build over the whole workspace
 - **Continuous aggregates:** when deriving house load (PV + grid import − feed-in),
   reconcile the sources' sampling mismatch over shared time buckets — do not join
   raw values.
+- **A cagg refresh window must stay well inside its source's retention.**
+  Dropping raw chunks invalidates the range, and a refresh reaching into it
+  recomputes those buckets from nothing — it *deletes* them (this wiped
+  `meter_1day` down to 30 days). Keep every policy's `start_offset` far below the
+  source's `drop_after` (currently 7 days), and never run a manual
+  `refresh_continuous_aggregate` over a range older than the raw data. Anything
+  that must outlive raw retention is built one level up (hierarchical cagg, e.g.
+  `meter_1day_local` on `meter_1hour`), not rebuilt from raw.
 - Keep backend ↔ frontend types in sync via `libs/shared-types`.
 
 ## Collector pattern (adding a new device)

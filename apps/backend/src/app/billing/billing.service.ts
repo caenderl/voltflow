@@ -109,7 +109,9 @@ export class BillingService {
    * boundary inside a bucket can be placed, never the totals. Both aggregates
    * store `last(counter)` per bucket, so a knot is dated at the bucket's *end*;
    * a bucket whose end has not passed yet is left out rather than dated into the
-   * future.
+   * future. The daily buckets are local days (`meter_1day_local`), so their end
+   * is the next local midnight, computed in local time: `+ 1 day` on the
+   * instant itself would land an hour off on the two DST days.
    *
    * Summed per instant across `device_sn`: a second registered grid-meter adds
    * its counter to the site total instead of the two interleaving into one
@@ -140,14 +142,15 @@ export class BillingService {
             AND grid_import_energy IS NOT NULL
             AND grid_export_energy IS NOT NULL
        ), d AS (
-         SELECT bucket + INTERVAL '1 day' AS at, device_sn,
-                grid_import_energy AS i, grid_export_energy AS e
-           FROM meter_1day
-          WHERE bucket >= $1::timestamptz - INTERVAL '2 days' AND bucket < $2
-            AND grid_import_energy IS NOT NULL
-            AND grid_export_energy IS NOT NULL
-            AND bucket + INTERVAL '1 day'
-                < COALESCE((SELECT min(at) FROM h), 'infinity'::timestamptz)
+         SELECT at, device_sn, i, e FROM (
+           SELECT ((bucket AT TIME ZONE $3) + INTERVAL '1 day') AT TIME ZONE $3 AS at,
+                  device_sn, grid_import_energy AS i, grid_export_energy AS e
+             FROM meter_1day_local
+            WHERE bucket >= $1::timestamptz - INTERVAL '2 days' AND bucket < $2
+              AND grid_import_energy IS NOT NULL
+              AND grid_export_energy IS NOT NULL
+         ) local_days
+          WHERE at < COALESCE((SELECT min(at) FROM h), 'infinity'::timestamptz)
        ), k AS (
          SELECT * FROM h UNION ALL SELECT * FROM d
        )
@@ -158,7 +161,7 @@ export class BillingService {
         GROUP BY at
        HAVING count(DISTINCT device_sn) = (SELECT count(DISTINCT device_sn) FROM k)
         ORDER BY at`,
-      [from, to],
+      [from, to, TIMEZONE],
     );
     return rows.map((r) => ({
       at: Number(r['at']),

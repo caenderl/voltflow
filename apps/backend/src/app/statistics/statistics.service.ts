@@ -27,10 +27,9 @@ export class StatisticsService {
    *
    * The energy figures come from the *hourly* aggregates: house load is only
    * defined where meter and inverter can be compared over the same bucket, and
-   * the two daily aggregates are bucketed in different zones (the meter's in
-   * UTC, the inverter's in local time), so pairing them would compare
-   * two-hour-shifted days. Hourly buckets are UTC on both sides and join
-   * exactly; the local day is assembled from them here.
+   * the dark-hour, gap and battery logic needs hours, not days. Hourly buckets
+   * are UTC on both sides and join exactly; the local day is assembled from
+   * them here.
    */
   async statistics(): Promise<StatisticsResponse> {
     const [hours, nights, pvPeak, housePeak] = await Promise.all([
