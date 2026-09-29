@@ -699,7 +699,7 @@ export interface ConsumerMinuteEnergy {
 export interface EnergyBalance {
   from: string;
   to: string;
-  /** PV energy produced (from SMA daily_yield). */
+  /** PV energy produced (the producers' lifetime counters, via the ledger). */
   productionKwh: number;
   /** Grid import (from the meter). */
   importKwh: number;
@@ -713,6 +713,66 @@ export interface EnergyBalance {
   selfConsumptionRate: number | null;
   /** Self-sufficiency / autarky = selfConsumed / consumption (0..1, null if no load). */
   autarkyRate: number | null;
+}
+
+/** The energy flows a balance is derived from, in kWh. */
+export interface EnergyFlows {
+  productionKwh: number;
+  importKwh: number;
+  exportKwh: number;
+  /**
+   * Energy that went INTO / came OUT of a storage device over the range.
+   * Optional: there is no storage device yet, and 0 reproduces the
+   * storage-free balance exactly. {@link EnergyBalance} does not carry these
+   * yet, so a caller re-deriving from a balance (the frontend's calibration)
+   * passes neither - storage support has to add them there first.
+   */
+  chargedKwh?: number;
+  dischargedKwh?: number;
+}
+
+/**
+ * The energy balance's arithmetic - the ONE copy of it. The backend applies it
+ * to measured flows (and rounds); the frontend re-applies it to calibrated
+ * import/export, so Autarkie/Eigenverbrauch never disagree with the
+ * calibrated Bezug/Einspeisung shown next to them. Unrounded.
+ *
+ * The house is a node: what flows in (production + import + discharge)
+ * leaves again as export, charge, or household load, so
+ *
+ *   consumption  = production − export + import + discharge − charge
+ *   selfConsumed = consumption − import   (never negative)
+ *
+ * With no storage that is `selfConsumed = production − export`. It also folds
+ * a battery in correctly on both sides: energy discharged without a matching
+ * import counts as self-consumed (it came from PV, stored earlier), and energy
+ * charged but not yet discharged is excluded from both until the period it is
+ * used - the same boundary effect the counter deltas already have.
+ *
+ * Every input is floored at 0 (a counter delta can come back slightly
+ * negative) so the derived quantities stay physical; a rate is null when its
+ * denominator is 0.
+ */
+export function deriveEnergyBalance(
+  flows: EnergyFlows,
+): Omit<EnergyBalance, 'from' | 'to'> {
+  const prod = Math.max(0, flows.productionKwh);
+  const imp = Math.max(0, flows.importKwh);
+  const exp = Math.max(0, flows.exportKwh);
+  const charged = Math.max(0, flows.chargedKwh ?? 0);
+  const discharged = Math.max(0, flows.dischargedKwh ?? 0);
+  const fromPv = Math.max(0, prod - exp);
+  const consumption = Math.max(0, fromPv + imp + discharged - charged);
+  const selfConsumed = Math.max(0, consumption - imp);
+  return {
+    productionKwh: prod,
+    importKwh: imp,
+    exportKwh: exp,
+    consumptionKwh: consumption,
+    selfConsumedKwh: selfConsumed,
+    selfConsumptionRate: prod > 0 ? selfConsumed / prod : null,
+    autarkyRate: consumption > 0 ? selfConsumed / consumption : null,
+  };
 }
 
 // ---------------------------------------------------------------------------

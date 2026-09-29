@@ -1,13 +1,13 @@
-import type { EnergyBalance } from '@org/shared-types';
+import { type EnergyBalance, deriveEnergyBalance } from '@org/shared-types';
 import { round2 } from '../common/db-utils';
 
 /** Raw kWh figures from the DB (PV production + meter import/export deltas). */
 export interface EnergyBalanceInputs {
-  /** PV energy produced (SMA total_yield delta). */
+  /** PV energy produced (the producer ledger's sum). */
   production: unknown;
-  /** Grid import (meter counter delta). */
+  /** Grid import (the grid ledger's sum). */
   importKwh: unknown;
-  /** Grid feed-in / export (meter counter delta). */
+  /** Grid feed-in / export (the grid ledger's sum). */
   exportKwh: unknown;
   /**
    * Energy that went INTO a storage device over the range. Optional: there is
@@ -19,59 +19,34 @@ export interface EnergyBalanceInputs {
 }
 
 /**
- * Derive the energy balance for [from, to) from the raw production / import /
- * export figures — pure arithmetic, no DB. Counter deltas can come back
- * slightly negative (counter resets, clock skew) or null (no rows); each input
- * is floored at 0 so the derived quantities stay physical.
- *
- * The house is a node: what flows in (production + import + discharge)
- * leaves again as export, charge, or household load, so
- *
- *   consumption  = production − export + import + discharge − charge
- *   selfConsumed = production − export   (PV that never left the house)
- *
- * With no storage both extra terms are 0 and this is the original
- * `consumption = selfConsumed + import`. Rates are null when their
- * denominator is 0.
- *
- * selfConsumed is everything in consumption that is not grid import, i.e.
- * `consumption − import` — never negative, since consumption already has the
- * import term added in. That also folds in a battery correctly on both
- * sides: energy discharged without a matching import counts as self-consumed
- * (it must have come from PV, stored earlier), and energy that went into the
- * battery but has not come back out yet is excluded from both consumption
- * and selfConsumed until the period it is actually used — the same boundary
- * effect the grid counter deltas already have.
+ * The energy balance for [from, to) from the DB's raw figures: pg hands back
+ * numeric strings or NULL (no rows), which become numbers (NULL -> 0) here;
+ * the arithmetic itself is {@link deriveEnergyBalance}, shared with the
+ * frontend's calibration so the two cannot drift apart. Rounded for the API.
  */
 export function computeEnergyBalance(
-  {
-    production,
-    importKwh,
-    exportKwh,
-    chargedKwh,
-    dischargedKwh,
-  }: EnergyBalanceInputs,
+  { production, importKwh, exportKwh, chargedKwh, dischargedKwh }: EnergyBalanceInputs,
   from: Date,
   to: Date,
 ): EnergyBalance {
-  const prod = Math.max(0, Number(production ?? 0));
-  const imp = Math.max(0, Number(importKwh ?? 0));
-  const exp = Math.max(0, Number(exportKwh ?? 0));
-  const charged = Math.max(0, Number(chargedKwh ?? 0));
-  const discharged = Math.max(0, Number(dischargedKwh ?? 0));
-  const fromPv = Math.max(0, prod - exp);
-  const consumption = Math.max(0, fromPv + imp + discharged - charged);
-  const selfConsumed = Math.max(0, consumption - imp);
+  const b = deriveEnergyBalance({
+    productionKwh: Number(production ?? 0),
+    importKwh: Number(importKwh ?? 0),
+    exportKwh: Number(exportKwh ?? 0),
+    chargedKwh: Number(chargedKwh ?? 0),
+    dischargedKwh: Number(dischargedKwh ?? 0),
+  });
+  const rate = (r: number | null): number | null => (r === null ? null : round2(r));
 
   return {
     from: from.toISOString(),
     to: to.toISOString(),
-    productionKwh: round2(prod),
-    importKwh: round2(imp),
-    exportKwh: round2(exp),
-    consumptionKwh: round2(consumption),
-    selfConsumedKwh: round2(selfConsumed),
-    selfConsumptionRate: prod > 0 ? round2(selfConsumed / prod) : null,
-    autarkyRate: consumption > 0 ? round2(selfConsumed / consumption) : null,
+    productionKwh: round2(b.productionKwh),
+    importKwh: round2(b.importKwh),
+    exportKwh: round2(b.exportKwh),
+    consumptionKwh: round2(b.consumptionKwh),
+    selfConsumedKwh: round2(b.selfConsumedKwh),
+    selfConsumptionRate: rate(b.selfConsumptionRate),
+    autarkyRate: rate(b.autarkyRate),
   };
 }

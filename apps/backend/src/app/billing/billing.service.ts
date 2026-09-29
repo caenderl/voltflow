@@ -109,9 +109,14 @@ export class BillingService {
    * boundary inside a bucket can be placed, never the totals. Both aggregates
    * store `last(counter)` per bucket, so a knot is dated at the bucket's *end*;
    * a bucket whose end has not passed yet is left out rather than dated into the
-   * future. The daily buckets are local days (`meter_1day_local`), so their end
-   * is the next local midnight, computed in local time: `+ 1 day` on the
-   * instant itself would land an hour off on the two DST days.
+   * future. The daily buckets are local days (`grid_meter_1day`, over
+   * `meter_1day_local`), so their end is the next local midnight, computed in
+   * local time: `+ 1 day` on the instant itself would land an hour off on the
+   * two DST days.
+   *
+   * Read through the `grid_meter_*` role views, like every other grid figure:
+   * the bill is about the house connection, so a device not carrying the
+   * `grid-meter` role must not move it.
    *
    * Summed per instant across `device_sn`: a second registered grid-meter adds
    * its counter to the site total instead of the two interleaving into one
@@ -137,7 +142,7 @@ export class BillingService {
       `WITH h AS (
          SELECT bucket + INTERVAL '1 hour' AS at, device_sn,
                 grid_import_energy AS i, grid_export_energy AS e
-           FROM meter_1hour
+           FROM grid_meter_1hour
           WHERE bucket >= $1::timestamptz - INTERVAL '2 hours' AND bucket < $2
             AND grid_import_energy IS NOT NULL
             AND grid_export_energy IS NOT NULL
@@ -145,7 +150,7 @@ export class BillingService {
          SELECT at, device_sn, i, e FROM (
            SELECT ((bucket AT TIME ZONE $3) + INTERVAL '1 day') AT TIME ZONE $3 AS at,
                   device_sn, grid_import_energy AS i, grid_export_energy AS e
-             FROM meter_1day_local
+             FROM grid_meter_1day
             WHERE bucket >= $1::timestamptz - INTERVAL '2 days' AND bucket < $2
               AND grid_import_energy IS NOT NULL
               AND grid_export_energy IS NOT NULL

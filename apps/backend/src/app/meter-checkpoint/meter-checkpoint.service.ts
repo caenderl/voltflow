@@ -88,8 +88,9 @@ export class MeterCheckpointService {
    * time of day. A value older than {@link READ_WINDOW} is refused rather than
    * used, which surfaces a collector outage as "no-data".
    *
-   * `meter_1hour` is the source because the raw readings are dropped after 30
-   * days while the aggregates are kept long-term. Its buckets are whole hours,
+   * `grid_meter_1hour` is the source: the grid-meter role, like every other
+   * grid figure, and hourly because the raw readings are dropped after 30 days
+   * while the aggregates are kept long-term. Its buckets are whole hours,
    * which line up with the local hour (Europe/Berlin offsets are whole hours),
    * so the value is normally at most one hour older than the reading itself —
    * on a data gap it can fall back to an older bucket within {@link READ_WINDOW},
@@ -121,7 +122,7 @@ export class MeterCheckpointService {
              FROM (
                SELECT DISTINCT ON (device_sn)
                       device_sn, bucket, grid_import_energy, grid_export_energy
-                 FROM meter_1hour
+                 FROM grid_meter_1hour
                 WHERE bucket <  ((c.date + c.read_at) AT TIME ZONE $1)
                   AND bucket >= ((c.date + c.read_at) AT TIME ZONE $1) - $2::interval
                   AND grid_import_energy IS NOT NULL
@@ -152,6 +153,12 @@ export class MeterCheckpointService {
    * Latest reading per device_sn, summed to a site total (a no-op today, with
    * exactly one grid-meter) - not a plain ORDER BY time DESC LIMIT 1 across
    * devices, which would pick whichever device happened to report last.
+   *
+   * Only grid-meters count, but the role is applied AFTER the per-device pick,
+   * on the raw table, not by reading the `grid_meter_readings` view: the view's
+   * join with `device` costs the DISTINCT ON its SkipScan, and it then walks
+   * every raw row of the last 30 days (measured in prod: 1.1 s instead of
+   * 0.4 ms). Filtering the one row per device afterwards is the same set.
    */
   private async currentCounters(): Promise<CounterSnapshot | null> {
     const { rows } = await this.db.query(
@@ -159,12 +166,15 @@ export class MeterCheckpointService {
               sum(grid_import_energy) AS grid_import_energy,
               sum(grid_export_energy) AS grid_export_energy
          FROM (
-           SELECT DISTINCT ON (device_sn) time, grid_import_energy, grid_export_energy
+           SELECT DISTINCT ON (device_sn)
+                  device_sn, time, grid_import_energy, grid_export_energy
              FROM meter_reading
             WHERE grid_import_energy IS NOT NULL
               AND grid_export_energy IS NOT NULL
             ORDER BY device_sn, time DESC
-         ) latest_per_device`,
+         ) latest_per_device
+         JOIN device d ON d.device_sn = latest_per_device.device_sn
+        WHERE d.roles @> ARRAY['grid-meter']::TEXT[]`,
     );
     if (!rows.length || rows[0]['time'] === null) return null;
     return {
