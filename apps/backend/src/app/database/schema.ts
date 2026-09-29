@@ -1122,6 +1122,74 @@ const MIGRATIONS: Migration[] = [
     name: '083-role-view-grid-meter-1day',
     sql: roleView('grid_meter_1day', 'meter_1day_local', 'grid-meter'),
   },
+  // ---------------------------------------------------------------------------
+  // The hourly energy ledger: the ONE place a cumulative counter becomes energy.
+  //
+  // Balance, the Bezug/Einspeisung bars, the PV bars and the statistics each
+  // used to turn counters into kWh with their own copy of the rule (raw
+  // max - min, hourly max - min per day, adjacent-hour deltas), which is how
+  // the balance ended up reading raw tables long after the bars had moved to
+  // aggregates. They all sum these views now.
+  //
+  // One row per device and hour: the counter's advance since the device's
+  // previous hourly bucket (`last()` per bucket, so hour H holds what was used
+  // between the end of H-1 and the end of H).
+  //
+  // A gap - hours with no bucket, i.e. the collector was down - is spread
+  // evenly over the hours it covers and flagged `estimated`: the counter
+  // proves the energy was used, only not when. That is how the billing already
+  // interpolates its counter curve across a gap, so the history and the bill
+  // cannot disagree about an outage. Anything that needs *measured* hours (the
+  // statistics' records and battery simulation) filters `estimated` out.
+  //
+  // A negative delta (meter swap, counter reset) is not consumption: that
+  // direction is NULL for the interval, independently of the other one.
+  //
+  // Plain views, because a continuous aggregate cannot hold window functions.
+  // They read the hourly role views, a few thousand rows per device and year.
+  // ---------------------------------------------------------------------------
+  {
+    name: '084-ledger-grid-energy-1hour',
+    sql: `CREATE OR REPLACE VIEW grid_energy_1hour AS
+          SELECT d.device_sn,
+                 h.bucket,
+                 CASE WHEN d.di >= 0 THEN d.di / d.hours END AS import_kwh,
+                 CASE WHEN d.de >= 0 THEN d.de / d.hours END AS export_kwh,
+                 d.hours > 1                                 AS estimated
+            FROM (
+              SELECT device_sn, bucket,
+                     lag(bucket) OVER w                                  AS prev,
+                     extract(epoch FROM bucket - lag(bucket) OVER w) / 3600 AS hours,
+                     grid_import_energy - lag(grid_import_energy) OVER w AS di,
+                     grid_export_energy - lag(grid_export_energy) OVER w AS de
+                FROM grid_meter_1hour
+               WHERE grid_import_energy IS NOT NULL AND grid_export_energy IS NOT NULL
+              WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
+            ) d
+           CROSS JOIN LATERAL generate_series(
+             d.prev + INTERVAL '1 hour', d.bucket, INTERVAL '1 hour') AS h(bucket)
+           WHERE d.prev IS NOT NULL`,
+  },
+  {
+    name: '085-ledger-producer-energy-1hour',
+    sql: `CREATE OR REPLACE VIEW producer_energy_1hour AS
+          SELECT d.device_sn,
+                 h.bucket,
+                 CASE WHEN d.d >= 0 THEN d.d / d.hours END AS pv_kwh,
+                 d.hours > 1                               AS estimated
+            FROM (
+              SELECT device_sn, bucket,
+                     lag(bucket) OVER w                                  AS prev,
+                     extract(epoch FROM bucket - lag(bucket) OVER w) / 3600 AS hours,
+                     total_yield_kwh - lag(total_yield_kwh) OVER w       AS d
+                FROM producer_1hour
+               WHERE total_yield_kwh IS NOT NULL
+              WINDOW w AS (PARTITION BY device_sn ORDER BY bucket)
+            ) d
+           CROSS JOIN LATERAL generate_series(
+             d.prev + INTERVAL '1 hour', d.bucket, INTERVAL '1 hour') AS h(bucket)
+           WHERE d.prev IS NOT NULL`,
+  },
 ];
 
 export async function applyMigrations(

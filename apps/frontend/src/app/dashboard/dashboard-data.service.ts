@@ -179,18 +179,29 @@ export class DashboardDataService {
       next: (b) => current() && this.periodBalance.set(b),
       error: () => current() && this.periodBalance.set(null),
     });
-    this.meterApi.series(from, to, resolution).subscribe({
-      next: (s) => current() && this.series.set(s),
-      complete: () => current() && this.loading.set(false),
-      error: () => {
-        if (!current()) return;
-        this.loading.set(false);
-        this.error.set(LOAD_ERROR);
-      },
-    });
+    // The month view draws no power chart (history-view hides it for months),
+    // so its series would be fetched only to be thrown away. There the loading
+    // state follows the energy request instead.
+    const seriesShown = view !== 'month';
+    if (seriesShown) {
+      this.meterApi.series(from, to, resolution).subscribe({
+        next: (s) => current() && this.series.set(s),
+        complete: () => current() && this.loading.set(false),
+        error: () => {
+          if (!current()) return;
+          this.loading.set(false);
+          this.error.set(LOAD_ERROR);
+        },
+      });
+    }
     this.meterApi.energy(period, date).subscribe({
       next: (e) => current() && this.energy.set(e),
-      error: () => current() && this.error.set(LOAD_ERROR),
+      complete: () => !seriesShown && current() && this.loading.set(false),
+      error: () => {
+        if (!current()) return;
+        if (!seriesShown) this.loading.set(false);
+        this.error.set(LOAD_ERROR);
+      },
     });
     if (view === 'week' || view === 'month') {
       this.energyApi.consumersDaily(from, to).subscribe({
