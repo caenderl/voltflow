@@ -145,6 +145,19 @@ scripts/deploy.sh collector-sma   # nur ein einzelner Collector (meter|sma|wallb
 scripts/deploy.sh --help      # Optionen: einzelne Services, --env, --prune, --dry-run
 ```
 
+**Zurückrollen.** Jeder Deploy taggt die gebauten Images zusätzlich als
+`<version>-<commit>` (z. B. `voltflow-backend:1.5.0-8fbe381`, mit `-dirty` bei
+uncommitteten Änderungen) und markiert vorher auf dem Server das **laufende** Image als
+`:previous`. Pro Service bleiben die 5 neuesten Builds (`KEEP_TAGS`). Ein Rollback
+verlangt immer ein explizites Ziel und tauscht `:latest` und `:previous` — ein zweiter
+`--rollback` geht also wieder vorwärts:
+
+```bash
+scripts/deploy.sh backend --rollback                  # zurück auf den Stand vor dem letzten Deploy
+scripts/deploy.sh app --rollback-to 1.4.7-befc896     # auf einen bestimmten, noch vorhandenen Build
+scripts/deploy.sh collector --list-tags               # welche Builds auf dem Server liegen
+```
+
 Die einzelnen Schritte, die der Wrapper ausführt:
 
 ```bash
