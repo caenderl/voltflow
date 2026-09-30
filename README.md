@@ -180,7 +180,7 @@ ssh <server> 'cd ~/voltflow && docker compose -f docker-compose.prod.yml up -d'
 
 `docker-compose.prod.yml` referenziert die App-Images mit `image:`-Tags + `pull_policy: never`,
 sodass der Server sie aus dem `docker load` nutzt (kein Build, kein Registry-Pull). `db` zieht
-`timescale/timescaledb:2.28.1-pg16` direkt (multi-arch). Alle Services laufen mit
+`timescale/timescaledb:2.30.2-pg16` direkt (multi-arch). Alle Services laufen mit
 `restart: unless-stopped` (überleben Server-Reboot).
 
 Services: `db` (TimescaleDB), die drei Collector-Container `collector-meter` / `collector-sma` /
@@ -353,9 +353,17 @@ Alter, Anzahl und Größenverlauf der lokalen Dumps sowie den letzten Off-Site-L
 - **Cron-Logs:** `scripts/backup-logrotate.conf` rotiert `backup.log`,
   `backup-offsite.log` und `prune.log` wöchentlich (6 Generationen, gzip).
 
-DB-Image ist exakt auf `timescale/timescaledb:2.28.1-pg16` gepinnt (PostgreSQL-Major **und**
-TimescaleDB-Version). Upgrades nur bewusst: Tag hochziehen → Backup → `docker compose pull` →
-`ALTER EXTENSION timescaledb UPDATE`. Ein PG-Major-Upgrade nur per Dump + Restore.
+DB-Image ist exakt auf `timescale/timescaledb:2.30.2-pg16` gepinnt (PostgreSQL-Major **und**
+TimescaleDB-Version). Upgrades nur bewusst: Backup → Tag hochziehen → `docker compose pull db` →
+`docker compose up -d db` → `ALTER EXTENSION timescaledb UPDATE` (als erster Befehl einer
+frischen Session, `psql -X`). Das neue Image bringt die Bibliotheken der alten Version mit, die
+DB startet also auch vor dem `ALTER EXTENSION`. Ein PG-Major-Upgrade nur per Dump + Restore.
+
+> **Restore älterer Dumps:** Ein Dump lässt sich nur in dieselbe TimescaleDB-Version
+> restoren. Dumps von vor dem Upgrade auf 2.30.2 (bis einschließlich 30.09.2026, v1.5.0)
+> brauchen das alte Image, z. B.
+> `DB_IMAGE=timescale/timescaledb:2.28.1-pg16 ./scripts/verify-restore.sh <snapshot>`;
+> danach in der Ziel-DB `ALTER EXTENSION timescaledb UPDATE`.
 
 ## Roadmap
 

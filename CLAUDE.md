@@ -13,7 +13,7 @@ Full architecture, API table and deployment: see @README.md.
 - `apps/frontend` — Angular 22, ngx-echarts
 - `apps/collector` — Python (asyncio), **not** NX/Node — runs in the `venv`
 - `libs/shared-types` — shared TS types between backend and frontend
-- DB: TimescaleDB, pinned to `timescale/timescaledb:2.28.1-pg16`
+- DB: TimescaleDB, pinned to `timescale/timescaledb:2.30.2-pg16`
 
 ## Dev commands
 
