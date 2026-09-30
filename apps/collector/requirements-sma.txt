@@ -1,4 +1,8 @@
 # SMA PV inverter collector (STP 6000TL-20) over Speedwire.
 -r requirements-common.txt
 aiohttp>=3.9
-pysma-plus<2
+# Held on 0.4.x: 0.5 reworks Speedwire V2 sensor discovery at night - exactly
+# the asleep/stale-session path this collector depends on - so it is its own,
+# separately tested step (ideally 0.5.1, which adds re-login before the
+# session expires), not a side effect of a lock refresh.
+pysma-plus>=0.4.4,<0.5

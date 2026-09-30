@@ -1,5 +1,5 @@
 # Anker SOLIX V1 / A5191 wallbox collector (Modbus TCP).  Build context = apps/collector
-FROM python:3.12-slim
+FROM python:3.14-slim
 WORKDIR /app
 
 # Runtime deps only (no git / anker-solix-api needed for this collector), at
