@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { DashboardDataService } from '../../dashboard/dashboard-data.service';
 import { SettingsCardComponent } from '../../ui/settings-card/settings-card.component';
 
@@ -13,7 +13,6 @@ import { SettingsCardComponent } from '../../ui/settings-card/settings-card.comp
   standalone: true,
   imports: [DatePipe, DecimalPipe, SettingsCardComponent],
   templateUrl: './checkpoint-projection.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './checkpoint-projection.component.scss',
 })
 export class CheckpointProjectionComponent {

@@ -1,4 +1,4 @@
-import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { BackupStatus, OffsiteSnapshot } from '@org/shared-types';
 import { CHART_COLORS } from '../../core/chart-utils';
@@ -59,7 +59,6 @@ function bytes(n: number): string {
   standalone: true,
   imports: [NgxEchartsDirective, MetricTileComponent],
   templateUrl: './system-backups.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './system-backups.component.scss',
 })
 export class SystemBackupsComponent {

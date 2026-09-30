@@ -1,4 +1,4 @@
-import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
+import { Component, input, output } from '@angular/core';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsCoreOption } from 'echarts/core';
 import type { EnergyBalance, EnergySummary } from '@org/shared-types';
@@ -11,7 +11,6 @@ import type { Costs } from '../../core/costs';
   standalone: true,
   imports: [NgxEchartsDirective, HistorySummaryComponent],
   templateUrl: './history-view.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './history-view.component.scss',
 })
 export class HistoryViewComponent {

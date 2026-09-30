@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import type { EChartsCoreOption } from 'echarts/core';
@@ -31,7 +31,6 @@ import { HistoryViewComponent } from '../history-view/history-view.component';
   selector: 'app-history-container',
   standalone: true,
   imports: [HistoryViewComponent],
-  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <app-history-view
       [view]="view()"

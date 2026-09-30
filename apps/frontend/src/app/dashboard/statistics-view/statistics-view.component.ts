@@ -1,4 +1,4 @@
-import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 import type { StatisticsResponse } from '@org/shared-types';
 import { formatDay } from '../../core/stat-format';
 import { StatisticsStorageSizingComponent } from '../statistics-storage-sizing/statistics-storage-sizing.component';
@@ -14,7 +14,6 @@ import { StatisticsHighlightsComponent } from '../statistics-highlights/statisti
   standalone: true,
   imports: [StatisticsHighlightsComponent, StatisticsStorageSizingComponent],
   templateUrl: './statistics-view.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './statistics-view.component.scss',
 })
 export class StatisticsViewComponent {

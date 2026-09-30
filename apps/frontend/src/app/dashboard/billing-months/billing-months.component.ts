@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { BillingMonth, BillingStatement } from '@org/shared-types';
 import { CHART_COLORS, categorySeriesChart } from '../../core/chart-utils';
@@ -14,7 +14,6 @@ import { CHART_COLORS, categorySeriesChart } from '../../core/chart-utils';
   standalone: true,
   imports: [DatePipe, DecimalPipe, NgxEchartsDirective],
   templateUrl: './billing-months.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './billing-months.component.scss',
 })
 export class BillingMonthsComponent {

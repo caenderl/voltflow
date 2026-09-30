@@ -1,4 +1,4 @@
-import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { EnergyBalance } from '@org/shared-types';
 import { LiveReadingCardComponent } from '../../ui/live-reading-card/live-reading-card.component';
@@ -16,7 +16,6 @@ export interface SmaState {
   standalone: true,
   imports: [CommonModule, LiveReadingCardComponent],
   templateUrl: './sma-card.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './sma-card.component.scss',
 })
 export class SmaCardComponent {
