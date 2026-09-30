@@ -26,7 +26,7 @@ SNAP="${1:-latest}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 # Must match the image the dump came from: a TimescaleDB restore only works
 # into the same extension version (and PG major).
-DB_IMAGE="${DB_IMAGE:-timescale/timescaledb:2.28.1-pg16}"
+DB_IMAGE="${DB_IMAGE:-timescale/timescaledb:2.30.2-pg16}"
 CONTAINER="voltflow-restore-verify"
 # Restore under the same role name the dump was taken with, otherwise every
 # `ALTER ... OWNER TO` in the dump fails.
