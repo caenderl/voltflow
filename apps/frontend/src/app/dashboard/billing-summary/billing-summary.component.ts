@@ -1,5 +1,5 @@
 import { DecimalPipe, PercentPipe } from '@angular/common';
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 import type { BillingStatement } from '@org/shared-types';
 
 /**
@@ -12,6 +12,7 @@ import type { BillingStatement } from '@org/shared-types';
   standalone: true,
   imports: [DecimalPipe, PercentPipe],
   templateUrl: './billing-summary.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './billing-summary.component.scss',
 })
 export class BillingSummaryComponent {

@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { WALLBOX_STATUS_LABELS } from '@org/shared-types';
 import { liveSparkChart, netWatts } from '../../core/chart-utils';
 import { calibrateBalance, calibrateEnergy } from '../../core/calibration';
@@ -37,6 +37,7 @@ function isStale(readingTime: string, pollIntervalS: number, now: number): boole
   selector: 'app-live-container',
   standalone: true,
   imports: [LiveViewComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <app-live-view
       [flow]="flow()"

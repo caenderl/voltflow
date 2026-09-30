@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { AdminSection } from '../core/config-types';
 import { CheckpointsSectionComponent } from './checkpoints-section/checkpoints-section.component';
@@ -24,6 +24,7 @@ import { TariffsSectionComponent } from './tariffs-section/tariffs-section.compo
     SystemSectionComponent,
   ],
   templateUrl: './admin-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-page.component.scss',
 })
 export class AdminPageComponent {

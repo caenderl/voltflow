@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 import type { StorageSizing } from '@org/shared-types';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsCoreOption } from 'echarts/core';
@@ -19,6 +19,7 @@ import { StatCardComponent } from '../../ui/stat-card/stat-card.component';
   standalone: true,
   imports: [NgxEchartsDirective, StatCardComponent],
   templateUrl: './statistics-storage-sizing.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './statistics-storage-sizing.component.scss',
 })
 export class StatisticsStorageSizingComponent {

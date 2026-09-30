@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 
 /**
  * Card with a heading + optional subtitle and a body via content projection.
@@ -21,6 +21,7 @@ import { Component, input } from '@angular/core';
       <ng-content />
     </section>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './settings-card.component.scss',
 })
 export class SettingsCardComponent {

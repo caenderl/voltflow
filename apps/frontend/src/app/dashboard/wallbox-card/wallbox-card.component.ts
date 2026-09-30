@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LiveReadingCardComponent } from '../../ui/live-reading-card/live-reading-card.component';
 
@@ -16,6 +16,7 @@ export interface WallboxState {
   standalone: true,
   imports: [CommonModule, LiveReadingCardComponent],
   templateUrl: './wallbox-card.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './wallbox-card.component.scss',
 })
 export class WallboxCardComponent {

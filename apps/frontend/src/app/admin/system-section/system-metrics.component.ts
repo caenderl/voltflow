@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { SystemHealth } from '@org/shared-types';
 import { CHART_COLORS } from '../../core/chart-utils';
@@ -31,6 +31,7 @@ function gb(bytes: number): string {
   standalone: true,
   imports: [NgxEchartsDirective, MetricTileComponent],
   templateUrl: './system-metrics.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './system-metrics.component.scss',
 })
 export class SystemMetricsComponent {
