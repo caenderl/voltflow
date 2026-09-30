@@ -1,4 +1,4 @@
-import { Component, input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { EnergyBalance, EnergySummary } from '@org/shared-types';
 import type { Costs } from '../../core/costs';
@@ -16,7 +16,6 @@ import type { Costs } from '../../core/costs';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './history-summary.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './history-summary.component.scss',
 })
 export class HistorySummaryComponent {

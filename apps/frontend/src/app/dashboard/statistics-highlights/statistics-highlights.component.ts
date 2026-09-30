@@ -1,4 +1,4 @@
-import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 import type {
   ConsumptionStatistics,
   PvStatistics,
@@ -27,7 +27,6 @@ import { StatRowsComponent, type StatRow } from '../../ui/stat-rows/stat-rows.co
   standalone: true,
   imports: [StatCardComponent, StatRowsComponent],
   templateUrl: './statistics-highlights.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './statistics-highlights.component.scss',
 })
 export class StatisticsHighlightsComponent {

@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import type { BackupStatus, SystemHealth } from '@org/shared-types';
 import { SettingsCardComponent } from '../../ui/settings-card/settings-card.component';
 import { SystemApiService } from '../../core/system-api.service';
@@ -27,7 +27,6 @@ const POLL_MS = 10_000;
     SystemBackupsComponent,
   ],
   templateUrl: './system-section.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './system-section.component.scss',
 })
 export class SystemSectionComponent {

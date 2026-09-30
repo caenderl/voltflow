@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, computed, inject, linkedSignal, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { DashboardDataService } from '../../dashboard/dashboard-data.service';
 import { SettingsCardComponent } from '../../ui/settings-card/settings-card.component';
@@ -16,7 +16,6 @@ import { ToggleSwitchComponent } from '../../ui/toggle-switch/toggle-switch.comp
   standalone: true,
   imports: [RouterLink, SettingsCardComponent, ToggleSwitchComponent, DecimalPipe],
   templateUrl: './config-section.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './config-section.component.scss',
 })
 export class ConfigSectionComponent {

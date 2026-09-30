@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component } from '@angular/core';
 import { CONFIGURABLE_DRIVERS } from '@org/shared-types';
 import { DeviceInstanceListComponent } from './device-instance-list/device-instance-list.component';
 import { DeviceRegistryListComponent } from './device-registry-list/device-registry-list.component';
@@ -15,7 +15,6 @@ import { DeviceRegistryListComponent } from './device-registry-list/device-regis
   standalone: true,
   imports: [DeviceInstanceListComponent, DeviceRegistryListComponent],
   templateUrl: './devices-section.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './devices-section.component.scss',
 })
 export class DevicesSectionComponent {

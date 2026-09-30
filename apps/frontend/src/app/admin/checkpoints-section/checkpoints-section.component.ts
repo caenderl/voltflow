@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import type { MeterCheckpoint } from '@org/shared-types';
 import { toLocalDateString, toLocalTimeString } from '../../core/date-utils';
 import { DashboardDataService } from '../../dashboard/dashboard-data.service';
@@ -27,7 +27,6 @@ import { CheckpointReconciliationComponent } from '../checkpoint-reconciliation/
     CheckpointReconciliationComponent,
   ],
   templateUrl: './checkpoints-section.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './checkpoints-section.component.scss',
 })
 export class CheckpointsSectionComponent {

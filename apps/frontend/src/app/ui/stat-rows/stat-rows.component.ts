@@ -1,4 +1,4 @@
-import { Component, input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, input } from '@angular/core';
 
 /** One detail line: a name, its value, and optionally when it happened. */
 export interface StatRow {
@@ -30,7 +30,6 @@ export interface StatRow {
       }
     </dl>
   `,
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stat-rows.component.scss',
 })
 export class StatRowsComponent {
