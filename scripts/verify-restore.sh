@@ -59,8 +59,14 @@ docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 docker run -d --rm --name "$CONTAINER" --memory=1g \
   -e POSTGRES_USER="$PGUSER_NAME" -e POSTGRES_PASSWORD=verify -e POSTGRES_DB=verifydb \
   "$DB_IMAGE" >/dev/null
+# Over TCP, not the Unix socket: the image's entrypoint first runs a
+# temporary, socket-only server for its init scripts - one of which creates
+# the timescaledb extension - and a socket-level pg_isready already succeeds
+# then. Racing that script with our own CREATE EXTENSION fails with a
+# duplicate key on pg_extension (seen with 2.30.2). TCP only answers once the
+# real server is up, i.e. after the init scripts have finished.
 for i in $(seq 1 60); do
-  docker exec "$CONTAINER" pg_isready -U "$PGUSER_NAME" -d verifydb >/dev/null 2>&1 && break
+  docker exec "$CONTAINER" pg_isready -h 127.0.0.1 -U "$PGUSER_NAME" -d verifydb >/dev/null 2>&1 && break
   [ "$i" = 60 ] && fail "throwaway database did not become ready"
   sleep 2
 done
