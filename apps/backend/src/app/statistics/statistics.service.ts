@@ -93,6 +93,21 @@ export class StatisticsService {
    * PV is null where the inverter has no measured hour - unknown, not zero -
    * except when there is no inverter data at all: a house without PV consumes
    * exactly what it imports, and every figure here would otherwise be empty.
+   *
+   * The consumers' energy (every `consumer` device, i.e. the car) rides along
+   * so the battery simulation can leave it out; an hour none of them charged
+   * in has no `charged_kwh` and counts as 0. A consumer reports every hour it
+   * is up, so an hour it skipped is an outage: whatever it drew then is
+   * unknown, and NULL says so. That covers the hours between two reports, and
+   * the hours since the last one while the device is still enabled - an
+   * outage that is still going on. Before its first report, and after the last
+   * one of a device no longer enabled, it is simply not there. `day_hours` is
+   * the length of the local day, so the clock-change days are judged against
+   * 23 / 25 h.
+   *
+   * The gaps are found from each report to the next (`lead`), so the series
+   * only spans actual outages; `consumer_reports` is referenced twice and
+   * therefore materialized, i.e. the view is read once.
    */
   private async hourlyEnergy(): Promise<HourEnergy[]> {
     const { rows } = await this.db.query(
@@ -108,13 +123,40 @@ export class StatisticsService {
           GROUP BY bucket
          HAVING NOT bool_or(estimated)
             AND count(import_kwh) = count(*) AND count(export_kwh) = count(*)
+       ), consumer_reports AS (
+         SELECT device_sn, bucket, charged_kwh FROM consumer_1hour
+       ), consumers AS (
+         SELECT bucket, sum(charged_kwh) AS consumer_kwh
+           FROM consumer_reports
+          GROUP BY bucket
+       ), consumer_gaps AS (
+         SELECT DISTINCT h.bucket
+           FROM (SELECT r.bucket,
+                        COALESCE(
+                          lead(r.bucket) OVER (PARTITION BY r.device_sn ORDER BY r.bucket),
+                          CASE WHEN EXISTS (SELECT 1 FROM device_config dc
+                                             WHERE dc.device_sn = r.device_sn AND dc.enabled)
+                               THEN date_trunc('hour', now()) + INTERVAL '1 hour' END
+                        ) AS next
+                   FROM consumer_reports r) r
+          CROSS JOIN LATERAL generate_series(
+            r.bucket + INTERVAL '1 hour', r.next - INTERVAL '1 hour', INTERVAL '1 hour') AS h(bucket)
+          WHERE r.next > r.bucket + INTERVAL '1 hour'
        )
-       SELECT (g.bucket AT TIME ZONE $1)::date::text        AS day,
+       SELECT l.day::text                                   AS day,
               extract(hour FROM g.bucket AT TIME ZONE $1)   AS hour,
+              extract(epoch FROM ((l.day + 1)::timestamp AT TIME ZONE $1)
+                               - (l.day::timestamp AT TIME ZONE $1)) / 3600
+                                                            AS day_hours,
               p.pv_kwh, g.import_kwh, g.export_kwh,
+              CASE WHEN cg.bucket IS NULL THEN COALESCE(c.consumer_kwh, 0) END
+                                                            AS consumer_kwh,
               EXISTS (SELECT 1 FROM producer_1hour) AS has_pv
          FROM grid g
+        CROSS JOIN LATERAL (SELECT (g.bucket AT TIME ZONE $1)::date AS day) l
          LEFT JOIN pv p ON p.bucket = g.bucket
+         LEFT JOIN consumers c ON c.bucket = g.bucket
+         LEFT JOIN consumer_gaps cg ON cg.bucket = g.bucket
         ORDER BY g.bucket`,
       [TIMEZONE],
     );
@@ -125,6 +167,8 @@ export class StatisticsService {
       pvKwh: r['pv_kwh'] !== null ? Number(r['pv_kwh']) : r['has_pv'] ? null : 0,
       importKwh: Number(r['import_kwh']),
       exportKwh: Number(r['export_kwh']),
+      consumerKwh: r['consumer_kwh'] !== null ? Number(r['consumer_kwh']) : null,
+      dayHours: Number(r['day_hours']),
     }));
   }
 

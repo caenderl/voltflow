@@ -1001,26 +1001,53 @@ export interface StorageSizingPoint {
  * stay free for a device that actually exists.
  */
 export interface StorageSizing {
+  /**
+   * Days the simulation ran on, and the first / last of them (YYYY-MM-DD).
+   * Fewer than the statistics' complete days when a consumer was not
+   * reporting: its draw is unknown, and the simulation has to leave it out.
+   */
+  days: number;
+  skippedDays: number;
+  firstDay: string | null;
+  lastDay: string | null;
   /** Autarky actually measured, i.e. the curve's 0 kWh point (0..1). */
   baseAutarky: number | null;
   /** Autarky / self-consumption over a range of sizes, ascending. */
   curve: StorageSizingPoint[];
   /**
-   * Smallest simulated size that would have removed *all* grid import over the
-   * measured period. Null when no size reaches it — with too little sun the
-   * energy is simply missing, and no storage can invent it.
+   * Smallest simulated size that would have covered the whole house over the
+   * measured period — every kWh of import except the car's, which the battery
+   * is not meant to serve. Null when no size reaches it: the surplus is too
+   * small or comes at the wrong time.
    */
-  fullAutarkyKwh: number | null;
-  /** Size beyond which another kWh adds less than a point of autarky. */
+  fullCoverageKwh: number | null;
+  /**
+   * Autarky at {@link fullCoverageKwh} (0..1): below 1 by exactly the car's
+   * grid import.
+   */
+  fullCoverageAutarky: number | null;
+  /**
+   * Size beyond which another kWh adds less than a point of the house's own
+   * autarky (consumers left out, as the battery does not serve them).
+   */
   kneeKwh: number | null;
   /** Autarky at {@link kneeKwh} (0..1). */
   kneeAutarky: number | null;
-  /** Typical / worst dark-hours consumption the store has to bridge, kWh. */
+  /**
+   * Typical / worst night (sunset to sunrise) the store has to bridge, without
+   * the consumers, kWh. Null until one whole night lies inside the data.
+   */
   medianNightKwh: number | null;
   maxNightKwh: number | null;
   /** Totals the simulation ran on, kWh. */
   productionKwh: number;
   consumptionKwh: number;
+  /** Feed-in, i.e. the surplus the battery could have charged from. */
+  exportKwh: number;
+  /** Grid import the battery may serve: the house's, the consumers' aside. */
+  houseImportKwh: number;
+  /** Grid import of the consumers (the car), which the battery leaves alone. */
+  consumerImportKwh: number;
   /** Round-trip efficiency the simulation assumed (0..1). */
   efficiency: number;
 }
