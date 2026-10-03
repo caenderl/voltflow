@@ -10,10 +10,10 @@
 @if (hasData()) {
   <div class="tiles">
     <app-stat-card
-      label="Autarkie heute"
+      label="Autarkie bisher"
       accent="primary"
       [value]="baseAutarky()"
-      caption="ohne Speicher, so gemessen"
+      caption="ohne Speicher, gemessen"
     />
     <app-stat-card
       label="Empfohlene Größe"
@@ -23,7 +23,7 @@
       [caption]="kneeCaption()"
     />
     <app-stat-card
-      label="Für 100 % Autarkie"
+      label="Haus voll gedeckt"
       accent="import"
       [value]="fullValue()"
       unit="kWh"
@@ -42,6 +42,11 @@
   </div>
 
   <p class="hint-sm">{{ basis() }}</p>
+} @else if (sizing().skippedDays) {
+  <p class="hint">
+    An keinem vollständigen Tag hat die Wallbox durchgehend gemeldet — ohne ihre
+    Daten lässt sich das Laden des Autos nicht herausrechnen.
+  </p>
 } @else {
   <p class="hint">
     Noch kein Tag mit lückenlosen Daten — die Simulation braucht mindestens einen

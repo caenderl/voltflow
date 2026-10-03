@@ -22,6 +22,13 @@ export interface HourEnergy {
   /** Grid import / feed-in during the hour, from the meter's counters. */
   importKwh: number;
   exportKwh: number;
+  /**
+   * What the consumer-role devices (the car) drew during the hour; null when
+   * one of them was not reporting, so its draw is unknown.
+   */
+  consumerKwh: number | null;
+  /** Hours the local day has: 24, or 23 / 25 on the days the clock changes. */
+  dayHours: number;
 }
 
 /** One night's measured base load. */
@@ -63,20 +70,12 @@ const DARK_KWH = 0.05;
  */
 const MAX_FILLABLE_GAP_HOURS = 3;
 
-/**
- * Hours a day needs to count as complete. 23, not 24: the spring DST day has
- * one hour less, and a day that is short one hour would still be excluded from
- * the records for good reason if it were a real gap — this only tolerates the
- * clock change.
- */
-const MIN_HOURS_PER_DAY = 23;
-
 /** Largest battery the sizing search considers, and its resolution (kWh). */
 const SEARCH_MAX_KWH = 100;
 const SEARCH_STEPS_PER_KWH = 2;
 
-/** Grid import under this share of consumption counts as "no import left". */
-const FULL_AUTARKY_TOLERANCE = 0.001;
+/** Import under this share of consumption counts as "nothing left to cover". */
+const FULL_COVERAGE_TOLERANCE = 0.001;
 
 /** Below this autarky gain per added kWh, growing the battery stops paying. */
 const KNEE_GAIN_PER_KWH = 0.01;
@@ -90,21 +89,39 @@ interface DayEnergy {
   day: string;
   pvKwh: number;
   houseKwh: number;
-  /** Consumption during the dark hours — one night's worth of storage. */
-  nightKwh: number;
+  /**
+   * Whether every consumer reported all day. The battery simulation needs it
+   * (it leaves the car out); the records do not.
+   */
+  consumersKnown: boolean;
   /** The day's hours in order, for the battery simulation. */
   flows: HourFlow[];
 }
 
-/** What the meter saw in one hour: the battery simulation needs nothing else. */
+/** One hour as the battery simulation sees it. */
 interface HourFlow {
   importKwh: number;
   exportKwh: number;
+  /**
+   * The part of the import the battery may serve: all of it except what the
+   * consumers (the car) drew from the grid. Charging a car from a home battery
+   * only moves midday surplus into the night through two conversions — the car
+   * can take that surplus directly — so the battery is not sized for it.
+   * Within the hour the consumers are assumed to have drawn from the grid
+   * first, which keeps the battery's share on the conservative side.
+   */
+  servableKwh: number;
+  /** No PV to speak of: part of a night. */
+  dark: boolean;
+  /** House load without the consumers — what this hour costs a battery. */
+  baseKwh: number;
 }
 
 interface SimResult {
   /** Grid import left after the battery has done what it can, kWh. */
   gridKwh: number;
+  /** Of that, what the battery could have served but did not, kWh. */
+  uncoveredKwh: number;
   /** Feed-in left after charging, kWh. */
   feedInKwh: number;
 }
@@ -225,19 +242,34 @@ function buildDays(hours: HourEnergy[]): DayEnergy[] {
 
   const days: DayEnergy[] = [];
   for (const [day, list] of byDay) {
-    if (list.length < MIN_HOURS_PER_DAY) continue;
+    // Against the day's own length, so the clock-change days are neither
+    // excluded (23 h) nor let through with an hour missing (25 h).
+    if (list.length < list[0].dayHours) continue;
     if (list.some((h) => h.pvKwh === null)) continue;
 
-    const d: DayEnergy = { day, pvKwh: 0, houseKwh: 0, nightKwh: 0, flows: [] };
+    const d: DayEnergy = {
+      day,
+      pvKwh: 0,
+      houseKwh: 0,
+      consumersKnown: list.every((h) => h.consumerKwh !== null),
+      flows: [],
+    };
     for (const h of [...list].sort((a, b) => a.hour - b.hour)) {
       const pv = h.pvKwh ?? 0;
       // Clamped: rounding in the three counters can push a quiet hour a few Wh
       // below zero, and negative consumption is not a thing.
       const house = Math.max(pv + h.importKwh - h.exportKwh, 0);
+      const consumer = h.consumerKwh ?? 0;
+      const consumerFromGrid = Math.min(h.importKwh, consumer);
       d.pvKwh += pv;
       d.houseKwh += house;
-      if (pv < DARK_KWH) d.nightKwh += house;
-      d.flows.push({ importKwh: h.importKwh, exportKwh: h.exportKwh });
+      d.flows.push({
+        importKwh: h.importKwh,
+        exportKwh: h.exportKwh,
+        servableKwh: h.importKwh - consumerFromGrid,
+        dark: pv < DARK_KWH,
+        baseKwh: Math.max(house - consumer, 0),
+      });
     }
     days.push(d);
   }
@@ -289,19 +321,28 @@ function standby(
 
 /**
  * How large a store would have to be, simulated against what actually
- * happened: every kWh the meter imported is offered to the battery first, and
- * every kWh that went out as feed-in charges it instead.
+ * happened: every kWh the meter imported for the house is offered to the
+ * battery first (the car's import is not — see {@link HourFlow.servableKwh}),
+ * and every kWh that went out as feed-in charges it instead.
  *
  * The measured import/export *are* the surplus and deficit (house load is
  * defined as PV + import − feed-in), so the simulation needs no assumption
  * about how load and production line up inside an hour beyond the usual
  * self-consumption priority.
  */
-function sizeStorage(days: DayEnergy[]): StorageSizing {
+function sizeStorage(allDays: DayEnergy[]): StorageSizing {
+  // A day a consumer was down for is left out: its car charging would land in
+  // the house load, and the battery would be sized for it after all.
+  const days = allDays.filter((d) => d.consumersKnown);
   const empty: StorageSizing = {
+    days: days.length,
+    skippedDays: allDays.length - days.length,
+    firstDay: days.length ? days[0].day : null,
+    lastDay: days.length ? days[days.length - 1].day : null,
     baseAutarky: null,
     curve: [],
-    fullAutarkyKwh: null,
+    fullCoverageKwh: null,
+    fullCoverageAutarky: null,
     kneeKwh: null,
     kneeAutarky: null,
     medianNightKwh: null,
@@ -328,14 +369,16 @@ function sizeStorage(days: DayEnergy[]): StorageSizing {
   const autarky = (capacityKwh: number): number =>
     1 - sim(capacityKwh).gridKwh / consumptionKwh;
 
-  // Smallest size that leaves no grid import. Scanned rather than solved: the
+  // Smallest size that leaves the house no import the battery could have
+  // served — the car's grid import stays, so that is not 100 % autarky unless
+  // the car never charged from the grid. Scanned rather than solved: the
   // battery is state-dependent (it can only give back what it stored earlier),
   // so there is no closed form for it.
-  let fullAutarkyKwh: number | null = null;
+  let fullCoverageKwh: number | null = null;
   for (let step = 0; step <= SEARCH_MAX_KWH * SEARCH_STEPS_PER_KWH; step++) {
     const capacity = step / SEARCH_STEPS_PER_KWH;
-    if (sim(capacity).gridKwh <= consumptionKwh * FULL_AUTARKY_TOLERANCE) {
-      fullAutarkyKwh = capacity;
+    if (sim(capacity).uncoveredKwh <= consumptionKwh * FULL_COVERAGE_TOLERANCE) {
+      fullCoverageKwh = capacity;
       break;
     }
   }
@@ -344,7 +387,7 @@ function sizeStorage(days: DayEnergy[]): StorageSizing {
   // names is also visible in the chart.
   const curveMax = Math.min(
     CURVE_MAX_KWH,
-    Math.max(CURVE_MIN_KWH, Math.ceil(fullAutarkyKwh ?? 0)),
+    Math.max(CURVE_MIN_KWH, Math.ceil(fullCoverageKwh ?? 0)),
   );
   const curve: StorageSizingPoint[] = [];
   for (let capacityKwh = 0; capacityKwh <= curveMax; capacityKwh++) {
@@ -366,19 +409,51 @@ function sizeStorage(days: DayEnergy[]): StorageSizing {
     kneeKwh = capacityKwh + 1;
   }
 
-  const nights = days.map((d) => d.nightKwh).sort((a, b) => a - b);
+  const nights = nightDemands(runs).sort((a, b) => a - b);
   return {
+    ...empty,
     baseAutarky: round3(autarky(0)),
     curve,
-    fullAutarkyKwh,
+    fullCoverageKwh,
+    fullCoverageAutarky:
+      fullCoverageKwh === null ? null : round3(autarky(fullCoverageKwh)),
     kneeKwh,
     kneeAutarky: round3(autarky(kneeKwh)),
-    medianNightKwh: round2(median(nights)),
-    maxNightKwh: round2(nights[nights.length - 1]),
+    medianNightKwh: nights.length ? round2(median(nights)) : null,
+    maxNightKwh: nights.length ? round2(nights[nights.length - 1]) : null,
     productionKwh: round2(productionKwh),
     consumptionKwh: round2(consumptionKwh),
     efficiency: BATTERY_EFFICIENCY,
   };
+}
+
+/**
+ * What each night cost the house, consumers left out: the dark hours from
+ * sunset to the next sunrise, across midnight — not a calendar day's dark
+ * hours, which would be the end of one night plus the start of the next, and
+ * split the heaviest night in two. Only nights with daylight on both sides
+ * count; a stretch begins and ends mid-night, and half a night is no night.
+ */
+function nightDemands(runs: HourFlow[][]): number[] {
+  const nights: number[] = [];
+  for (const run of runs) {
+    // null until the first daylight hour: the stretch may start mid-night.
+    let night: number | null = null;
+    let sawDark = false;
+    for (const f of run) {
+      if (f.dark) {
+        if (night !== null) {
+          night += f.baseKwh;
+          sawDark = true;
+        }
+      } else {
+        if (night !== null && sawDark) nights.push(night);
+        night = 0;
+        sawDark = false;
+      }
+    }
+  }
+  return nights;
 }
 
 /**
@@ -422,7 +497,7 @@ function nextDay(day: string): string {
  * the battery in, which is what a battery that has been there all along has.
  */
 function simulate(runs: HourFlow[][], capacityKwh: number): SimResult {
-  const result: SimResult = { gridKwh: 0, feedInKwh: 0 };
+  const result: SimResult = { gridKwh: 0, uncoveredKwh: 0, feedInKwh: 0 };
   for (const run of runs) {
     const warm = runFlows(run, capacityKwh, 0, null);
     runFlows(run, capacityKwh, warm, result);
@@ -443,7 +518,7 @@ function runFlows(
   let soc = Math.min(startSoc, capacityKwh);
   for (const f of flows) {
     // Discharge first (self-consumption before storing anything).
-    const fromStore = Math.min(f.importKwh, soc);
+    const fromStore = Math.min(f.servableKwh, soc);
     soc -= fromStore;
     // Then charge with the surplus, as far as the free room allows. The losses
     // sit here, so `room` is the *grid-side* energy that still fits.
@@ -452,6 +527,7 @@ function runFlows(
     soc += charged * BATTERY_EFFICIENCY;
     if (out) {
       out.gridKwh += f.importKwh - fromStore;
+      out.uncoveredKwh += f.servableKwh - fromStore;
       out.feedInKwh += f.exportKwh - charged;
     }
   }

@@ -7,14 +7,15 @@ import {
 } from './statistics';
 
 /**
- * A full day of hours. `pv` / `imp` / `exp` are per-hour arrays of 24 values;
- * a scalar repeats for the whole day.
+ * A full day of hours. `pv` / `imp` / `exp` / `car` are per-hour arrays of 24
+ * values; a scalar repeats for the whole day.
  */
 function day(
   date: string,
   pv: number | number[],
   imp: number | number[],
   exp: number | number[] = 0,
+  car: number | number[] = 0,
 ): HourEnergy[] {
   const at = (v: number | number[], h: number) => (Array.isArray(v) ? v[h] : v);
   return Array.from({ length: 24 }, (_, hour) => ({
@@ -23,7 +24,14 @@ function day(
     pvKwh: at(pv, hour),
     importKwh: at(imp, hour),
     exportKwh: at(exp, hour),
+    consumerKwh: at(car, hour),
+    dayHours: 24,
   }));
+}
+
+/** 1 per hour in [from, to), 0 otherwise — scaled by `kwh`. */
+function span(from: number, to: number, kwh: number): number[] {
+  return Array.from({ length: 24 }, (_, h) => (h >= from && h < to ? kwh : 0));
 }
 
 /** 6 kWh of sun between 10:00 and 13:00, nothing otherwise. */
@@ -48,7 +56,7 @@ describe('computeStatistics', () => {
     expect(s.pv.bestDay).toBeNull();
     expect(s.consumption.avgDayKwh).toBeNull();
     expect(s.storageSizing.curve).toEqual([]);
-    expect(s.storageSizing.fullAutarkyKwh).toBeNull();
+    expect(s.storageSizing.fullCoverageKwh).toBeNull();
   });
 
   it('sums house load as PV + import - feed-in per day', () => {
@@ -124,8 +132,23 @@ describe('computeStatistics', () => {
   });
 
   it('keeps a 23-hour day: that is the DST day, not a gap', () => {
-    const dst = day('2026-03-29', 0, 1).filter((h) => h.hour !== 2);
+    const dst = day('2026-03-29', 0, 1)
+      .filter((h) => h.hour !== 2)
+      .map((h) => ({ ...h, dayHours: 23 }));
     expect(computeStatistics(input({ hours: dst })).days).toBe(1);
+  });
+
+  it('drops an ordinary day that is one hour short', () => {
+    const short = day('2026-06-01', 0, 1).filter((h) => h.hour !== 14);
+    expect(computeStatistics(input({ hours: short })).days).toBe(0);
+  });
+
+  it('drops the 25-hour day when it is one hour short', () => {
+    // 24 rows on the day the clock goes back: that is a missing hour.
+    const autumn = day('2026-10-25', 0, 1).map((h) => ({ ...h, dayHours: 25 }));
+    expect(computeStatistics(input({ hours: autumn })).days).toBe(0);
+    const full = [...autumn, { ...autumn[2] }].sort((a, b) => a.hour - b.hour);
+    expect(computeStatistics(input({ hours: full })).days).toBe(1);
   });
 
   it('passes the peaks through untouched', () => {
@@ -194,7 +217,8 @@ describe('storage sizing', () => {
 
   it('finds the size that removes the last kWh of grid import', () => {
     const b = computeStatistics(input({ hours: CYCLE })).storageSizing;
-    expect(b.fullAutarkyKwh).toBe(4);
+    expect(b.fullCoverageKwh).toBe(4);
+    expect(b.fullCoverageAutarky).toBe(1);
     expect(b.curve.find((p) => p.capacityKwh === 4)?.autarky).toBe(1);
     // Half a night short of it, half the night's import is left.
     expect(b.curve.find((p) => p.capacityKwh === 2)?.autarky).toBe(0.6);
@@ -218,7 +242,7 @@ describe('storage sizing', () => {
   it('gives up when the sun never covers the load', () => {
     // Consumption all night, no production at all: no size can help.
     const b = computeStatistics(input({ hours: day('2026-01-01', 0, 0.5) })).storageSizing;
-    expect(b.fullAutarkyKwh).toBeNull();
+    expect(b.fullCoverageKwh).toBeNull();
     expect(b.kneeKwh).toBe(0);
     expect(b.baseAutarky).toBe(0);
     expect(b.curve.at(-1)?.autarky).toBe(0);
@@ -232,16 +256,80 @@ describe('storage sizing', () => {
       ...day('2026-06-03', 0, 0.25),
     ];
     const b = computeStatistics(input({ hours })).storageSizing;
-    expect(b.fullAutarkyKwh).toBeNull();
+    expect(b.fullCoverageKwh).toBeNull();
   });
 
-  it('measures the night a battery has to bridge', () => {
+  it('does not charge the car from the battery', () => {
+    // CYCLE plus 6 kWh of car charging from the grid every night, on top of
+    // the 4 kWh the house imports. The surplus would cover part of the car
+    // too; the battery leaves it alone, so the same 4 kWh still covers the
+    // house and the car's import stays.
+    const car = span(0, 6, 1);
+    const hours = Array.from({ length: 7 }, (_, i) =>
+      day(
+        `2026-06-0${i + 1}`,
+        SUNNY,
+        span(0, 6, 4 / 6 + 1),
+        span(10, 13, 5 / 3),
+        car,
+      ),
+    ).flat();
+    const b = computeStatistics(input({ hours })).storageSizing;
+    // 11 kWh consumed a day (5 house + 6 car), 6 of it the car's import.
+    expect(b.consumptionKwh).toBe(77);
+    expect(b.fullCoverageKwh).toBe(4);
+    expect(b.fullCoverageAutarky).toBe(round3(1 - 6 / 11));
+    // A bigger battery buys nothing more: the rest is the car.
+    expect(b.curve.find((p) => p.capacityKwh === 10)?.autarky).toBe(round3(1 - 6 / 11));
+  });
+
+  it('measures each night from sunset to sunrise, across midnight', () => {
+    // Evening import 13..24 h and morning import 0..10 h of the next day form
+    // one night; the stretch's first morning and last evening are partial
+    // nights and do not count.
     const hours = [
-      ...day('2026-06-01', SUNNY, Array.from({ length: 24 }, (_, h) => (h < 6 ? 1 : 0))),
-      ...day('2026-06-02', SUNNY, Array.from({ length: 24 }, (_, h) => (h < 6 ? 2 : 0))),
+      ...day('2026-06-01', SUNNY, span(13, 24, 0.5)),
+      ...day('2026-06-02', SUNNY, [...span(0, 10, 0.2)].map((v, h) => v || (h >= 13 ? 1 : 0))),
+      ...day('2026-06-03', SUNNY, span(0, 10, 0.3)),
     ];
     const b = computeStatistics(input({ hours })).storageSizing;
-    expect(b.medianNightKwh).toBe(9);
-    expect(b.maxNightKwh).toBe(12);
+    // Night 1: 11 × 0.5 + 10 × 0.2 = 7.5; night 2: 11 × 1 + 10 × 0.3 = 14.
+    expect(b.medianNightKwh).toBe(10.75);
+    expect(b.maxNightKwh).toBe(14);
+  });
+
+  it('leaves the car out of the night', () => {
+    const hours = [
+      ...day('2026-06-01', SUNNY, span(13, 24, 2), 0, span(20, 24, 1.5)),
+      ...day('2026-06-02', SUNNY, 0),
+    ];
+    const b = computeStatistics(input({ hours })).storageSizing;
+    // 11 × 2 kWh imported, 4 × 1.5 of it the car.
+    expect(b.maxNightKwh).toBe(16);
+  });
+
+  it('leaves out a day a consumer was not reporting, but keeps it in the records', () => {
+    const down = day('2026-06-02', SUNNY, 2).map((h) =>
+      h.hour >= 20 ? { ...h, consumerKwh: null } : h,
+    );
+    const s = computeStatistics(
+      input({ hours: [...day('2026-06-01', SUNNY, 0.5), ...down, ...day('2026-06-03', SUNNY, 0.5)] }),
+    );
+    expect(s.days).toBe(3);
+    expect(s.consumption.maxDay?.day).toBe('2026-06-02');
+    const b = s.storageSizing;
+    expect(b.days).toBe(2);
+    expect(b.skippedDays).toBe(1);
+    expect(b.firstDay).toBe('2026-06-01');
+    expect(b.lastDay).toBe('2026-06-03');
+    // Without day 2 the two days are no longer one stretch: no whole night.
+    expect(b.maxNightKwh).toBeNull();
+    expect(b.consumptionKwh).toBe(2 * (6 + 12));
+  });
+
+  it('has no night without a whole one in the data', () => {
+    const b = computeStatistics(input({ hours: day('2026-06-01', SUNNY, 0.5) })).storageSizing;
+    expect(b.medianNightKwh).toBeNull();
+    expect(b.maxNightKwh).toBeNull();
   });
 });

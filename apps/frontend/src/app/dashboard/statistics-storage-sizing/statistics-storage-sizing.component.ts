@@ -3,7 +3,7 @@ import type { StorageSizing } from '@org/shared-types';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsCoreOption } from 'echarts/core';
 import { CHART_COLORS, categorySeriesChart } from '../../core/chart-utils';
-import { formatKwh, formatKwhUnit, formatPercent } from '../../core/stat-format';
+import { formatDay, formatKwh, formatKwhUnit, formatPercent } from '../../core/stat-format';
 import { StatCardComponent } from '../../ui/stat-card/stat-card.component';
 
 /**
@@ -11,8 +11,8 @@ import { StatCardComponent } from '../../ui/stat-card/stat-card.component';
  * A simulation of a *hypothetical* store, not a reading from an installed one.
  *
  * Three tiles for the sizes that matter — what is there today, the size where
- * every further kWh stops paying, and the one that would have removed the last
- * kWh of grid import — over a curve that shows the whole trade-off.
+ * every further kWh stops paying, and the one that would have covered the
+ * whole house (the car aside) — over a curve that shows the whole trade-off.
  */
 @Component({
   selector: 'app-statistics-storage-sizing',
@@ -23,8 +23,6 @@ import { StatCardComponent } from '../../ui/stat-card/stat-card.component';
 })
 export class StatisticsStorageSizingComponent {
   readonly sizing = input.required<StorageSizing>();
-  /** Days the simulation ran on, for the caption under the tiles. */
-  readonly days = input.required<number>();
 
   readonly hasData = computed(() => this.sizing().curve.length > 0);
 
@@ -37,12 +35,13 @@ export class StatisticsStorageSizingComponent {
     return `bringt ${formatPercent(b.kneeAutarky)} Autarkie`;
   });
 
-  readonly fullValue = computed(() => formatKwh(this.sizing().fullAutarkyKwh, 1));
-  readonly fullCaption = computed(() =>
-    this.sizing().fullAutarkyKwh === null
-      ? 'im gemessenen Zeitraum nicht erreichbar'
-      : 'deckt jede gemessene Stunde ohne Netz',
-  );
+  readonly fullValue = computed(() => formatKwh(this.sizing().fullCoverageKwh, 1));
+  readonly fullCaption = computed(() => {
+    const b = this.sizing();
+    if (b.fullCoverageKwh === null) return 'im gemessenen Zeitraum nicht erreichbar';
+    const autarky = `bringt ${formatPercent(b.fullCoverageAutarky)} Autarkie`;
+    return carImportLeft(b) ? `${autarky}, der Rest ist das Auto` : autarky;
+  });
 
   /** The figures behind the curve, as a compact line under the chart. */
   readonly facts = computed(() => {
@@ -58,28 +57,29 @@ export class StatisticsStorageSizingComponent {
   });
 
   /**
-   * Why 100 % may be out of reach, in one sentence: with less sun than load
-   * over the period, no size can bridge it — that is a PV question, not a
-   * storage one.
+   * The answer in one sentence: the size that would have covered the house,
+   * or, where none does, the point the curve flattens out.
    */
   readonly verdict = computed(() => {
     const b = this.sizing();
-    if (b.fullAutarkyKwh !== null) {
-      return `Über den gemessenen Zeitraum hätte ein Speicher mit ${formatKwh(
-        b.fullAutarkyKwh,
-        1,
-      )} kWh jede Kilowattstunde selbst gedeckt — 100 % Autarkie.`;
+    if (b.fullCoverageKwh !== null) {
+      const kwh = formatKwh(b.fullCoverageKwh, 1);
+      const house = `Mit ${kwh} kWh wäre das Haus im gemessenen Zeitraum ohne Netzbezug ausgekommen`;
+      return carImportLeft(b)
+        ? `${house}, nur das Auto hätte noch Netzstrom geladen.`
+        : `${house}.`;
     }
-    if (b.productionKwh < b.consumptionKwh) {
-      return `Im gemessenen Zeitraum lag die Erzeugung (${formatKwh(
-        b.productionKwh,
-        0,
-      )} kWh) unter dem Verbrauch (${formatKwh(
-        b.consumptionKwh,
-        0,
-      )} kWh). Diese Lücke kann kein Speicher füllen — die Energie fehlt.`;
+    if (!b.kneeKwh) {
+      return (
+        'Ein Speicher brächte hier kaum etwas: schon die erste Kilowattstunde ' +
+        'hebt die Autarkie um weniger als einen Prozentpunkt.'
+      );
     }
-    return 'Die Erzeugung reicht in Summe, kommt aber zu selten zur richtigen Zeit: 100 % Autarkie würde einen Speicher jenseits jeder sinnvollen Größe brauchen.';
+    return (
+      `Bis ${formatKwh(b.kneeKwh, 0)} kWh bringt jede weitere Kilowattstunde ` +
+      'mindestens einen Prozentpunkt Autarkie, danach flacht die Kurve ab. ' +
+      'Ganz ohne Netz wäre das Haus mit keiner Größe ausgekommen.'
+    );
   });
 
   readonly chart = computed<EChartsCoreOption>(() => {
@@ -100,19 +100,54 @@ export class StatisticsStorageSizingComponent {
           data: curve.map((p) => round1(p.selfConsumption * 100)),
         },
       ],
-      { legend: true, unit: '%', xAxisName: 'Speichergröße (kWh)' },
+      { legend: true, unit: '%', xAxisName: 'Nutzbare Kapazität (kWh)' },
     );
   });
 
   readonly basis = computed(() => {
     const b = this.sizing();
-    const days = this.days();
-    return `Simuliert über ${days} ${days === 1 ? 'Tag' : 'Tage'} mit vollständigen Daten · ${formatPercent(
-      b.efficiency,
-    )} Wirkungsgrad · Laden nur aus Überschuss`;
+    const { days, skippedDays, firstDay: first, lastDay: last } = b;
+    const parts = [
+      `Simuliert über ${days} ${days === 1 ? 'Tag' : 'Tage'} (${formatDay(
+        first,
+        true,
+      )} – ${formatDay(last, true)})`,
+      `${formatPercent(b.efficiency)} Wirkungsgrad`,
+      'Laden nur aus Überschuss',
+      'das Auto lädt nicht aus dem Speicher',
+    ];
+    if (skippedDays) {
+      parts.push(
+        `${skippedDays} ${skippedDays === 1 ? 'Tag' : 'Tage'} ohne Wallbox-Daten ausgelassen`,
+      );
+    }
+    const basis = parts.join(' · ');
+    return first && last && !coversWinter(first, last)
+      ? `${basis}. Noch ohne Wintermonate: übers Jahr bringt ein Speicher ` +
+          'weniger, als die Kurve zeigt.'
+      : basis;
   });
 }
 
 function round1(v: number): number {
   return Math.round(v * 10) / 10;
+}
+
+/**
+ * Whether the car still imported at the size that covers the house — then
+ * that size stops short of 100 % autarky by exactly the car's import.
+ */
+function carImportLeft(b: StorageSizing): boolean {
+  return b.fullCoverageAutarky !== null && b.fullCoverageAutarky < 0.995;
+}
+
+/** Whether any month from November to February lies between the two days. */
+function coversWinter(firstDay: string, lastDay: string): boolean {
+  const d = new Date(`${firstDay.slice(0, 7)}-01T00:00:00Z`);
+  const end = new Date(`${lastDay}T00:00:00Z`);
+  for (; d <= end; d.setUTCMonth(d.getUTCMonth() + 1)) {
+    const month = d.getUTCMonth() + 1;
+    if (month >= 11 || month <= 2) return true;
+  }
+  return false;
 }
