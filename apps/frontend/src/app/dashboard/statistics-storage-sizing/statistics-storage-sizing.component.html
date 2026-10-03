@@ -42,7 +42,7 @@
   </div>
 
   <p class="hint-sm">{{ basis() }}</p>
-} @else if (sizing().skippedDays) {
+} @else if (!sizing().days && sizing().skippedDays) {
   <p class="hint">
     An keinem vollständigen Tag hat die Wallbox durchgehend gemeldet — ohne ihre
     Daten lässt sich das Laden des Autos nicht herausrechnen.

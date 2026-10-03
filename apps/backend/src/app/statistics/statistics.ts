@@ -109,6 +109,10 @@ interface HourFlow {
    * can take that surplus directly — so the battery is not sized for it.
    * Within the hour the consumers are assumed to have drawn from the grid
    * first, which keeps the battery's share on the conservative side.
+   *
+   * This treats every `consumer` device as a load that can wait for the sun,
+   * which the wallbox — the only one there is — is. A consumer a battery
+   * should serve (a heat pump) would need telling apart from it first.
    */
   servableKwh: number;
   /** No PV to speak of: part of a night. */
@@ -349,14 +353,28 @@ function sizeStorage(allDays: DayEnergy[]): StorageSizing {
     maxNightKwh: null,
     productionKwh: 0,
     consumptionKwh: 0,
+    exportKwh: 0,
+    houseImportKwh: 0,
+    consumerImportKwh: 0,
     efficiency: BATTERY_EFFICIENCY,
   };
   if (!days.length) return empty;
 
   const runs = contiguousRuns(days);
+  const flows = runs.flat();
+  const sum = (pick: (f: HourFlow) => number) => flows.reduce((s, f) => s + pick(f), 0);
   const consumptionKwh = days.reduce((s, d) => s + d.houseKwh, 0);
   const productionKwh = days.reduce((s, d) => s + d.pvKwh, 0);
-  if (consumptionKwh <= 0) return { ...empty, productionKwh: round2(productionKwh) };
+  // The house without the consumers: what the battery is sized against.
+  const houseOnlyKwh = sum((f) => f.baseKwh);
+  const totals = {
+    productionKwh: round2(productionKwh),
+    consumptionKwh: round2(consumptionKwh),
+    exportKwh: round2(sum((f) => f.exportKwh)),
+    houseImportKwh: round2(sum((f) => f.servableKwh)),
+    consumerImportKwh: round2(sum((f) => f.importKwh - f.servableKwh)),
+  };
+  if (consumptionKwh <= 0) return { ...empty, ...totals };
 
   const cache = new Map<number, SimResult>();
   const sim = (capacityKwh: number): SimResult => {
@@ -377,7 +395,7 @@ function sizeStorage(allDays: DayEnergy[]): StorageSizing {
   let fullCoverageKwh: number | null = null;
   for (let step = 0; step <= SEARCH_MAX_KWH * SEARCH_STEPS_PER_KWH; step++) {
     const capacity = step / SEARCH_STEPS_PER_KWH;
-    if (sim(capacity).uncoveredKwh <= consumptionKwh * FULL_COVERAGE_TOLERANCE) {
+    if (sim(capacity).uncoveredKwh <= houseOnlyKwh * FULL_COVERAGE_TOLERANCE) {
       fullCoverageKwh = capacity;
       break;
     }
@@ -401,11 +419,16 @@ function sizeStorage(allDays: DayEnergy[]): StorageSizing {
   }
 
   // Diminishing returns: the last size whose next kWh still buys a full point
-  // of autarky. 0 means even the first kWh does not — then a battery is simply
-  // not the lever.
+  // of the house's own autarky. 0 means even the first kWh does not — then a
+  // battery is simply not the lever. Measured against the house without the
+  // consumers: the battery does not serve them, and counting them would let a
+  // car that charges a lot shrink the recommendation for a house it does not
+  // change.
+  const houseGain = (capacityKwh: number): number =>
+    (sim(capacityKwh).uncoveredKwh - sim(capacityKwh + 1).uncoveredKwh) / houseOnlyKwh;
   let kneeKwh = 0;
-  for (let capacityKwh = 0; capacityKwh < curveMax; capacityKwh++) {
-    if (autarky(capacityKwh + 1) - autarky(capacityKwh) < KNEE_GAIN_PER_KWH) break;
+  for (let capacityKwh = 0; houseOnlyKwh > 0 && capacityKwh < curveMax; capacityKwh++) {
+    if (houseGain(capacityKwh) < KNEE_GAIN_PER_KWH) break;
     kneeKwh = capacityKwh + 1;
   }
 
@@ -421,9 +444,7 @@ function sizeStorage(allDays: DayEnergy[]): StorageSizing {
     kneeAutarky: round3(autarky(kneeKwh)),
     medianNightKwh: nights.length ? round2(median(nights)) : null,
     maxNightKwh: nights.length ? round2(nights[nights.length - 1]) : null,
-    productionKwh: round2(productionKwh),
-    consumptionKwh: round2(consumptionKwh),
-    efficiency: BATTERY_EFFICIENCY,
+    ...totals,
   };
 }
 

@@ -58,7 +58,7 @@ export class StatisticsStorageSizingComponent {
 
   /**
    * The answer in one sentence: the size that would have covered the house,
-   * or, where none does, the point the curve flattens out.
+   * or, where none does, why not and where the curve flattens out.
    */
   readonly verdict = computed(() => {
     const b = this.sizing();
@@ -69,17 +69,21 @@ export class StatisticsStorageSizingComponent {
         ? `${house}, nur das Auto hätte noch Netzstrom geladen.`
         : `${house}.`;
     }
-    if (!b.kneeKwh) {
-      return (
-        'Ein Speicher brächte hier kaum etwas: schon die erste Kilowattstunde ' +
-        'hebt die Autarkie um weniger als einen Prozentpunkt.'
-      );
-    }
-    return (
-      `Bis ${formatKwh(b.kneeKwh, 0)} kWh bringt jede weitere Kilowattstunde ` +
-      'mindestens einen Prozentpunkt Autarkie, danach flacht die Kurve ab. ' +
-      'Ganz ohne Netz wäre das Haus mit keiner Größe ausgekommen.'
-    );
+    // No size covers the house. With less storable surplus than the house
+    // imported, the energy is missing — a PV question, not a storage one.
+    const stored = b.exportKwh * b.efficiency;
+    const why =
+      stored < b.houseImportKwh
+        ? `Dafür fehlt die Energie: Der Überschuss (${formatKwh(b.exportKwh, 0)} kWh, ` +
+          `nach Speicherverlusten ${formatKwh(stored, 0)} kWh) ist kleiner als der ` +
+          `Netzbezug des Hauses (${formatKwh(b.houseImportKwh, 0)} kWh).`
+        : 'Der Überschuss reicht in Summe, kommt aber zu ungünstig verteilt.';
+    const curve = b.kneeKwh
+      ? `Bis ${formatKwh(b.kneeKwh, 0)} kWh bringt jede weitere Kilowattstunde ` +
+        'mindestens einen Prozentpunkt Autarkie.'
+      : 'Ein Speicher brächte hier kaum etwas: schon die erste Kilowattstunde ' +
+        'hebt die Autarkie um weniger als einen Prozentpunkt.';
+    return `${curve} Ganz ohne Netz wäre das Haus mit keiner Größe ausgekommen. ${why}`;
   });
 
   readonly chart = computed<EChartsCoreOption>(() => {
@@ -134,11 +138,11 @@ function round1(v: number): number {
 }
 
 /**
- * Whether the car still imported at the size that covers the house — then
- * that size stops short of 100 % autarky by exactly the car's import.
+ * Whether the car imported at all — then the size that covers the house stops
+ * short of 100 % autarky by exactly that import.
  */
 function carImportLeft(b: StorageSizing): boolean {
-  return b.fullCoverageAutarky !== null && b.fullCoverageAutarky < 0.995;
+  return b.consumerImportKwh > 0;
 }
 
 /** Whether any month from November to February lies between the two days. */

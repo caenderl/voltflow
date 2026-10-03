@@ -281,6 +281,27 @@ describe('storage sizing', () => {
     expect(b.fullCoverageAutarky).toBe(round3(1 - 6 / 11));
     // A bigger battery buys nothing more: the rest is the car.
     expect(b.curve.find((p) => p.capacityKwh === 10)?.autarky).toBe(round3(1 - 6 / 11));
+    expect(b.houseImportKwh).toBe(28);
+    expect(b.consumerImportKwh).toBe(42);
+    expect(b.exportKwh).toBe(35);
+  });
+
+  it('recommends the same size however much the car charges', () => {
+    // CYCLE plus 180 kWh of car a night: each battery kWh still removes 7 kWh
+    // of the house's import a week, but under 1 % of the total consumption.
+    // The recommendation follows the house, not the car.
+    const hours = Array.from({ length: 7 }, (_, i) =>
+      day(
+        `2026-06-0${i + 1}`,
+        SUNNY,
+        span(0, 6, 4 / 6 + 30),
+        span(10, 13, 5 / 3),
+        span(0, 6, 30),
+      ),
+    ).flat();
+    const b = computeStatistics(input({ hours })).storageSizing;
+    expect(b.kneeKwh).toBe(4);
+    expect(b.fullCoverageKwh).toBe(4);
   });
 
   it('measures each night from sunset to sunrise, across midnight', () => {
@@ -312,9 +333,8 @@ describe('storage sizing', () => {
     const down = day('2026-06-02', SUNNY, 2).map((h) =>
       h.hour >= 20 ? { ...h, consumerKwh: null } : h,
     );
-    const s = computeStatistics(
-      input({ hours: [...day('2026-06-01', SUNNY, 0.5), ...down, ...day('2026-06-03', SUNNY, 0.5)] }),
-    );
+    const hours = [...day('2026-06-01', SUNNY, 0.5), ...down, ...day('2026-06-03', SUNNY, 0.5)];
+    const s = computeStatistics(input({ hours }));
     expect(s.days).toBe(3);
     expect(s.consumption.maxDay?.day).toBe('2026-06-02');
     const b = s.storageSizing;

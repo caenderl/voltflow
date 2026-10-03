@@ -1026,7 +1026,10 @@ export interface StorageSizing {
    * grid import.
    */
   fullCoverageAutarky: number | null;
-  /** Size beyond which another kWh adds less than a point of autarky. */
+  /**
+   * Size beyond which another kWh adds less than a point of the house's own
+   * autarky (consumers left out, as the battery does not serve them).
+   */
   kneeKwh: number | null;
   /** Autarky at {@link kneeKwh} (0..1). */
   kneeAutarky: number | null;
@@ -1039,6 +1042,12 @@ export interface StorageSizing {
   /** Totals the simulation ran on, kWh. */
   productionKwh: number;
   consumptionKwh: number;
+  /** Feed-in, i.e. the surplus the battery could have charged from. */
+  exportKwh: number;
+  /** Grid import the battery may serve: the house's, the consumers' aside. */
+  houseImportKwh: number;
+  /** Grid import of the consumers (the car), which the battery leaves alone. */
+  consumerImportKwh: number;
   /** Round-trip efficiency the simulation assumed (0..1). */
   efficiency: number;
 }
